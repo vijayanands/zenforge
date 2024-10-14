@@ -1,8 +1,11 @@
 import streamlit as st
-from first_line_manager.dashboard import show_first_line_manager_dashboard
-from ic.dashboard import show_ic_dashboard
-from second_line_manager_or_director.dashboard import show_director_dashboard
-from ui.title_bar import set_title_bar
+
+from demo_code.first_line_manager.dashboard import \
+    show_first_line_manager_dashboard
+from demo_code.ic.dashboard import show_ic_dashboard
+from demo_code.second_line_manager_or_director.dashboard import \
+    show_director_dashboard
+from demo_code.ui.title_bar import set_title_bar
 
 # Constants
 PAGE_TITLE = "Pathforge ZenForge"
@@ -39,7 +42,7 @@ def main():
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
 
     # Add the title bar
-    logo_path = "ui/pathforge-logo-final.png"
+    logo_path = "demo_code/ui/pathforge-logo-final.png"
     set_title_bar(logo_path)
 
     # Create a sidebar

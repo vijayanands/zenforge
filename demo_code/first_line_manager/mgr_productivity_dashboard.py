@@ -4,11 +4,12 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import streamlit as st
-from ui.style import (apply_styled_dropdown_css, create_pie_chart,
-                      create_progress_bar, create_styled_bar_chart,
-                      create_styled_bullet_list, create_styled_line_chart,
-                      create_styled_metric, create_styled_tabs,
-                      display_pie_chart)
+
+from demo_code.ui.style import (apply_styled_dropdown_css, create_pie_chart,
+                                create_progress_bar, create_styled_bar_chart,
+                                create_styled_bullet_list,
+                                create_styled_line_chart, create_styled_metric,
+                                create_styled_tabs, display_pie_chart)
 
 
 # Helper functions to generate dummy data for employee-level dashboard
