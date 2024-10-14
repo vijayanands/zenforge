@@ -3,14 +3,9 @@ import datetime
 import pandas as pd
 import streamlit as st
 from streamlit_echarts import st_echarts
-
-from ui.style import (
-    apply_styled_dropdown_css,
-    create_pie_chart,
-    create_progress_bar,
-    create_styled_tabs,
-    display_pie_chart,
-)
+from ui.style import (apply_styled_dropdown_css, create_pie_chart,
+                      create_progress_bar, create_styled_tabs,
+                      display_pie_chart)
 
 
 def ic_learning_dashboard():
