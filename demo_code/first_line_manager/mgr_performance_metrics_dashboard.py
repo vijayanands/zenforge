@@ -15,7 +15,7 @@ def get_dummy_employees() -> List[str]:
     return ["Alice", "Bob", "Charlie", "David", "Eve"]
 
 
-def get_commits_per_developer(duration: str) -> Dict[str, int]:
+def get_commits_per_developer(duration: str = "Quarterly") -> Dict[str, int]:
     employees = get_dummy_employees()
     multiplier = 1 if duration == "Monthly" else (3 if duration == "Quarterly" else 12)
     return {emp: np.random.randint(10, 100) * multiplier for emp in employees}
