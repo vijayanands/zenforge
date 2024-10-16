@@ -1,12 +1,6 @@
 import hashlib
-import logging
 from collections import defaultdict
 from typing import Dict, List
-
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 unique_user_emails = [
     "vijayanands@gmail.com",

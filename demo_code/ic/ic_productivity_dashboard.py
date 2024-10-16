@@ -86,14 +86,6 @@ def generate_weekly_task_completion():
     return [random.randint(5, 20) for _ in range(12)]
 
 
-def generate_communication_data():
-    return {
-        "avg_email_response_time": round(random.uniform(0.5, 4), 1),
-        "meetings_attended": random.randint(10, 30),
-        "time_in_meetings": random.randint(10, 40),
-    }
-
-
 def generate_email_response_trend():
     return [round(random.uniform(0.5, 4), 1) for _ in range(12)]
 
@@ -204,7 +196,7 @@ def ic_productivity_dashboard():
     )
 
     # Tabs
-    tab_labels = ["Tasks", "Communication", "Knowledge", "Meetings", "Learning", "Code"]
+    tab_labels = ["Tasks", "Code", "Knowledge", "Meetings"]
     tabs = create_styled_tabs(tab_labels)
 
     # Tab 1: Tasks
@@ -247,32 +239,63 @@ def ic_productivity_dashboard():
             weekly_completion = generate_weekly_task_completion()
             create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
 
-    # Tab 2: Communication Efficiency
+    # Tab 2: Code
     with tabs[1]:
-        comm_data = generate_communication_data()
+        code_data = generate_code_data()
 
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         with col1:
             create_styled_metric(
-                "Avg Email Response Time",
-                f"{comm_data['avg_email_response_time']} hours",
-                "📧",
+                "Code Quality", f"{code_data['quality_score']}/10", "🏆"
             )
         with col2:
-            create_styled_metric(
-                "Meetings Attended", comm_data["meetings_attended"], "🗓️"
-            )
+            create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
         with col3:
             create_styled_metric(
-                "Time in Meetings", f"{comm_data['time_in_meetings']}%", "⏱️"
+                "Refactoring Tasks", code_data["refactoring_tasks"], "🔧"
+            )
+        with col4:
+            create_styled_metric(
+                "Features Developed", code_data["features_developed"], "🚀"
+            )
+        with col5:
+            create_styled_metric("Git Commits", code_data["git_commits"], "🔢")
+        with col6:
+            create_styled_metric(
+                "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
             )
 
-        st.header("Email Response Time Trend")
-        email_trend = generate_email_response_trend()
-        create_styled_line_chart(email_trend, "Weeks", "Response Time (hours)")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.header("Bugs Fixed by Criticality")
+            bugs_data = pd.DataFrame(
+                {
+                    "Criticality": code_data["bugs_fixed"].keys(),
+                    "Count": code_data["bugs_fixed"].values(),
+                }
+            )
+            fig = create_pie_chart(
+                bugs_data,
+                names="Criticality",
+                values="Count",
+                title="Bugs Fixed by Criticality",
+                height=360,
+                width=360,
+            )
+            display_pie_chart(fig)
+
+        with col2:
+            st.header("Code Quality Trend")
+            code_quality_trend = [
+                random.uniform(
+                    code_data["quality_score"] - 1, code_data["quality_score"] + 1
+                )
+                for _ in range(12)
+            ]
+            create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
 
     # Tab 3: Knowledge
-    with tabs[2]:
+    with tabs[3]:
         knowledge_data = generate_knowledge_data()
 
         col1, col2, col3, col4, col5 = st.columns(5)
@@ -334,86 +357,6 @@ def ic_productivity_dashboard():
         create_styled_bar_chart(
             list(raci_data.keys()), list(raci_data.values()), "Roles", "Count"
         )
-
-    # Tab 5: Learning
-    with tabs[4]:
-        learning_data = generate_learning_data()
-
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            create_styled_metric(
-                "Learning Hours", learning_data["learning_hours"], "📚"
-            )
-        with col2:
-            create_styled_metric(
-                "Conferences Attended", learning_data["conferences_attended"], "🎤"
-            )
-        with col3:
-            create_styled_metric(
-                "Skill Improvement", f"{learning_data['skill_improvement']}/10", "📈"
-            )
-
-        create_styled_bullet_list(
-            learning_data["courses_completed"], title="Courses Completed"
-        )
-        create_styled_bullet_list(
-            learning_data["certifications"], title="Certifications Achieved"
-        )
-
-    # Tab 6: Code
-    with tabs[5]:
-        code_data = generate_code_data()
-
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        with col1:
-            create_styled_metric(
-                "Code Quality", f"{code_data['quality_score']}/10", "🏆"
-            )
-        with col2:
-            create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
-        with col3:
-            create_styled_metric(
-                "Refactoring Tasks", code_data["refactoring_tasks"], "🔧"
-            )
-        with col4:
-            create_styled_metric(
-                "Features Developed", code_data["features_developed"], "🚀"
-            )
-        with col5:
-            create_styled_metric("Git Commits", code_data["git_commits"], "🔢")
-        with col6:
-            create_styled_metric(
-                "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
-            )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.header("Bugs Fixed by Criticality")
-            bugs_data = pd.DataFrame(
-                {
-                    "Criticality": code_data["bugs_fixed"].keys(),
-                    "Count": code_data["bugs_fixed"].values(),
-                }
-            )
-            fig = create_pie_chart(
-                bugs_data,
-                names="Criticality",
-                values="Count",
-                title="Bugs Fixed by Criticality",
-                height=360,
-                width=360,
-            )
-            display_pie_chart(fig)
-
-        with col2:
-            st.header("Code Quality Trend")
-            code_quality_trend = [
-                random.uniform(
-                    code_data["quality_score"] - 1, code_data["quality_score"] + 1
-                )
-                for _ in range(12)
-            ]
-            create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
 
 
 if __name__ == "__main__":

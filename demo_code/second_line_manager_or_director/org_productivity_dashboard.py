@@ -117,26 +117,11 @@ def generate_dummy_data():
             base_performance + random.uniform(-0.5, 0.5) for _ in range(len(date_range))
         ]
 
-    # Training impact data
-    training_impact = pd.DataFrame(
-        [
-            {
-                "department": dept,
-                "avgPerformance": random.uniform(3.0, 4.5),
-                "trainingHours": random.uniform(20, 60),
-                "employees": random.randint(10, 50),
-            }
-            for dept in departments
-            for _ in range(10)  # 10 data points per department
-        ]
-    )
-
     return (
         productivity_data,
         projects_data,
         performance_ratings,
         trends,
-        training_impact,
     )
 
 
@@ -145,7 +130,7 @@ def org_productivity_dashboard():
     apply_styled_dropdown_css()
 
     # Generate dummy data
-    productivity_data, projects_data, performance_ratings, trends, training_impact = (
+    productivity_data, projects_data, performance_ratings, trends = (
         generate_dummy_data()
     )
 
@@ -164,9 +149,6 @@ def org_productivity_dashboard():
         performance_ratings = performance_ratings[
             performance_ratings["department"] == selected_department
         ]
-        training_impact = training_impact[
-            training_impact["department"] == selected_department
-        ]
 
     # Use styled tabs
     tabs = create_styled_tabs(
@@ -174,8 +156,6 @@ def org_productivity_dashboard():
             "Overview",
             "Project Status",
             "Performance Ratings",
-            "Productivity Trends",
-            "Training Impact",
             "Risk Assessment",
         ]
     )
@@ -190,12 +170,6 @@ def org_productivity_dashboard():
         performance_ratings_tab(performance_ratings)
 
     with tabs[3]:
-        productivity_trends_tab(trends, selected_department)
-
-    with tabs[4]:
-        training_impact_tab(training_impact)
-
-    with tabs[5]:
         risk_assessment_tab(projects_data)
 
 
@@ -360,163 +334,6 @@ def performance_ratings_tab(performance_ratings):
     )
 
 
-def productivity_trends_tab(trends, selected_department):
-    st.header("Productivity and Performance Trends")
-
-    # Date range selection
-    date_range = st.date_input(
-        "Select Date Range",
-        value=(trends.index.min(), trends.index.max()),
-        min_value=trends.index.min(),
-        max_value=trends.index.max(),
-    )
-
-    # Filter data based on selection
-    start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
-    filtered_trends = trends.loc[start_date:end_date]
-
-    if selected_department == "All":
-        # Show average trends across all departments
-        productivity_avg = filtered_trends[
-            [col for col in filtered_trends.columns if "productivity" in col]
-        ].mean(axis=1)
-        performance_avg = filtered_trends[
-            [col for col in filtered_trends.columns if "performance" in col]
-        ].mean(axis=1)
-
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=filtered_trends.index,
-                y=productivity_avg,
-                name="Avg Productivity",
-                line=dict(color="blue"),
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=filtered_trends.index,
-                y=performance_avg,
-                name="Avg Performance",
-                line=dict(color="green"),
-            )
-        )
-    else:
-        # Show trends for selected department
-        fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=filtered_trends.index,
-                y=filtered_trends[f"{selected_department}_productivity"],
-                name="Productivity",
-                line=dict(color="blue"),
-            )
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=filtered_trends.index,
-                y=filtered_trends[f"{selected_department}_performance"],
-                name="Performance",
-                line=dict(color="green"),
-            )
-        )
-
-    fig.update_layout(
-        title="Productivity and Performance Trends",
-        xaxis_title="Date",
-        yaxis_title="Score",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Calculate and display metrics
-    if selected_department == "All":
-        avg_productivity = productivity_avg.mean()
-        max_productivity = productivity_avg.max()
-        min_productivity = productivity_avg.min()
-    else:
-        dept_productivity = filtered_trends[f"{selected_department}_productivity"]
-        avg_productivity = dept_productivity.mean()
-        max_productivity = dept_productivity.max()
-        min_productivity = dept_productivity.min()
-
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        create_styled_metric("Average Productivity", f"{avg_productivity:.2f}", "📊")
-    with col2:
-        create_styled_metric("Max Productivity", f"{max_productivity:.2f}", "🔼")
-    with col3:
-        create_styled_metric("Min Productivity", f"{min_productivity:.2f}", "🔽")
-
-
-def training_impact_tab(training_impact):
-    st.header("Training Impact Analysis")
-
-    # Scatter plot of training hours vs performance
-    fig = px.scatter(
-        training_impact,
-        x="trainingHours",
-        y="avgPerformance",
-        size="employees",
-        color="department",
-        hover_name="department",
-        title="Training Hours vs Average Performance",
-        labels={
-            "trainingHours": "Training Hours",
-            "avgPerformance": "Average Performance",
-            "employees": "Number of Employees",
-        },
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Correlation analysis
-    correlation = training_impact["trainingHours"].corr(
-        training_impact["avgPerformance"]
-    )
-    create_styled_metric("Training-Performance Correlation", f"{correlation:.2f}", "📊")
-
-    # Training efficiency by department
-    st.subheader("Training Efficiency by Department")
-    dept_efficiency = (
-        training_impact.groupby("department")
-        .apply(lambda x: x["avgPerformance"].mean() / x["trainingHours"].mean())
-        .sort_values(ascending=False)
-    )
-    create_styled_bar_chart(
-        dept_efficiency.index,
-        dept_efficiency.values,
-        "Department",
-        "Training Efficiency (Perf/Hour)",
-    )
-
-    # Insights
-    st.subheader("Key Insights")
-
-    # Calculate additional metrics for insights
-    avg_performance = training_impact["avgPerformance"].mean()
-    high_performers = training_impact[
-        training_impact["avgPerformance"] > avg_performance
-    ]
-    low_performers = training_impact[
-        training_impact["avgPerformance"] <= avg_performance
-    ]
-
-    high_perf_avg_hours = high_performers["trainingHours"].mean()
-    low_perf_avg_hours = low_performers["trainingHours"].mean()
-
-    most_efficient_dept = dept_efficiency.index[0]
-    least_efficient_dept = dept_efficiency.index[-1]
-
-    insights = [
-        f"The correlation between training hours and performance is {correlation:.2f}, indicating a {'weak' if abs(correlation) < 0.3 else 'moderate' if abs(correlation) < 0.5 else 'strong'} {'positive' if correlation > 0 else 'negative'} relationship.",
-        f"{most_efficient_dept} shows the highest training efficiency at {dept_efficiency.iloc[0]:.2f} performance points per training hour.",
-        f"High-performing employees (above average) receive an average of {high_perf_avg_hours:.1f} training hours, compared to {low_perf_avg_hours:.1f} hours for lower-performing employees.",
-        f"Consider reviewing and potentially increasing training hours for {least_efficient_dept}, which shows the lowest training efficiency.",
-        f"Evaluate the training programs of {most_efficient_dept} for potential best practices that could be applied to other departments.",
-    ]
-    for insight in insights:
-        st.write(f"• {insight}")
-
-
 def risk_assessment_tab(projects_data):
     st.header("Risk Assessment")
 
@@ -553,24 +370,6 @@ def risk_assessment_tab(projects_data):
     ]
     for strategy in strategies:
         st.write(f"• {strategy}")
-
-    # Risk vs Completion scatter plot
-    st.subheader("Risk vs Project Completion")
-    risk_numeric = {"low": 1, "medium": 2, "high": 3}
-    projects_data["risk_numeric"] = projects_data["risk"].map(risk_numeric)
-
-    fig = px.scatter(
-        projects_data,
-        x="completion",
-        y="risk_numeric",
-        color="department",
-        size="risk_numeric",
-        hover_name="name",
-        labels={"completion": "Project Completion (%)", "risk_numeric": "Risk Level"},
-        title="Project Risk vs Completion",
-    )
-    fig.update_yaxes(tickvals=[1, 2, 3], ticktext=["Low", "Medium", "High"])
-    st.plotly_chart(fig, use_container_width=True)
 
 
 if __name__ == "__main__":

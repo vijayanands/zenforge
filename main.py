@@ -23,8 +23,6 @@ PERSONA_NAVIGATION = {
     "Individual Contributor": [
         "Productivity",
         "Performance & Career",
-        "Learning & Skills",
-        "Tasks",
     ],
     "First Line Manager": [
         "Productivity",

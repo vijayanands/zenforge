@@ -45,15 +45,6 @@ def generate_weekly_task_completion():
     return [random.randint(5, 20) for _ in range(12)]
 
 
-def generate_communication_data():
-    return {
-        "avg_email_response_time": round(random.uniform(0.5, 4), 1),
-        "meetings_attended": random.randint(10, 30),
-        "feedback_implemented": random.randint(5, 15),
-        "time_in_meetings": random.randint(10, 40),
-    }
-
-
 def generate_email_response_trend():
     return [round(random.uniform(0.5, 4), 1) for _ in range(12)]
 
@@ -171,12 +162,6 @@ def aggregate_employee_data(num_employees):
         sum(x) for x in zip(*[generate_task_data() for _ in range(num_employees)])
     ]
 
-    aggregated_comm_data = {
-        key: sum(generate_communication_data()[key] for _ in range(num_employees))
-        for key in generate_communication_data().keys()
-    }
-    aggregated_comm_data["avg_email_response_time"] /= num_employees
-
     aggregated_knowledge_data = {
         key: sum(generate_knowledge_data()[key] for _ in range(num_employees))
         for key in generate_knowledge_data().keys()
@@ -264,7 +249,6 @@ def aggregate_employee_data(num_employees):
                 *[generate_weekly_task_completion() for _ in range(num_employees)]
             )
         ],
-        "communication_data": aggregated_comm_data,
         "email_trend": [
             round(
                 sum(generate_email_response_trend()[i] for _ in range(num_employees))
@@ -358,7 +342,6 @@ def employee_productivity_dashboard():
         data = {
             "productivity_score": generate_productivity_score(),
             "task_data": generate_task_data(),
-            "communication_data": generate_communication_data(),
             "knowledge_data": generate_knowledge_data(),
             "meeting_data": generate_meeting_data(),
             "learning_data": generate_learning_data(),
@@ -382,9 +365,7 @@ def employee_productivity_dashboard():
         create_styled_metric("Completed Tasks", completed_tasks, "✅")
 
     # Tabs
-    tabs = create_styled_tabs(
-        ["Tasks", "Communication", "Knowledge", "Meetings", "Learning", "Code"]
-    )
+    tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
 
     # Tab 1: Tasks
     with tabs[0]:
@@ -430,35 +411,60 @@ def employee_productivity_dashboard():
             )
             display_pie_chart(fig)
 
-    # Tab 2: Communication Efficiency
+    # Tab 2: Code
     with tabs[1]:
-        st.header("Communication Efficiency")
-        comm_data = data["communication_data"]
+        st.header("Code")
+        code_data = data["code_data"]
 
-        # Communication metrics in a single row
-        col1, col2, col3, col4 = st.columns(4)
+        # All code metrics in two rows
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             create_styled_metric(
-                "Avg Email Response Time",
-                f"{comm_data['avg_email_response_time']} hours",
-                "📧",
+                "Code Quality", f"{code_data['quality_score']}/10", "🏆"
             )
         with col2:
-            create_styled_metric(
-                "Meetings Attended", comm_data["meetings_attended"], "🗓️"
-            )
+            create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
         with col3:
             create_styled_metric(
-                "Feedback Implemented", comm_data["feedback_implemented"], "💡"
+                "Refactoring Tasks", code_data["refactoring_tasks"], "🔧"
             )
         with col4:
             create_styled_metric(
-                "Time in Meetings", f"{comm_data['time_in_meetings']}%", "⏱️"
+                "Features Developed", code_data["features_developed"], "🚀"
             )
+        with col5:
+            create_styled_metric("Git Commits", code_data["git_commits"], "💻")
 
-        st.subheader("Email Response Time Trend")
-        email_trend = data.get("email_trend", generate_email_response_trend())
-        create_styled_line_chart(email_trend, "Week", "Response Time (hours)")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        with col1:
+            create_styled_metric(
+                "Bug Fix Rate", f"{code_data['bug_fix_rate']} bugs/week", "🐛"
+            )
+        with col2:
+            create_styled_metric(
+                "Critical Bugs Fixed", code_data["bugs_fixed"]["critical"], "🚨"
+            )
+        with col3:
+            create_styled_metric(
+                "High Bugs Fixed", code_data["bugs_fixed"]["high"], "🔴"
+            )
+        with col4:
+            create_styled_metric(
+                "Medium Bugs Fixed", code_data["bugs_fixed"]["medium"], "🟠"
+            )
+        with col5:
+            create_styled_metric("Low Bugs Fixed", code_data["bugs_fixed"]["low"], "🟡")
+
+        # Bugs Fixed by Criticality pie chart
+        st.subheader("Bugs Fixed by Criticality")
+        bug_data = {
+            "Criticality": list(code_data["bugs_fixed"].keys()),
+            "Count": list(code_data["bugs_fixed"].values()),
+        }
+        fig = create_pie_chart(
+            bug_data, "Criticality", "Count", title="Bugs Fixed by Criticality"
+        )
+        display_pie_chart(fig)
 
     # Tab 3: Knowledge
     with tabs[2]:
@@ -529,100 +535,6 @@ def employee_productivity_dashboard():
         create_styled_bar_chart(
             list(raci_data.keys()), list(raci_data.values()), "Role", "Count"
         )
-
-    # Tab 5: Learning
-    with tabs[4]:
-        st.header("Learning")
-        learning_data = data["learning_data"]
-
-        # Learning metrics in a single row
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            create_styled_metric(
-                "Learning Hours", learning_data["learning_hours"], "📚"
-            )
-        with col2:
-            create_styled_metric(
-                "Conferences", learning_data["conferences_attended"], "🎤"
-            )
-        with col3:
-            create_styled_metric(
-                "Skill Improvement", f"{learning_data['skill_improvement']}/10", "📈"
-            )
-        with col4:
-            create_styled_metric(
-                "Courses Completed", len(learning_data["courses_completed"]), "🎓"
-            )
-        with col5:
-            create_styled_metric(
-                "Certifications", len(learning_data["certifications"]), "🏅"
-            )
-
-        # Courses and Certifications
-        col1, col2 = st.columns(2)
-        with col1:
-            create_styled_bullet_list(
-                learning_data["courses_completed"], "Courses Completed"
-            )
-        with col2:
-            create_styled_bullet_list(
-                learning_data["certifications"], "Certifications Achieved"
-            )
-
-    # Tab 6: Code
-    with tabs[5]:
-        st.header("Code")
-        code_data = data["code_data"]
-
-        # All code metrics in two rows
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            create_styled_metric(
-                "Code Quality", f"{code_data['quality_score']}/10", "🏆"
-            )
-        with col2:
-            create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
-        with col3:
-            create_styled_metric(
-                "Refactoring Tasks", code_data["refactoring_tasks"], "🔧"
-            )
-        with col4:
-            create_styled_metric(
-                "Features Developed", code_data["features_developed"], "🚀"
-            )
-        with col5:
-            create_styled_metric("Git Commits", code_data["git_commits"], "💻")
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            create_styled_metric(
-                "Bug Fix Rate", f"{code_data['bug_fix_rate']} bugs/week", "🐛"
-            )
-        with col2:
-            create_styled_metric(
-                "Critical Bugs Fixed", code_data["bugs_fixed"]["critical"], "🚨"
-            )
-        with col3:
-            create_styled_metric(
-                "High Bugs Fixed", code_data["bugs_fixed"]["high"], "🔴"
-            )
-        with col4:
-            create_styled_metric(
-                "Medium Bugs Fixed", code_data["bugs_fixed"]["medium"], "🟠"
-            )
-        with col5:
-            create_styled_metric("Low Bugs Fixed", code_data["bugs_fixed"]["low"], "🟡")
-
-        # Bugs Fixed by Criticality pie chart
-        st.subheader("Bugs Fixed by Criticality")
-        bug_data = {
-            "Criticality": list(code_data["bugs_fixed"].keys()),
-            "Count": list(code_data["bugs_fixed"].values()),
-        }
-        fig = create_pie_chart(
-            bug_data, "Criticality", "Count", title="Bugs Fixed by Criticality"
-        )
-        display_pie_chart(fig)
 
 
 def manager_productivity_dashboard():

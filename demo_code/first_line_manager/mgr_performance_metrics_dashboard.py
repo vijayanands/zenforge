@@ -86,7 +86,10 @@ def manager_performance_dashboard():
     # Add dropdowns for duration and employee selection
     col1, col2 = st.columns(2)
     with col1:
-        duration = st.selectbox("Select Duration", ["Monthly", "Quarterly", "Yearly"])
+        duration = (
+            st.selectbox("Select Duration", ["Monthly", "Quarterly", "Yearly"], index=0)
+            or "Monthly"
+        )
     with col2:
         employees = get_dummy_employees()
         selected_employee = st.selectbox("Select Employee", ["All"] + employees)
@@ -101,7 +104,7 @@ def manager_performance_dashboard():
         with col1:
             # Commits per Developer
             commits_data = get_commits_per_developer(duration)
-            if selected_employee != "All":
+            if selected_employee != "All" and selected_employee is not None:
                 commits_data = {selected_employee: commits_data[selected_employee]}
             create_styled_bar_chart(
                 list(commits_data.keys()),
@@ -114,7 +117,7 @@ def manager_performance_dashboard():
         with col2:
             # Bug Fix Rate
             bug_fix_data = get_bug_fix_rate(duration)
-            if selected_employee != "All":
+            if selected_employee != "All" and selected_employee is not None:
                 bug_fix_data = {selected_employee: bug_fix_data[selected_employee]}
             create_styled_bar_chart(
                 list(bug_fix_data.keys()),
@@ -141,7 +144,7 @@ def manager_performance_dashboard():
         with col2:
             # Average Resolution Time
             resolution_time_data = get_average_resolution_time(duration)
-            if selected_employee != "All":
+            if selected_employee != "All" and selected_employee is not None:
                 resolution_time_data = {
                     selected_employee: resolution_time_data[selected_employee]
                 }
