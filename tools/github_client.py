@@ -1,6 +1,6 @@
 import os
 import sys
-from typing import Any, DefaultDict, Dict, List
+from typing import Any, DefaultDict, Dict, List, Optional
 from datetime import datetime
 
 import requests
@@ -47,26 +47,26 @@ class GitHubAPIClient:
             sys.exit(1)
         return response.json()["default_branch"]
 
-    def get_commits(self, branch: str, since: datetime = None) -> Any:
+    def get_commits(self, branch: str, since: Optional[datetime] = None) -> Any:
         return self._fetch_from_github("commits", {"sha": branch}, since)
 
-    def get_all_pulls(self, since: datetime = None) -> Any:
+    def get_all_pulls(self, since: Optional[datetime] = None) -> Any:
         return self._fetch_from_github("pulls", since=since)
 
-    def get_PR_comments(self, pr_number: int) -> Any:
-        return self._fetch_from_github(f"pulls/{pr_number}/comments")
+    def get_PR_comments(self, pr_number: int, since: Optional[datetime] = None) -> Any:
+        return self._fetch_from_github(f"pulls/{pr_number}/comments", since=since)
 
-    def get_all_contributors(self) -> Any:
-        return self._fetch_from_github("contributors")
+    def get_all_contributors(self, since: Optional[datetime] = None) -> Any:
+        return self._fetch_from_github("contributors", since=since)
 
-    def get_all_commit_comments(self) -> Any:
-        return self._fetch_from_github("comments")
+    def get_all_commit_comments(self, since: Optional[datetime] = None) -> Any:
+        return self._fetch_from_github("comments", since=since)
 
     def _fetch_from_github(
         self, 
         path: str, 
         additional_params: Dict[str, Any] = {},
-        since: datetime = None
+        since: Optional[datetime] = None
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
         params: Dict[str, Any] = {"per_page": 100, "state": "all"}

@@ -1,6 +1,7 @@
 import json
 from collections import defaultdict
-from typing import Any
+from typing import Any, Optional
+from datetime import datetime
 
 from github_client import GitHubAPIClient
 
@@ -17,8 +18,8 @@ def _extract_pr_info(pr: Any) -> Any:
     }
 
 
-def get_all_PRs_by_user() -> Any:
-    raw_prs: Any = client.get_all_pulls()
+def get_all_PRs_by_user(since: Optional[datetime] = None) -> Any:
+    raw_prs: Any = client.get_all_pulls(since=since)
     extracted_pr_info = [_extract_pr_info(pr) for pr in raw_prs]
     prs_by_author = defaultdict(dict)
     for pr_info in extracted_pr_info:
@@ -28,15 +29,15 @@ def get_all_PRs_by_user() -> Any:
     return prs_by_author
 
 
-def get_pull_requests_by_author(author: str) -> Any:
-    return get_all_PRs_by_user()[author].get("pull_requests", [])
+def get_pull_requests_by_author(author: str, since: Optional[datetime] = None) -> Any:
+    return get_all_PRs_by_user(since=since)[author].get("pull_requests", [])
 
 
-def _extract_commits_by_user() -> Any:
+def _extract_commits_by_user(since: Optional[datetime] = None) -> Any:
     branch = client.get_default_branch()
     print(f"Analyzing commits on the default branch: {branch}")
 
-    commits = client.get_commits(branch)
+    commits = client.get_commits(branch, since=since)
     print(f"Found {len(commits)} commits on the {branch} branch")
 
     commits_per_user = defaultdict(dict)
@@ -55,9 +56,9 @@ def _extract_commits_by_user() -> Any:
     return commits_per_user
 
 
-def get_commits_by_user() -> Any:
+def get_commits_by_user(since: Optional[datetime] = None) -> Any:
     try:
-        commits_per_user = _extract_commits_by_user()
+        commits_per_user = _extract_commits_by_user(since=since)
 
         # Print the results to the console as well
         print("\nCommits per user:")
@@ -73,9 +74,9 @@ def get_commits_by_user() -> Any:
         return None  # Return None in case of an error
 
 
-def get_commits_by_author(author: str) -> Any:
+def get_commits_by_author(author: str, since: Optional[datetime] = None) -> Any:
     # Get commits per user in the repository
-    commits_by_users = get_commits_by_user()
+    commits_by_users = get_commits_by_user(since=since)
     if commits_by_users is None:
         return None, 0
     return commits_by_users.get(author, {}), commits_by_users.get(author, {}).get(
@@ -83,9 +84,9 @@ def get_commits_by_author(author: str) -> Any:
     )
 
 
-def get_github_contributions_by_author(author: str) -> Any:
-    commit_info_list, total_commits = get_commits_by_author(author=author)
-    pr_list = get_pull_requests_by_author(author=author)
+def get_github_contributions_by_author(author: str, since: Optional[datetime] = None) -> Any:
+    commit_info_list, total_commits = get_commits_by_author(author=author, since=since)
+    pr_list = get_pull_requests_by_author(author=author, since=since)
 
     return {
         "author": author,
@@ -95,6 +96,19 @@ def get_github_contributions_by_author(author: str) -> Any:
         "pull_requests": pr_list,
     }
 
+def pull_github_data(since: Optional[datetime] = None) -> Any:
+    contributors = client.get_all_contributors(since=since)
+    prs_by_user = get_all_PRs_by_user(since=since)
+    prs_comments = client.get_PR_comments(prs_by_user, since=since)
+    commits_by_user = get_commits_by_user(since=since)
+    commits_comments = client.get_all_commit_comments(since=since)
+    return prs_by_user, commits_by_user, prs_comments, commits_comments
 
 if __name__ == "__main__":
     author = "vijayanands@gmail.com"
+    since_date = datetime(2024, 1, 1)  # Example: since January 1, 2023
+    prs_by_user, commits_by_user, prs_comments, commits_comments = pull_github_data(since=since_date)
+    print(prs_by_user)
+    print(commits_by_user)
+    print(prs_comments)
+    print(commits_comments)
