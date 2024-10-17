@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from datetime import datetime
 
 from github_client import GitHubAPIClient
@@ -9,12 +9,31 @@ client = GitHubAPIClient()
 
 
 def _extract_pr_info(pr: Any) -> Any:
+    milestone: Dict[str, str] = {
+        "id": pr["milestone"]["id"],
+        "state": pr["milestone"]["state"],
+        "title": pr["milestone"]["title"],
+        "description": pr["milestone"]["description"],
+        "open_issues": pr["milestone"]["open_issues"],
+        "closed_issues": pr["milestone"]["closed_issues"],
+        "created_at": pr["milestone"]["created_at"],
+        "updated_at": pr["milestone"]["updated_at"],
+        "closed_at": pr["milestone"]["closed_at"],
+        "due_on": pr["milestone"]["due_on"],
+    }
     return {
         "number": pr["number"],
-        "pr_title": pr["title"],
-        "pr_url": pr["html_url"],
+        "title": pr["title"],
+        "html_url": pr["html_url"],
         "author": pr["user"]["login"],
         "body": pr["body"],
+        "state": pr["state"],
+        "milestone": milestone,
+        "created_at": pr["created_at"],
+        "updated_at": pr["updated_at"],
+        "closed_at": pr["closed_at"],
+        "merged_at": pr["merged_at"],
+        "merge_commit_sha": pr["merge_commit_sha"],
     }
 
 
@@ -51,6 +70,7 @@ def _extract_commits_by_user(since: Optional[datetime] = None) -> Any:
             commits_per_user[author].setdefault("total_commits", 0) + 1
         )
         commits_per_user[author]["comment_count"] = commit["commit"]["comment_count"]
+        commits_per_user[author]["comments_url"] = commit["comments_url"]
         commits_per_user[author]["message"] = commit["commit"]["message"]
 
     return commits_per_user
@@ -84,7 +104,9 @@ def get_commits_by_author(author: str, since: Optional[datetime] = None) -> Any:
     )
 
 
-def get_github_contributions_by_author(author: str, since: Optional[datetime] = None) -> Any:
+def get_github_contributions_by_author(
+    author: str, since: Optional[datetime] = None
+) -> Any:
     commit_info_list, total_commits = get_commits_by_author(author=author, since=since)
     pr_list = get_pull_requests_by_author(author=author, since=since)
 
@@ -96,23 +118,24 @@ def get_github_contributions_by_author(author: str, since: Optional[datetime] = 
         "pull_requests": pr_list,
     }
 
-def pull_github_data(since: Optional[datetime] = None) -> Any:
-    contributors = client.get_all_contributors(since=since)
-    prs_by_user = get_all_PRs_by_user(since=since)
-    prs_comments = client.get_PR_comments(prs_by_user, since=since)
+
+def pull_github_data(since: Optional[datetime] = None) -> None:
+    # contributors = client.get_all_contributors(since=since)
+    # prs_by_user = get_all_PRs_by_user(since=since)
+    # print("\n--- Pull Requests by User ---")
+    # print(prs_by_user)
+    # prs_comments = client.get_PR_comments(prs_by_user, since=since)
+    # print("\n--- Pull Request Comments ---")
+    # print(prs_comments)
     commits_by_user = get_commits_by_user(since=since)
-    commits_comments = client.get_all_commit_comments(since=since)
-    return prs_by_user, commits_by_user, prs_comments, commits_comments
+    print("\n--- Commits by User ---")
+    print(commits_by_user)
+    # commits_comments = client.get_all_commit_comments(since=since)
+    # print("\n--- Commit Comments ---")
+    # print(commits_comments)
+
 
 if __name__ == "__main__":
     author = "vijayanands@gmail.com"
-    since_date = datetime(2024, 1, 1)  # Example: since January 1, 2023
-    prs_by_user, commits_by_user, prs_comments, commits_comments = pull_github_data(since=since_date)
-    print("\n--- Pull Requests by User ---")
-    print(prs_by_user)
-    print("\n--- Commits by User ---")
-    print(commits_by_user)
-    print("\n--- Pull Request Comments ---")
-    print(prs_comments)
-    print("\n--- Commit Comments ---")
-    print(commits_comments)
+    since_date = datetime(2022, 10, 10)  # since September 1, 2024
+    pull_github_data(since=since_date)

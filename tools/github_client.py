@@ -14,13 +14,13 @@ headers = get_github_auth_header()
 
 class GitHubAPIClient:
     def __init__(self):
-        self.base_url = "https://api.github.com"
         self.headers = headers
         self.github_owner = os.getenv("GITHUB_OWNER")
         self.github_repo = os.getenv("GITHUB_REPO")
         assert self.github_owner is not None, "GITHUB_OWNER must be set"
         assert self.github_repo is not None, "GITHUB_REPO must be set"
-        self.base_url = f"{self.base_url}/repos/{self.github_owner}/{self.github_repo}"
+        self.base_path = f"repos/{self.github_owner}/{self.github_repo}"
+        self.base_url = f"https://api.github.com/{self.base_path}"
 
     def get_github_owner(self) -> str:
         if self.github_owner is None:
@@ -39,8 +39,7 @@ class GitHubAPIClient:
         return response
 
     def get_default_branch(self) -> str:
-        url = f"{self.base_url}/repos/{self.github_owner}/{self.github_repo}"
-        response = self.call_github(url)
+        response = self.call_github(self.base_url)
         if response.status_code != 200:
             print(f"Error fetching repository info: {response.status_code}")
             print(f"Response content: {response.text}")
@@ -63,17 +62,17 @@ class GitHubAPIClient:
         return self._fetch_from_github("comments", since=since)
 
     def _fetch_from_github(
-        self, 
-        path: str, 
+        self,
+        path: str,
         additional_params: Dict[str, Any] = {},
-        since: Optional[datetime] = None
+        since: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
         params: Dict[str, Any] = {"per_page": 100, "state": "all"}
         params.update(additional_params)
 
         if since:
-            params['since'] = since.isoformat()
+            params["since"] = since.isoformat()
 
         all_items = []
 
