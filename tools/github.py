@@ -108,7 +108,11 @@ if __name__ == "__main__":
     author = "vijayanands@gmail.com"
     since_date = datetime(2024, 1, 1)  # Example: since January 1, 2023
     prs_by_user, commits_by_user, prs_comments, commits_comments = pull_github_data(since=since_date)
+    print("\n--- Pull Requests by User ---")
     print(prs_by_user)
+    print("\n--- Commits by User ---")
     print(commits_by_user)
+    print("\n--- Pull Request Comments ---")
     print(prs_comments)
+    print("\n--- Commit Comments ---")
     print(commits_comments)
