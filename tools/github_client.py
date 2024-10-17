@@ -191,6 +191,12 @@ class GitHubAPIClient:
                 print(f"Response content: {response.text}")
                 break
             items = response.json()
+
+            # Extract comment text if fetching comments
+            if contribution_type == "comments":
+                for item in items:
+                    item["comment_text"] = item.get("body", "")
+
             all_items.extend(items)
 
             # Check for pagination
