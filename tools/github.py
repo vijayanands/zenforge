@@ -5,8 +5,7 @@ from typing import Any
 
 from github_client import GitHubAPIClient
 
-from helpers.constants import (map_user, unique_user_emails,
-                               user_to_external_users)
+from helpers.constants import map_user, unique_user_emails, user_to_external_users
 
 # Set up logging
 logging.basicConfig(
