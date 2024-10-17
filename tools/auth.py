@@ -22,7 +22,7 @@ def base64_encode_string(input_string: str) -> str:
     return encoded_string
 
 
-def get_basic_auth_header(username: str, password: str):
+def get_basic_auth_header(username: str, password: str) -> str:
     auth_string = f"{username}:{password}"
     return f"Basic {base64_encode_string(auth_string)}"
 
@@ -35,7 +35,7 @@ def get_headers(username: str, api_token: str) -> Dict[str, str]:
     return headers
 
 
-def get_github_auth_header():
+def get_github_auth_header() -> Dict[str, str]:
     headers = {
         "Authorization": f"token {os.getenv('GITHUB_TOKEN')}",
         "Accept": "application/vnd.github.v3+json",

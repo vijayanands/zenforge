@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="aa843445-ed9f-45b8-aa35-d630df7be654" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/helpers/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/auth.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/helpers/constants.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/tools/github.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/github.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/tools/github_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/github_client.py" afterDir="false" />
-    </list>
+    <list default="true" id="aa843445-ed9f-45b8-aa35-d630df7be654" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -34,6 +28,11 @@
     &quot;git-widget-placeholder&quot;: &quot;main&quot;
   }
 }</component>
+  <component name="RecentsManager">
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/tools" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>

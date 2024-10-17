@@ -17,21 +17,27 @@ class GitHubAPIClient:
         self.headers = headers
         self.github_owner = os.getenv("GITHUB_OWNER")
         self.github_repo = os.getenv("GITHUB_REPO")
+        assert self.github_owner is not None, "GITHUB_OWNER must be set"
+        assert self.github_repo is not None, "GITHUB_REPO must be set"
         self.base_url = f"{self.base_url}/repos/{self.github_owner}/{self.github_repo}"
 
-    def get_github_owner(self):
+    def get_github_owner(self) -> str:
+        if self.github_owner is None:
+            raise ValueError("GitHub owner is not set")
         return self.github_owner
 
-    def get_github_repo(self):
+    def get_github_repo(self) -> str:
+        if self.github_repo is None:
+            raise ValueError("GitHub repo is not set")
         return self.github_repo
 
-    def call_github(self, url, params=None):
+    def call_github(self, url, params=None) -> Any:
         print(f"Making API call to: {url}")
         response = requests.get(url, headers=self.headers, params=params)
         print(f"Response status code: {response.status_code}")
         return response
 
-    def get_default_branch(self):
+    def get_default_branch(self) -> str:
         url = f"{self.base_url}/repos/{self.github_owner}/{self.github_repo}"
         response = self.call_github(url)
         if response.status_code != 200:
@@ -40,7 +46,7 @@ class GitHubAPIClient:
             sys.exit(1)
         return response.json()["default_branch"]
 
-    def get_commits(self, branch):
+    def get_commits(self, branch) -> Any:
         return self._fetch_from_github("commits", {"sha": branch})
 
     def get_all_pulls(self) -> Any:
@@ -56,7 +62,7 @@ class GitHubAPIClient:
         return self._fetch_from_github("comments")
 
     def _fetch_from_github(
-        self, path: str, additional_params: Dict[str, str] = DefaultDict
+        self, path: str, additional_params: Dict[str, str] = {}
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
         params: Dict[str, Any] = {"per_page": 100, "state": "all"}
