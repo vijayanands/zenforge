@@ -5,15 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="aa843445-ed9f-45b8-aa35-d630df7be654" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/demo_code/first_line_manager/mgr_performance_metrics_dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_code/first_line_manager/mgr_performance_metrics_dashboard.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/demo_code/first_line_manager/mgr_productivity_dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_code/first_line_manager/mgr_productivity_dashboard.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/demo_code/ic/dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_code/ic/dashboard.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/demo_code/ic/ic_learning_dashboard.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/demo_code/ic/ic_productivity_dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_code/ic/ic_productivity_dashboard.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/demo_code/ic/ic_task_dashboard.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/demo_code/second_line_manager_or_director/org_productivity_dashboard.py" beforeDir="false" afterPath="$PROJECT_DIR$/demo_code/second_line_manager_or_director/org_productivity_dashboard.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/helpers/constants.py" beforeDir="false" afterPath="$PROJECT_DIR$/helpers/constants.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/helpers/auth.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/auth.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/helpers/constants.py" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/tools/github.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/github.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tools/github_client.py" beforeDir="false" afterPath="$PROJECT_DIR$/tools/github_client.py" afterDir="false" />
     </list>

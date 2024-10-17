@@ -4,10 +4,14 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from demo_code.ui.style import (create_pie_chart, create_progress_bar,
-                                create_styled_bullet_list,
-                                create_styled_metric, create_styled_tabs,
-                                display_pie_chart)
+from demo_code.ui.style import (
+    create_pie_chart,
+    create_progress_bar,
+    create_styled_bullet_list,
+    create_styled_metric,
+    create_styled_tabs,
+    display_pie_chart,
+)
 
 
 def get_overall_performance():
