@@ -1,6 +1,7 @@
 import os
 import sys
 from typing import Any, DefaultDict, Dict, List
+from datetime import datetime
 
 import requests
 from dotenv import load_dotenv
@@ -46,11 +47,11 @@ class GitHubAPIClient:
             sys.exit(1)
         return response.json()["default_branch"]
 
-    def get_commits(self, branch) -> Any:
-        return self._fetch_from_github("commits", {"sha": branch})
+    def get_commits(self, branch: str, since: datetime = None) -> Any:
+        return self._fetch_from_github("commits", {"sha": branch}, since)
 
-    def get_all_pulls(self) -> Any:
-        return self._fetch_from_github("pulls")
+    def get_all_pulls(self, since: datetime = None) -> Any:
+        return self._fetch_from_github("pulls", since=since)
 
     def get_PR_comments(self, pr_number: int) -> Any:
         return self._fetch_from_github(f"pulls/{pr_number}/comments")
@@ -62,12 +63,18 @@ class GitHubAPIClient:
         return self._fetch_from_github("comments")
 
     def _fetch_from_github(
-        self, path: str, additional_params: Dict[str, str] = {}
+        self, 
+        path: str, 
+        additional_params: Dict[str, Any] = {},
+        since: datetime = None
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
         params: Dict[str, Any] = {"per_page": 100, "state": "all"}
-        for key, value in additional_params:
-            params[key] = value
+        params.update(additional_params)
+
+        if since:
+            params['since'] = since.isoformat()
+
         all_items = []
 
         while url:
