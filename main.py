@@ -1,8 +1,10 @@
 import streamlit as st
 
-from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
+from demo_code.first_line_manager.dashboard import \
+    show_first_line_manager_dashboard
 from demo_code.ic.dashboard import show_ic_dashboard
-from demo_code.second_line_manager_or_director.dashboard import show_director_dashboard
+from demo_code.second_line_manager_or_director.dashboard import \
+    show_director_dashboard
 from demo_code.ui.title_bar import set_title_bar
 
 # Constants

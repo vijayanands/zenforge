@@ -1,9 +1,10 @@
 import os
 import sys
-from typing import Any, Dict, List, DefaultDict
+from typing import Any, DefaultDict, Dict, List
 
 import requests
 from dotenv import load_dotenv
+
 from tools.auth import get_github_auth_header
 
 load_dotenv()
