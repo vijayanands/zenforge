@@ -1,41 +1,86 @@
 import json
+import os
+import sys
 from collections import defaultdict
-from typing import Any, Optional, Dict
-from datetime import datetime
+from typing import Any, Optional, Dict, DefaultDict, List
+from datetime import datetime, timezone
+
+from pinecone.control.langchain_import_warnings import GITHUB_REPO
 
 from github_client import GitHubAPIClient
+from tools.fetch_commit_comments import fetch_commit_comments
+from tools.fetch_commits import fetch_commits
+from tools.fetch_pr_comments import fetch_pr_comments
+from tools.fetch_prs import fetch_pull_requests
+from tools.github_client import GitHubAPIClient
 
 client = GitHubAPIClient()
+owner = client.get_github_owner()
+repo = client.get_github_repo()
+token = os.getenv("GITHUB_TOKEN")
 
+github_data: Dict[str, Dict[str, Any]] = DefaultDict[str, Dict[str, Any]]()
 
-def _extract_pr_info(pr: Any) -> Any:
-    milestone: Dict[str, str] = {
-        "id": pr["milestone"]["id"],
-        "state": pr["milestone"]["state"],
-        "title": pr["milestone"]["title"],
-        "description": pr["milestone"]["description"],
-        "open_issues": pr["milestone"]["open_issues"],
-        "closed_issues": pr["milestone"]["closed_issues"],
-        "created_at": pr["milestone"]["created_at"],
-        "updated_at": pr["milestone"]["updated_at"],
-        "closed_at": pr["milestone"]["closed_at"],
-        "due_on": pr["milestone"]["due_on"],
-    }
+def _extract_pr_info(pr: Dict[str, Any]) -> Dict[str, Any]:
+    milestone = pr.get('milestone', {})
+    merged_at = pr['pull_request']['merged_at']
     return {
-        "number": pr["number"],
-        "title": pr["title"],
-        "html_url": pr["html_url"],
-        "author": pr["user"]["login"],
-        "body": pr["body"],
-        "state": pr["state"],
-        "milestone": milestone,
-        "created_at": pr["created_at"],
-        "updated_at": pr["updated_at"],
-        "closed_at": pr["closed_at"],
-        "merged_at": pr["merged_at"],
-        "merge_commit_sha": pr["merge_commit_sha"],
+        "html_url": pr['html_url'],
+        "id": pr['id'],
+        "number": pr['number'],
+        "state": pr['state'],
+        "title": pr['title'],
+        "body": pr['body'],
+        "labels": [{"id": label['id'], "name": label['name'], "description": label['description']} 
+                   for label in pr.get('labels', [])],
+        "milestone": {
+            "id": milestone.get('id'),
+            "number": milestone.get('number'),
+            "state": milestone.get('state'),
+            "title": milestone.get('title'),
+            "description": milestone.get('description'),
+            "open_issues": milestone.get('open_issues'),
+            "closed_issues": milestone.get('closed_issues'),
+            "created_at": milestone.get('created_at'),
+            "updated_at": milestone.get('updated_at'),
+            "closed_at": milestone.get('closed_at'),
+            "due_on": milestone.get('due_on')
+        } if milestone else None,
+        "created_at": pr['created_at'],
+        "updated_at": pr['updated_at'],
+        "closed_at": pr['closed_at'],
+        "merged_at": merged_at
     }
 
+def _extract_pr_comment_info(pr_comment: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "html_url": pr_comment['html_url'],
+        "pull_request_review_id": pr_comment.get('pull_request_review_id'),
+        "id": pr_comment['id'],
+        "commit_id": pr_comment.get('commit_id'),
+        "original_commit_id": pr_comment.get('original_commit_id'),
+        "in_reply_to_id": pr_comment.get('in_reply_to_id'),
+        "body": pr_comment['body'],
+        "created_at": pr_comment['created_at'],
+    }
+
+def _extract_commit_comment_info(commit_comment: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "html_url": commit_comment['html_url'],
+        "id": commit_comment['id'],
+        "body": commit_comment['body'],
+        "commit_id": commit_comment['commit_id'],
+        "created_at": commit_comment['created_at'],
+        "updated_at": commit_comment['updated_at'],
+    }
+
+def _extract_commit_info(commit: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "sha": commit['sha'],
+        "html_url": commit['html_url'],
+        "message": commit['commit']['message'],
+        "date": commit['commit']['author']['date']
+    }
 
 def get_all_PRs_by_user(since: Optional[datetime] = None) -> Any:
     raw_prs: Any = client.get_all_pulls(since=since)
@@ -70,7 +115,7 @@ def _extract_commits_by_user(since: Optional[datetime] = None) -> Any:
             commits_per_user[author].setdefault("total_commits", 0) + 1
         )
         commits_per_user[author]["comment_count"] = commit["commit"]["comment_count"]
-        commits_per_user[author]["comments_url"] = commit["comments_url"]
+        commits_per_user[author]["commemake sure that the updated_at is greater than sincets_url"] = commit["comments_url"]
         commits_per_user[author]["message"] = commit["commit"]["message"]
 
     return commits_per_user
@@ -118,24 +163,164 @@ def get_github_contributions_by_author(
         "pull_requests": pr_list,
     }
 
+def aggregate_github_data(prs: List[Dict[str, Any]], 
+                          pr_comments: List[Dict[str, Any]], 
+                          commits: List[Dict[str, Any]], 
+                          commit_comments: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    github_data: DefaultDict[str, Dict[str, Any]] = defaultdict(lambda: defaultdict(list))
+    
+    for pr in prs:
+        author = pr['user']['login']
+        pr_info = _extract_pr_info(pr)
+        github_data[author]['pull_requests'].append(pr_info)
 
-def pull_github_data(since: Optional[datetime] = None) -> None:
-    # contributors = client.get_all_contributors(since=since)
-    # prs_by_user = get_all_PRs_by_user(since=since)
-    # print("\n--- Pull Requests by User ---")
-    # print(prs_by_user)
-    # prs_comments = client.get_PR_comments(prs_by_user, since=since)
-    # print("\n--- Pull Request Comments ---")
-    # print(prs_comments)
-    commits_by_user = get_commits_by_user(since=since)
-    print("\n--- Commits by User ---")
-    print(commits_by_user)
-    # commits_comments = client.get_all_commit_comments(since=since)
-    # print("\n--- Commit Comments ---")
-    # print(commits_comments)
+    for pr_comment in pr_comments:
+        author = pr_comment['user']['login']
+        pr_comment_info = _extract_pr_comment_info(pr_comment)
+        github_data[author]['pull_request_comments'].append(pr_comment_info)
 
+    for commit in commits:
+        author = commit['author']['login']
+        commit_info = _extract_commit_info(commit)
+        github_data[author]['commits'].append(commit_info)
+
+    for commit_comment in commit_comments:
+        author = commit_comment['user']['login']
+        commit_comment_info = _extract_commit_comment_info(commit_comment)
+        github_data[author]['commit_comments'].append(commit_comment_info)
+
+    return dict(github_data)
+
+def get_commits(start_date: str, end_date: Optional[str] = None):
+    # Validate date format
+    # Validate date format
+    try:
+        datetime.strptime(start_date, '%Y-%m-%d')
+        if end_date:
+            datetime.strptime(end_date, '%Y-%m-%d')
+    except ValueError:
+        print("Date format should be YYYY-MM-DD")
+        sys.exit(1)
+
+    commits = fetch_commits(owner, repo, start_date, end_date, token)
+    return commits
+
+
+def print_commits(commits, start_date):
+    print(f"Found {len(commits)} commit(s) starting from {start_date}:\n")
+    for commit in commits:
+        sha = commit['sha']
+        message = commit['commit']['message'].split('\n')[0]
+        author = commit['commit']['author']['name']
+        date = commit['commit']['author']['date']
+        url = commit['html_url']
+        print(f"Commit {sha[:7]} - {message}")
+        print(f"  Author: {author} on {date}")
+        print(f"  URL: {url}\n")
+
+
+def get_PR_comments(start_date: str, end_date: Optional[str] = None):
+    # Validate date format
+    try:
+        datetime.strptime(start_date, '%Y-%m-%d')
+        if end_date:
+            datetime.strptime(end_date, '%Y-%m-%d')
+    except ValueError:
+        print("Date format should be YYYY-MM-DD")
+        sys.exit(1)
+
+    comments = fetch_pr_comments(owner, repo, start_date, end_date, token)
+    return comments
+
+
+def print_PR_comments(comments, start_date):
+    print(f"Found {len(comments)} pull request comment(s) starting from {start_date}:\n")
+    for comment in comments:
+        pr_number = comment['pull_request_url'].split('/')[-1]
+        commenter = comment['user']['login']
+        created_at = comment['created_at']
+        url = comment['html_url']
+        body = comment['body'].split('\n')[0]
+        print(f"PR #{pr_number} Comment by {commenter} on {created_at}")
+        print(f"  {body}")
+        print(f"  URL: {url}\n")
+
+
+def get_commit_comments(start_date: str, end_date: Optional[str] = None):
+    # Validate date format
+    try:
+        datetime.strptime(start_date, '%Y-%m-%d')
+        if end_date:
+            datetime.strptime(end_date, '%Y-%m-%d')
+    except ValueError:
+        print("Date format should be YYYY-MM-DD")
+        sys.exit(1)
+
+    comments = fetch_commit_comments(owner, repo, start_date, end_date, token)
+    return comments
+
+
+def print_commit_comments(comments, start_date):
+    print(f"Found {len(comments)} commit comment(s) starting from {start_date}:\n")
+    for comment in comments:
+        commit_id = comment['commit_id']
+        commenter = comment['user']['login']
+        created_at = comment['created_at']
+        url = comment['html_url']
+        body = comment['body'].split('\n')[0]
+        print(f"Commit {commit_id[:7]} Comment by {commenter} on {created_at}")
+        print(f"  {body}")
+        print(f"  URL: {url}\n")
+
+
+def get_PRs(start_date: str, end_date: Optional[str] = None):
+    # Validate date format
+    try:
+        datetime.strptime(start_date, '%Y-%m-%d')
+        if end_date:
+            datetime.strptime(end_date, '%Y-%m-%d')
+    except ValueError:
+        print("Date format should be YYYY-MM-DD")
+        sys.exit(1)
+
+    prs = fetch_pull_requests(owner, repo, start_date, end_date, token)
+    return prs
+
+
+def print_PRs(prs, start_date):
+    print(f"Found {len(prs)} pull request(s) starting from {start_date}:\n")
+    for pr in prs:
+        print(f"PR #{pr['number']} - {pr['title']}")
+        print(f"  Created by: {pr['user']['login']} on {pr['created_at']}")
+        print(f"  URL: {pr['html_url']}\n")
+
+
+def _pretty_print_dict(dictionary, indent=0):
+    """
+    Pretty prints a dictionary with nested structures.
+
+    Args:
+        dictionary: The dictionary to print
+        indent: Current indentation level (default: 0)
+    """
+    for key, value in dictionary.items():
+        print('  ' * indent + str(key) + ':', end=' ')
+        if isinstance(value, dict):
+            print()
+            _pretty_print_dict(value, indent + 1)
+        else:
+            print(str(value))
+
+def pull_github_data(start_date: str, end_date: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    prs = get_PRs(start_date=start_date, end_date=end_date)
+    pr_comments = get_PR_comments(start_date=start_date, end_date=end_date)
+    commits = get_commits(start_date=start_date, end_date=end_date)
+    commit_comments = get_commit_comments(start_date=start_date, end_date=end_date)
+
+    return aggregate_github_data(prs, pr_comments, commits, commit_comments)
 
 if __name__ == "__main__":
-    author = "vijayanands@gmail.com"
-    since_date = datetime(2022, 10, 10)  # since September 1, 2024
-    pull_github_data(since=since_date)
+    start_date = "2024-10-20"
+    end_date = None
+    github_data = pull_github_data(start_date, end_date)
+    _pretty_print_dict(github_data)

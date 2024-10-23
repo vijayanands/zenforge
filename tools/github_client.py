@@ -68,7 +68,7 @@ class GitHubAPIClient:
         since: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
-        params: Dict[str, Any] = {"per_page": 100, "state": "all"}
+        params: Dict[str, Any] = {"per_page": 100}
         params.update(additional_params)
 
         if since:
@@ -83,10 +83,14 @@ class GitHubAPIClient:
                 print(f"Response content: {response.text}")
                 break
             items = response.json()
+            
             all_items.extend(items)
 
             # Check for pagination
             url = response.links.get("next", {}).get("url")
+
+            # Clear params for subsequent requests to avoid duplicate query parameters
+            params = {}
 
         print(f"Fetched {len(all_items)} {path}")
         return all_items

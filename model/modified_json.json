@@ -57,6 +57,14 @@
                 "body": "Great stuff!",
                 "created_at": "2011-"
             }
+        ],
+        "commits": [
+            {
+                "sha": "",
+                "html_url": "",
+                "message": "",
+                "date": ""
+            }
         ]
     }
 }
