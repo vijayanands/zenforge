@@ -6,7 +6,7 @@ from datetime import datetime
 import requests
 from dotenv import load_dotenv
 
-from tools.auth import get_github_auth_header
+from auth import get_github_auth_header
 
 load_dotenv()
 headers = get_github_auth_header()

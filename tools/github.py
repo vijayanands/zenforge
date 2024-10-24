@@ -8,11 +8,15 @@ from datetime import datetime, timezone
 from pinecone.control.langchain_import_warnings import GITHUB_REPO
 
 from github_client import GitHubAPIClient
-from tools.fetch_commit_comments import fetch_commit_comments
-from tools.fetch_commits import fetch_commits
-from tools.fetch_pr_comments import fetch_pr_comments
-from tools.fetch_prs import fetch_pull_requests
-from tools.github_client import GitHubAPIClient
+# from tools.fetch_commit_comments import fetch_commit_comments
+from fetch_commit_comments import fetch_commit_comments
+# from tools.fetch_commits import fetch_commits
+from fetch_commits import fetch_commits
+# from tools.fetch_pr_comments import fetch_pr_comments
+from fetch_pr_comments import fetch_pr_comments
+# from tools.fetch_prs import fetch_pull_requests
+from fetch_prs import fetch_pull_requests
+# from tools.github_client import GitHubAPIClient
 
 client = GitHubAPIClient()
 owner = client.get_github_owner()
@@ -320,7 +324,21 @@ def pull_github_data(start_date: str, end_date: Optional[str] = None) -> Dict[st
     return aggregate_github_data(prs, pr_comments, commits, commit_comments)
 
 if __name__ == "__main__":
+    import json
+    
     start_date = "2024-10-20"
     end_date = None
     github_data = pull_github_data(start_date, end_date)
-    _pretty_print_dict(github_data)
+    
+    # Convert github_data to JSON
+    json_data = json.dumps(github_data, indent=2, default=str)
+    
+    # Print the JSON data
+    print(json_data)
+    
+    # Save the JSON data to a file
+    output_file = "github_data_output.json"
+    with open(output_file, "w") as f:
+        f.write(json_data)
+    
+    print(f"\nJSON data has been saved to {output_file}")
