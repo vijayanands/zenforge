@@ -1,13 +1,16 @@
 import enum
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, ForeignKey, Enum, DateTime, Text, Boolean, \
-    PrimaryKeyConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+
+from sqlalchemy import (Boolean, Column, DateTime, Enum, Float, ForeignKey,
+                        Integer, PrimaryKeyConstraint, String, Text,
+                        create_engine)
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.sql import text
 
 Base = declarative_base()
+
 
 # Enums remain unchanged
 class EventType(enum.Enum):
@@ -18,20 +21,23 @@ class EventType(enum.Enum):
     PULL_REQUEST = "pull_request"
     CI_CD = "ci_cd"
 
+
 class StageType(enum.Enum):
     START = "start"
     END = "end"
     BLOCKED = "blocked"
     RESUME = "resume"
 
+
 class PRState(enum.Enum):
     OPENED = "opened"
     APPROVED = "approved"
     MERGED = "merged"
 
+
 class Project(Base):
-    __tablename__ = 'projects'
-    __table_args__ = {'schema': 'sdlc_timeseries'}
+    __tablename__ = "projects"
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)
     title = Column(String, nullable=False)
@@ -47,15 +53,16 @@ class Project(Base):
     avg_code_coverage = Column(Float)
     total_p0_bugs = Column(Integer)
 
+
 class DesignEvent(Base):
-    __tablename__ = 'design_events'
+    __tablename__ = "design_events"
     __table_args__ = (
-        PrimaryKeyConstraint('id', 'timestamp'),
-        {'schema': 'sdlc_timeseries'}
+        PrimaryKeyConstraint("id", "timestamp"),
+        {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))
+    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     timestamp = Column(DateTime, nullable=False)
     design_type = Column(String, nullable=False)
     stage = Column(Enum(StageType), nullable=False)
@@ -64,12 +71,15 @@ class DesignEvent(Base):
     stakeholders = Column(String)
     review_status = Column(String)
 
+
 class JiraItem(Base):
-    __tablename__ = 'jira_items'
-    __table_args__ = {'schema': 'sdlc_timeseries'}
+    __tablename__ = "jira_items"
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)  # jira_id
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))  # Changed from project_id
+    event_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id")
+    )  # Changed from project_id
     parent_id = Column(String, nullable=True)
     type = Column(String, nullable=False)
     title = Column(String, nullable=False)
@@ -83,15 +93,18 @@ class JiraItem(Base):
     estimated_hours = Column(Integer)
     actual_hours = Column(Integer)
 
+
 class CodeCommit(Base):
-    __tablename__ = 'code_commits'
+    __tablename__ = "code_commits"
     __table_args__ = (
-        PrimaryKeyConstraint('id', 'timestamp'),
-        {'schema': 'sdlc_timeseries'}
+        PrimaryKeyConstraint("id", "timestamp"),
+        {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))  # Changed from project_id
+    event_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id")
+    )  # Changed from project_id
     timestamp = Column(DateTime, nullable=False)
     repository = Column(String)
     branch = Column(String)
@@ -107,15 +120,18 @@ class CodeCommit(Base):
     comments_count = Column(Integer)
     approved_by = Column(String)
 
+
 class CICDEvent(Base):
-    __tablename__ = 'cicd_events'
+    __tablename__ = "cicd_events"
     __table_args__ = (
-        PrimaryKeyConstraint('id', 'timestamp'),
-        {'schema': 'sdlc_timeseries'}
+        PrimaryKeyConstraint("id", "timestamp"),
+        {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))  # Changed from project_id
+    event_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id")
+    )  # Changed from project_id
     timestamp = Column(DateTime, nullable=False)
     environment = Column(String)
     event_type = Column(String)
@@ -125,12 +141,15 @@ class CICDEvent(Base):
     metrics = Column(JSONB)
     reason = Column(String, nullable=True)
 
+
 class Bug(Base):
-    __tablename__ = 'bugs'
-    __table_args__ = {'schema': 'sdlc_timeseries'}
+    __tablename__ = "bugs"
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)  # jira_id
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))  # Changed from project_id
+    event_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id")
+    )  # Changed from project_id
     bug_type = Column(String)
     impact_area = Column(String)
     severity = Column(String)
@@ -148,12 +167,15 @@ class Bug(Base):
     customer_communication_needed = Column(Boolean)
     postmortem_link = Column(String)
 
+
 class Sprint(Base):
-    __tablename__ = 'sprints'
-    __table_args__ = {'schema': 'sdlc_timeseries'}
+    __tablename__ = "sprints"
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)  # sprint_id
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))  # Changed from project_id
+    event_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id")
+    )  # Changed from project_id
     start_date = Column(DateTime)
     end_date = Column(DateTime)
     planned_story_points = Column(Integer)
@@ -168,15 +190,18 @@ class Sprint(Base):
     team_satisfaction_score = Column(Float)
     status = Column(String)
 
+
 class TeamMetrics(Base):
-    __tablename__ = 'team_metrics'
+    __tablename__ = "team_metrics"
     __table_args__ = (
-        PrimaryKeyConstraint('id', 'week_starting'),
-        {'schema': 'sdlc_timeseries'}
+        PrimaryKeyConstraint("id", "week_starting"),
+        {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
-    event_id = Column(String, ForeignKey('sdlc_timeseries.projects.id'))  # Changed from project_id
+    event_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id")
+    )  # Changed from project_id
     week_starting = Column(DateTime, nullable=False)
     team_size = Column(Integer)
     velocity = Column(Float)

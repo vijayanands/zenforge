@@ -1,12 +1,11 @@
 import os
 import sys
-from typing import Any, DefaultDict, Dict, List, Optional
 from datetime import datetime
+from typing import Any, DefaultDict, Dict, List, Optional
 
 import requests
-from dotenv import load_dotenv
-
 from auth import get_github_auth_header
+from dotenv import load_dotenv
 
 load_dotenv()
 headers = get_github_auth_header()
@@ -83,7 +82,7 @@ class GitHubAPIClient:
                 print(f"Response content: {response.text}")
                 break
             items = response.json()
-            
+
             all_items.extend(items)
 
             # Check for pagination

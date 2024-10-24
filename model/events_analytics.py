@@ -1,8 +1,11 @@
-from typing import Dict, List, Tuple, Any
 from datetime import datetime, timedelta
-from sqlalchemy import func, and_, or_, desc, case
+from typing import Any, Dict, List, Tuple
+
+from events_schema import (Bug, CICDEvent, CodeCommit, DatabaseManager,
+                           DesignEvent, Sprint, TeamMetrics)
+from sqlalchemy import and_, case, desc, func, or_
 from sqlalchemy.orm import Session
-from events_schema import DatabaseManager, CodeCommit, CICDEvent, DesignEvent, Bug, Sprint, TeamMetrics
+
 
 class EventAnalytics:
     def __init__(self, db_manager: DatabaseManager):

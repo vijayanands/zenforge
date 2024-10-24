@@ -6,17 +6,12 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from demo_code.ui.style import (
-    apply_styled_dropdown_css,
-    create_pie_chart,
-    create_styled_bar_chart,
-    create_styled_bullet_list,
-    create_styled_line_chart,
-    create_styled_metric,
-    create_styled_radio_buttons,
-    create_styled_tabs,
-    display_pie_chart,
-)
+from demo_code.ui.style import (apply_styled_dropdown_css, create_pie_chart,
+                                create_styled_bar_chart,
+                                create_styled_bullet_list,
+                                create_styled_line_chart, create_styled_metric,
+                                create_styled_radio_buttons,
+                                create_styled_tabs, display_pie_chart)
 
 
 # Generate dummy data

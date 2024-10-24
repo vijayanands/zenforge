@@ -2,19 +2,21 @@
 TimescaleDB Schema Management using pure Python with psycopg2
 """
 
+import logging
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2.extras import execute_batch
-from typing import List, Dict, Any, Optional
-import logging
-from datetime import datetime
-from contextlib import contextmanager
+
 
 class TimescaleDBManager:
     def __init__(self, connection_params: Dict[str, str]):
         """
         Initialize TimescaleDB connection manager
-        
+
         Args:
             connection_params: Dictionary containing connection parameters
                 (dbname, user, password, host, port)
@@ -35,9 +37,9 @@ class TimescaleDBManager:
 
     def create_database(self) -> None:
         """Create the database if it doesn't exist"""
-        db_name = self.conn_params['dbname']
+        db_name = self.conn_params["dbname"]
         temp_params = self.conn_params.copy()
-        temp_params['dbname'] = 'postgres'  # Connect to default db first
+        temp_params["dbname"] = "postgres"  # Connect to default db first
 
         create_db_query = f"""
         SELECT 'CREATE DATABASE {db_name}'
@@ -55,7 +57,7 @@ class TimescaleDBManager:
         extensions = [
             "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;",
             "CREATE EXTENSION IF NOT EXISTS postgis CASCADE;",
-            "CREATE EXTENSION IF NOT EXISTS pg_stat_statements CASCADE;"
+            "CREATE EXTENSION IF NOT EXISTS pg_stat_statements CASCADE;",
         ]
 
         with self.get_connection(autocommit=True) as conn:
@@ -74,7 +76,6 @@ class TimescaleDBManager:
                 WHEN duplicate_object THEN null;
             END $$;
             """,
-
             # Repositories table
             """
             CREATE TABLE IF NOT EXISTS repositories (
@@ -87,7 +88,6 @@ class TimescaleDBManager:
                 UNIQUE(repo_name)
             );
             """,
-
             # SDLC metrics table
             """
             CREATE TABLE IF NOT EXISTS sdlc_metrics (
@@ -101,7 +101,6 @@ class TimescaleDBManager:
                 PRIMARY KEY(time, repo_id, metric_type, event_id)
             );
             """,
-
             # PR metrics table
             """
             CREATE TABLE IF NOT EXISTS pr_metrics (
@@ -120,7 +119,6 @@ class TimescaleDBManager:
                 PRIMARY KEY(time, repo_id, pr_number)
             );
             """,
-
             # Commit metrics table
             """
             CREATE TABLE IF NOT EXISTS commit_metrics (
@@ -137,7 +135,6 @@ class TimescaleDBManager:
                 PRIMARY KEY(time, repo_id, commit_hash)
             );
             """,
-
             # Review metrics table
             """
             CREATE TABLE IF NOT EXISTS review_metrics (
@@ -152,7 +149,7 @@ class TimescaleDBManager:
                 metadata JSONB DEFAULT '{}',
                 PRIMARY KEY(time, repo_id, pr_number, reviewer)
             );
-            """
+            """,
         ]
 
         with self.get_connection() as conn:
@@ -191,7 +188,7 @@ class TimescaleDBManager:
                 if_not_exists => TRUE,
                 migrate_data => TRUE
             );
-            """
+            """,
         ]
 
         with self.get_connection() as conn:
@@ -212,7 +209,6 @@ class TimescaleDBManager:
             CREATE INDEX IF NOT EXISTS idx_sdlc_metrics_repo 
             ON sdlc_metrics(repo_id, time DESC);
             """,
-
             # PR metrics indexes
             """
             CREATE INDEX IF NOT EXISTS idx_pr_metrics_status 
@@ -222,7 +218,6 @@ class TimescaleDBManager:
             CREATE INDEX IF NOT EXISTS idx_pr_metrics_repo_time 
             ON pr_metrics(repo_id, time DESC);
             """,
-
             # Commit metrics indexes
             """
             CREATE INDEX IF NOT EXISTS idx_commit_metrics_pr 
@@ -232,7 +227,6 @@ class TimescaleDBManager:
             CREATE INDEX IF NOT EXISTS idx_commit_metrics_author 
             ON commit_metrics(author_email, time DESC);
             """,
-
             # Review metrics indexes
             """
             CREATE INDEX IF NOT EXISTS idx_review_metrics_reviewer 
@@ -241,7 +235,7 @@ class TimescaleDBManager:
             """
             CREATE INDEX IF NOT EXISTS idx_review_metrics_pr 
             ON review_metrics(repo_id, pr_number, time DESC);
-            """
+            """,
         ]
 
         with self.get_connection() as conn:
@@ -269,7 +263,6 @@ class TimescaleDBManager:
             GROUP BY bucket, repo_id
             WITH NO DATA;
             """,
-
             # Hourly commit statistics
             """
             CREATE MATERIALIZED VIEW IF NOT EXISTS hourly_commit_stats
@@ -285,7 +278,6 @@ class TimescaleDBManager:
             GROUP BY bucket, repo_id
             WITH NO DATA;
             """,
-
             # Weekly review statistics
             """
             CREATE MATERIALIZED VIEW IF NOT EXISTS weekly_review_stats
@@ -300,7 +292,7 @@ class TimescaleDBManager:
             FROM review_metrics
             GROUP BY bucket, repo_id
             WITH NO DATA;
-            """
+            """,
         ]
 
         with self.get_connection() as conn:
@@ -361,7 +353,6 @@ class TimescaleDBManager:
             END;
             $$;
             """,
-
             # Calculate developer productivity metrics
             """
             CREATE OR REPLACE FUNCTION get_developer_metrics(
@@ -422,7 +413,7 @@ class TimescaleDBManager:
                 FULL OUTER JOIN review_stats rs ON COALESCE(cs.author_email, ps.author_email) = rs.author_email;
             END;
             $$;
-            """
+            """,
         ]
 
         with self.get_connection() as conn:
@@ -457,7 +448,5 @@ class TimescaleDBManager:
                 INTERVAL '2 years',
                 if_not_exists => TRUE
             );
-            """
+            """,
         ]
-
-        

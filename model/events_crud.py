@@ -1,10 +1,10 @@
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from events_schema import (
-    Project, DesignEvent, JiraItem, CodeCommit, CICDEvent,
-    Bug, Sprint, TeamMetrics, EventType, StageType, PRState
-)
+from events_schema import (Bug, CICDEvent, CodeCommit, DesignEvent, EventType,
+                           JiraItem, Project, PRState, Sprint, StageType,
+                           TeamMetrics)
+
 from model.timescaledb_init import DatabaseManager
 
 
@@ -26,31 +26,33 @@ class CRUDManager:
 
     def update_project(self, project_id: str, update_data: Dict[str, Any]) -> bool:
         with self.db_manager.get_session() as session:
-            result = session.query(Project).filter(
-                Project.id == project_id
-            ).update(update_data)
+            result = (
+                session.query(Project)
+                .filter(Project.id == project_id)
+                .update(update_data)
+            )
             session.commit()
             return result > 0
 
     def delete_project(self, project_id: str) -> bool:
         with self.db_manager.get_session() as session:
-            result = session.query(Project).filter(
-                Project.id == project_id
-            ).delete()
+            result = session.query(Project).filter(Project.id == project_id).delete()
             session.commit()
             return result > 0
 
     # Design Event Operations
     def create_design_event(self, event_data: Dict[str, Any]) -> DesignEvent:
-        if 'stage' in event_data:
-            event_data['stage'] = StageType(event_data['stage'])
+        if "stage" in event_data:
+            event_data["stage"] = StageType(event_data["stage"])
         with self.db_manager.get_session() as session:
             event = DesignEvent(**event_data)
             session.add(event)
             session.commit()
             return event
 
-    def get_design_events(self, event_id: str, design_type: Optional[str] = None) -> List[DesignEvent]:
+    def get_design_events(
+        self, event_id: str, design_type: Optional[str] = None
+    ) -> List[DesignEvent]:
         with self.db_manager.get_session() as session:
             query = session.query(DesignEvent).filter(DesignEvent.event_id == event_id)
             if design_type:
@@ -65,21 +67,27 @@ class CRUDManager:
             session.commit()
             return jira
 
-    def get_jira_items(self, event_id: str, item_type: Optional[str] = None) -> List[JiraItem]:
+    def get_jira_items(
+        self, event_id: str, item_type: Optional[str] = None
+    ) -> List[JiraItem]:
         with self.db_manager.get_session() as session:
             query = session.query(JiraItem).filter(JiraItem.event_id == event_id)
             if item_type:
                 query = query.filter(JiraItem.type == item_type)
             return query.order_by(JiraItem.created_date).all()
 
-    def update_jira_status(self, jira_id: str, new_status: str, completion_date: Optional[datetime] = None) -> bool:
+    def update_jira_status(
+        self, jira_id: str, new_status: str, completion_date: Optional[datetime] = None
+    ) -> bool:
         with self.db_manager.get_session() as session:
-            update_data = {'status': new_status}
+            update_data = {"status": new_status}
             if completion_date:
-                update_data['completed_date'] = completion_date
-            result = session.query(JiraItem).filter(
-                JiraItem.id == jira_id
-            ).update(update_data)
+                update_data["completed_date"] = completion_date
+            result = (
+                session.query(JiraItem)
+                .filter(JiraItem.id == jira_id)
+                .update(update_data)
+            )
             session.commit()
             return result > 0
 
@@ -91,8 +99,12 @@ class CRUDManager:
             session.commit()
             return commit
 
-    def get_commits(self, event_id: str, start_date: Optional[datetime] = None,
-                   end_date: Optional[datetime] = None) -> List[CodeCommit]:
+    def get_commits(
+        self,
+        event_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> List[CodeCommit]:
         with self.db_manager.get_session() as session:
             query = session.query(CodeCommit).filter(CodeCommit.event_id == event_id)
             if start_date:
@@ -109,8 +121,12 @@ class CRUDManager:
             session.commit()
             return event
 
-    def get_cicd_events(self, event_id: str, environment: Optional[str] = None,
-                       event_type: Optional[str] = None) -> List[CICDEvent]:
+    def get_cicd_events(
+        self,
+        event_id: str,
+        environment: Optional[str] = None,
+        event_type: Optional[str] = None,
+    ) -> List[CICDEvent]:
         with self.db_manager.get_session() as session:
             query = session.query(CICDEvent).filter(CICDEvent.event_id == event_id)
             if environment:
@@ -127,8 +143,12 @@ class CRUDManager:
             session.commit()
             return bug
 
-    def get_bugs(self, event_id: str, severity: Optional[str] = None,
-                status: Optional[str] = None) -> List[Bug]:
+    def get_bugs(
+        self,
+        event_id: str,
+        severity: Optional[str] = None,
+        status: Optional[str] = None,
+    ) -> List[Bug]:
         with self.db_manager.get_session() as session:
             query = session.query(Bug).filter(Bug.event_id == event_id)
             if severity:
@@ -137,18 +157,19 @@ class CRUDManager:
                 query = query.filter(Bug.status == status)
             return query.order_by(Bug.created_date).all()
 
-    def update_bug_status(self, bug_id: str, new_status: str,
-                         resolution_date: Optional[datetime] = None) -> bool:
+    def update_bug_status(
+        self, bug_id: str, new_status: str, resolution_date: Optional[datetime] = None
+    ) -> bool:
         with self.db_manager.get_session() as session:
-            update_data = {'status': new_status}
+            update_data = {"status": new_status}
             if resolution_date:
-                update_data['resolved_date'] = resolution_date
+                update_data["resolved_date"] = resolution_date
                 # Calculate resolution time
                 bug = session.query(Bug).filter(Bug.id == bug_id).first()
                 if bug and bug.created_date:
                     hours = (resolution_date - bug.created_date).total_seconds() / 3600
-                    update_data['resolution_time_hours'] = int(hours)
-            
+                    update_data["resolution_time_hours"] = int(hours)
+
             result = session.query(Bug).filter(Bug.id == bug_id).update(update_data)
             session.commit()
             return result > 0
@@ -176,8 +197,12 @@ class CRUDManager:
             session.commit()
             return metrics
 
-    def get_team_metrics(self, event_id: str, start_date: Optional[datetime] = None,
-                        end_date: Optional[datetime] = None) -> List[TeamMetrics]:
+    def get_team_metrics(
+        self,
+        event_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> List[TeamMetrics]:
         with self.db_manager.get_session() as session:
             query = session.query(TeamMetrics).filter(TeamMetrics.event_id == event_id)
             if start_date:

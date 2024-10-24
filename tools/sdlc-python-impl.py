@@ -3,27 +3,23 @@ SDLC Data Processing System
 Handles GitHub webhook data, stores in MongoDB, and summarizes in TimescaleDB
 """
 
+import logging
 import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Union
-import logging
 
 import psycopg2
+from psycopg2.extensions import connection
 from psycopg2.extras import execute_values
 from pymongo import MongoClient
 from pymongo.database import Database
-from psycopg2.extensions import connection
+
 
 class SDLCDataProcessor:
-    def __init__(
-        self,
-        timescale_dsn: str,
-        mongo_uri: str,
-        mongo_db_name: str
-    ):
+    def __init__(self, timescale_dsn: str, mongo_uri: str, mongo_db_name: str):
         """
         Initialize connections to TimescaleDB and MongoDB
-        
+
         Args:
             timescale_dsn: Connection string for TimescaleDB
             mongo_uri: MongoDB connection URI
@@ -37,7 +33,7 @@ class SDLCDataProcessor:
     def process_github_webhook(self, event_type: str, payload: Dict) -> None:
         """
         Process GitHub webhook events and store in appropriate databases
-        
+
         Args:
             event_type: GitHub webhook event type
             payload: Webhook payload data
@@ -60,12 +56,9 @@ class SDLCDataProcessor:
         # Store complete data in MongoDB
         pr_doc = self._prepare_pr_document(payload)
         mongo_result = self.mongo_db.pullRequests.update_one(
-            {
-                "repo_id": pr_doc["repo_id"],
-                "pr_number": pr_doc["pr_number"]
-            },
+            {"repo_id": pr_doc["repo_id"], "pr_number": pr_doc["pr_number"]},
             {"$set": pr_doc},
-            upsert=True
+            upsert=True,
         )
 
         # Extract metrics for TimescaleDB
@@ -75,16 +68,13 @@ class SDLCDataProcessor:
     def _handle_push_event(self, payload: Dict) -> None:
         """Handle Push (commit) events"""
         commits = self._prepare_commit_documents(payload)
-        
+
         # Store in MongoDB
         for commit in commits:
             self.mongo_db.commits.update_one(
-                {
-                    "repo_id": commit["repo_id"],
-                    "commit_hash": commit["commit_hash"]
-                },
+                {"repo_id": commit["repo_id"], "commit_hash": commit["commit_hash"]},
                 {"$set": commit},
-                upsert=True
+                upsert=True,
             )
 
         # Extract and store commit metrics
@@ -135,24 +125,21 @@ class SDLCDataProcessor:
             "metadata": {
                 "title": pr["title"],
                 "labels": [l["name"] for l in pr["labels"]],
-                "author": pr["user"]["login"]
-            }
+                "author": pr["user"]["login"],
+            },
         }
 
     def get_pr_velocity_metrics(
-        self,
-        repo_id: int,
-        start_date: datetime,
-        end_date: datetime
+        self, repo_id: int, start_date: datetime, end_date: datetime
     ) -> List[Dict]:
         """
         Get PR velocity metrics for a repository
-        
+
         Args:
             repo_id: Repository ID
             start_date: Start date for metrics
             end_date: End date for metrics
-            
+
         Returns:
             List of daily PR velocity metrics
         """
@@ -162,24 +149,20 @@ class SDLCDataProcessor:
         with self.timescale_conn.cursor() as cur:
             cur.execute(query, (repo_id, start_date, end_date))
             results = cur.fetchall()
-            
+
         return [
-            {
-                "date": row[0],
-                "prs_merged": row[1],
-                "avg_time_to_merge": row[2]
-            }
+            {"date": row[0], "prs_merged": row[1], "avg_time_to_merge": row[2]}
             for row in results
         ]
 
     def get_detailed_pr_info(self, repo_id: int, pr_number: int) -> Dict:
         """
         Get detailed PR information combining data from both databases
-        
+
         Args:
             repo_id: Repository ID
             pr_number: Pull Request number
-            
+
         Returns:
             Combined PR information
         """
@@ -192,7 +175,7 @@ class SDLCDataProcessor:
         ORDER BY time DESC
         LIMIT 1
         """
-        
+
         with self.timescale_conn.cursor() as cur:
             cur.execute(metrics_query, (repo_id, pr_number))
             metrics = cur.fetchone()
@@ -215,7 +198,7 @@ class SDLCDataProcessor:
                 "additions": metrics[4],
                 "deletions": metrics[5],
                 "review_comments": metrics[6],
-                "metadata": metrics[7]
+                "metadata": metrics[7],
             },
             "details": {
                 "title": mongo_pr["title"],
@@ -223,24 +206,21 @@ class SDLCDataProcessor:
                 "author": mongo_pr["author"],
                 "timeline": mongo_pr["timeline"],
                 "labels": mongo_pr["labels"],
-                "reviewers": mongo_pr["reviewers"]
-            }
+                "reviewers": mongo_pr["reviewers"],
+            },
         }
 
     def calculate_pr_stats(
-        self,
-        repo_id: int,
-        start_date: datetime,
-        end_date: datetime
+        self, repo_id: int, start_date: datetime, end_date: datetime
     ) -> Dict:
         """
         Calculate PR statistics for a given time period
-        
+
         Args:
             repo_id: Repository ID
             start_date: Start date for analysis
             end_date: End date for analysis
-            
+
         Returns:
             Dictionary of PR statistics
         """
@@ -263,7 +243,7 @@ class SDLCDataProcessor:
             AVG(review_comments_count) as avg_review_comments
         FROM pr_data
         """
-        
+
         with self.timescale_conn.cursor() as cur:
             cur.execute(query, (repo_id, start_date, end_date))
             result = cur.fetchone()
@@ -273,7 +253,7 @@ class SDLCDataProcessor:
             "merged_prs": result[1],
             "avg_files_changed": float(result[2]) if result[2] else 0,
             "avg_changes": float(result[3]) if result[3] else 0,
-            "avg_review_comments": float(result[4]) if result[4] else 0
+            "avg_review_comments": float(result[4]) if result[4] else 0,
         }
 
     def close(self) -> None:
@@ -281,26 +261,24 @@ class SDLCDataProcessor:
         self.timescale_conn.close()
         self.mongo_client.close()
 
+
 class SDLCAnalytics:
     """Analytics helper class for SDLC data"""
-    
+
     def __init__(self, processor: SDLCDataProcessor):
         self.processor = processor
 
     def calculate_developer_metrics(
-        self,
-        repo_id: int,
-        start_date: datetime,
-        end_date: datetime
+        self, repo_id: int, start_date: datetime, end_date: datetime
     ) -> Dict:
         """
         Calculate developer-specific metrics
-        
+
         Args:
             repo_id: Repository ID
             start_date: Start date for analysis
             end_date: End date for analysis
-            
+
         Returns:
             Dictionary of developer metrics
         """
@@ -309,55 +287,43 @@ class SDLCAnalytics:
             {
                 "$match": {
                     "repo_id": repo_id,
-                    "created_at": {
-                        "$gte": start_date,
-                        "$lte": end_date
-                    }
+                    "created_at": {"$gte": start_date, "$lte": end_date},
                 }
             },
             {
                 "$group": {
                     "_id": "$author.username",
                     "total_prs": {"$sum": 1},
-                    "total_commits": {
-                        "$sum": "$stats.commits_count"
-                    },
+                    "total_commits": {"$sum": "$stats.commits_count"},
                     "total_changes": {
-                        "$sum": {
-                            "$add": ["$stats.additions", "$stats.deletions"]
-                        }
-                    }
+                        "$sum": {"$add": ["$stats.additions", "$stats.deletions"]}
+                    },
                 }
-            }
+            },
         ]
-        
-        developer_stats = list(
-            self.processor.mongo_db.pullRequests.aggregate(pipeline)
-        )
-        
+
+        developer_stats = list(self.processor.mongo_db.pullRequests.aggregate(pipeline))
+
         return {
             dev["_id"]: {
                 "prs_created": dev["total_prs"],
                 "total_commits": dev["total_commits"],
-                "total_changes": dev["total_changes"]
+                "total_changes": dev["total_changes"],
             }
             for dev in developer_stats
         }
 
     def get_pr_review_stats(
-        self,
-        repo_id: int,
-        start_date: datetime,
-        end_date: datetime
+        self, repo_id: int, start_date: datetime, end_date: datetime
     ) -> Dict:
         """
         Get PR review statistics
-        
+
         Args:
             repo_id: Repository ID
             start_date: Start date for analysis
             end_date: End date for analysis
-            
+
         Returns:
             Dictionary of review statistics
         """
@@ -365,25 +331,16 @@ class SDLCAnalytics:
             {
                 "$match": {
                     "repo_id": repo_id,
-                    "created_at": {
-                        "$gte": start_date,
-                        "$lte": end_date
-                    }
+                    "created_at": {"$gte": start_date, "$lte": end_date},
                 }
             },
-            {
-                "$unwind": "$timeline"
-            },
-            {
-                "$match": {
-                    "timeline.event_type": "review_submitted"
-                }
-            },
+            {"$unwind": "$timeline"},
+            {"$match": {"timeline.event_type": "review_submitted"}},
             {
                 "$group": {
                     "_id": "$pr_number",
                     "review_count": {"$sum": 1},
-                    "reviewers": {"$addToSet": "$timeline.actor"}
+                    "reviewers": {"$addToSet": "$timeline.actor"},
                 }
             },
             {
@@ -391,30 +348,23 @@ class SDLCAnalytics:
                     "_id": None,
                     "total_reviews": {"$sum": "$review_count"},
                     "avg_reviews_per_pr": {"$avg": "$review_count"},
-                    "unique_reviewers": {
-                        "$addToSet": "$reviewers"
-                    }
+                    "unique_reviewers": {"$addToSet": "$reviewers"},
                 }
-            }
+            },
         ]
-        
-        review_stats = list(
-            self.processor.mongo_db.pullRequests.aggregate(pipeline)
-        )
-        
+
+        review_stats = list(self.processor.mongo_db.pullRequests.aggregate(pipeline))
+
         if not review_stats:
-            return {
-                "total_reviews": 0,
-                "avg_reviews_per_pr": 0,
-                "unique_reviewers": 0
-            }
-            
+            return {"total_reviews": 0, "avg_reviews_per_pr": 0, "unique_reviewers": 0}
+
         stats = review_stats[0]
         return {
             "total_reviews": stats["total_reviews"],
             "avg_reviews_per_pr": round(stats["avg_reviews_per_pr"], 2),
-            "unique_reviewers": len(stats["unique_reviewers"])
+            "unique_reviewers": len(stats["unique_reviewers"]),
         }
+
 
 # Example usage
 if __name__ == "__main__":
@@ -422,43 +372,38 @@ if __name__ == "__main__":
     processor = SDLCDataProcessor(
         timescale_dsn="postgresql://user:pass@localhost:5432/sdlc_db",
         mongo_uri="mongodb://localhost:27017",
-        mongo_db_name="sdlc_data"
+        mongo_db_name="sdlc_data",
     )
-    
+
     # Initialize analytics
     analytics = SDLCAnalytics(processor)
-    
+
     # Example webhook processing
     webhook_payload = {
         "event_type": "pull_request",
         "payload": {
             # ... webhook data ...
-        }
+        },
     }
-    
+
     try:
         # Process webhook
         processor.process_github_webhook(
-            webhook_payload["event_type"],
-            webhook_payload["payload"]
+            webhook_payload["event_type"], webhook_payload["payload"]
         )
-        
+
         # Get PR velocity metrics
         velocity_metrics = processor.get_pr_velocity_metrics(
-            repo_id=123,
-            start_date=datetime(2024, 1, 1),
-            end_date=datetime(2024, 1, 31)
+            repo_id=123, start_date=datetime(2024, 1, 1), end_date=datetime(2024, 1, 31)
         )
-        
+
         # Get developer metrics
         dev_metrics = analytics.calculate_developer_metrics(
-            repo_id=123,
-            start_date=datetime(2024, 1, 1),
-            end_date=datetime(2024, 1, 31)
+            repo_id=123, start_date=datetime(2024, 1, 1), end_date=datetime(2024, 1, 31)
         )
-        
+
         print("Velocity Metrics:", velocity_metrics)
         print("Developer Metrics:", dev_metrics)
-        
+
     finally:
         processor.close()
