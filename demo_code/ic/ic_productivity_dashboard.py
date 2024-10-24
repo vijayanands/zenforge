@@ -4,16 +4,11 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-from demo_code.ui.style import (
-    create_pie_chart,
-    create_styled_bar_chart,
-    create_styled_bullet_list,
-    create_styled_line_chart,
-    create_styled_metric,
-    create_styled_radio_buttons,
-    create_styled_tabs,
-    display_pie_chart,
-)
+from demo_code.ui.style import (create_pie_chart, create_styled_bar_chart,
+                                create_styled_bullet_list,
+                                create_styled_line_chart, create_styled_metric,
+                                create_styled_radio_buttons,
+                                create_styled_tabs, display_pie_chart)
 
 
 def set_custom_css():

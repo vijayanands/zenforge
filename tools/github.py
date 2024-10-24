@@ -7,13 +7,10 @@ from typing import Any, DefaultDict, Dict, List, Optional
 
 # from tools.fetch_commit_comments import fetch_commit_comments
 from fetch_commit_comments import fetch_commit_comments
-
 # from tools.fetch_commits import fetch_commits
 from fetch_commits import fetch_commits
-
 # from tools.fetch_pr_comments import fetch_pr_comments
 from fetch_pr_comments import fetch_pr_comments
-
 # from tools.fetch_prs import fetch_pull_requests
 from fetch_prs import fetch_pull_requests
 from github_client import GitHubAPIClient

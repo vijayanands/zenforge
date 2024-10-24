@@ -4,14 +4,8 @@ from typing import Any, Dict, List
 
 from sqlalchemy import Integer, and_, case, func
 
-from model.events_schema import (
-    Bug,
-    CICDEvent,
-    CodeCommit,
-    DesignEvent,
-    Sprint,
-    TeamMetrics,
-)
+from model.events_schema import (Bug, CICDEvent, CodeCommit, DesignEvent,
+                                 Sprint, TeamMetrics)
 from model.load_timescaledb import initialize_db_manager
 from model.timescaledb_init import DatabaseManager
 
