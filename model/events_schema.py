@@ -1,13 +1,8 @@
 import enum
-from datetime import datetime
-
 from sqlalchemy import (Boolean, Column, DateTime, Enum, Float, ForeignKey,
-                        Integer, PrimaryKeyConstraint, String, Text,
-                        create_engine)
+                        Integer, PrimaryKeyConstraint, String, Text)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, sessionmaker
-from sqlalchemy.sql import text
 
 Base = declarative_base()
 

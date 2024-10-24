@@ -1,4 +1,3 @@
-# part3b_data_generation_entities.py
 import json
 import uuid
 from datetime import datetime, timedelta
@@ -455,16 +454,6 @@ def get_sample_data() -> Dict[str, List[Dict[str, Any]]]:
 
 
 if __name__ == "__main__":
-    import json
-
     all_data = get_sample_data()
     json_data = json.dumps(all_data, indent=2, default=str)
-
     print(json_data)
-
-    # Save the JSON data to a file
-    output_file = "zenforge_data.json"
-    with open(output_file, "w") as f:
-        f.write(json_data)
-
-    print(f"\nJSON data has been saved to {output_file}")

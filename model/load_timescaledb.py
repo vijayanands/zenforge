@@ -1,14 +1,4 @@
-import json
-import os
-import sys
-from datetime import datetime
-
 from sqlalchemy import create_engine, text
-from sqlalchemy.exc import ProgrammingError
-
-# Add the parent directory of the current file to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from events_crud import CRUDManager
 from events_entity_generators import get_sample_data
 
@@ -23,6 +13,9 @@ port = "5432"  # default PostgreSQL port
 
 # Create a connection string for the PostgreSQL server (not a specific database)
 server_connection_string = f"postgresql://{user}:{password}@{host}:{port}/postgres"
+
+# Create a connection string for the new database
+connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 
 # Create an engine for the server connection
 engine = create_engine(server_connection_string)
@@ -45,20 +38,25 @@ def create_database_if_not_exists(engine, db_name):
             print(f"Database {db_name} created successfully")
 
 
+def initialize_db_manager():
+    # Create the DatabaseManager instance and initialize the database
+    db_manager = DatabaseManager(connection_string)
+    try:
+        db_manager.init_db()
+        print("Schemas created successfully.")
+    except Exception as e:
+        print(f"Error creating schemas: {e}")
+    return db_manager
+
+
 # Call the function to create the database if it does not exist
 create_database_if_not_exists(engine, db_name)
 
 # Create a connection string for the new database
 connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 
-# Create the DatabaseManager instance and initialize the database
-db_manager = DatabaseManager(connection_string)
-try:
-    db_manager.init_db()
-    print("Schemas created successfully.")
-except Exception as e:
-    print(f"Error creating schemas: {e}")
-
+# Initialize the DatabaseManager using the new function
+db_manager = initialize_db_manager()
 
 def load_data(db_manager):
     # Initialize the CRUD manager
@@ -99,21 +97,15 @@ def load_data(db_manager):
     for team_metric in all_data["team_metrics"]:
         crud_manager.create_team_metrics(team_metric)
 
-
-if __name__ == "__main__":
+def load_sample_data_into_timeseries_db():
     # Call the function to create the database if it does not exist
     create_database_if_not_exists(engine, db_name)
 
-    # Create a connection string for the new database
-    connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
-
-    # Create the DatabaseManager instance and initialize the database
-    db_manager = DatabaseManager(connection_string)
-    try:
-        db_manager.init_db()
-        print("Schemas created successfully.")
-    except Exception as e:
-        print(f"Error creating schemas: {e}")
+    # Initialize the DatabaseManager using the new function
+    db_manager = initialize_db_manager()
 
     load_data(db_manager)
     print("Data has been loaded into the sdlc_timeseries schema.")
+
+if __name__ == "__main__":
+    load_sample_data_into_timeseries_db()

@@ -1,5 +1,3 @@
-# part3a_data_generation_core.py
-
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple

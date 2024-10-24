@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
-from events_schema import (Bug, CICDEvent, CodeCommit, DatabaseManager,
-                           DesignEvent, Sprint, TeamMetrics)
-from sqlalchemy import and_, case, desc, func, or_
-from sqlalchemy.orm import Session
+from events_schema import (Bug, CICDEvent, CodeCommit, DesignEvent, Sprint, TeamMetrics)
+from sqlalchemy import and_, case, func, Integer
+from model.timescaledb_init import DatabaseManager
+import json
+from load_timescaledb import initialize_db_manager
 
 
 class EventAnalytics:
@@ -31,6 +32,17 @@ class EventAnalytics:
                 )
             ).first()
 
+            if not stats:
+                return {
+                    'total_commits': 0,
+                    'total_files_changed': 0,
+                    'total_lines_added': 0,
+                    'total_lines_removed': 0,
+                    'avg_code_coverage': None,
+                    'avg_lint_score': None,
+                    'avg_review_time_minutes': None,
+                    'total_review_comments': 0
+                }
             return {
                 'total_commits': stats.total_commits,
                 'total_files_changed': stats.total_files_changed,
@@ -45,12 +57,12 @@ class EventAnalytics:
     def get_deployment_success_rate(self, event_id: str, environment: str, time_window: timedelta) -> float:
         """Calculate deployment success rate for a given environment"""
         with self.db_manager.get_session() as session:
-            end_date = datetime.utcnow()
+            end_date = datetime.now()
             start_date = end_date - time_window
 
             deployments = session.query(
                 func.count(CICDEvent.id).label('total'),
-                func.sum(case([(CICDEvent.status == 'success', 1)], else_=0)).label('successful')
+                func.sum(case((CICDEvent.status == 'success', 1), else_=0).cast(Integer)).label('successful')
             ).filter(
                 and_(
                     CICDEvent.event_id == event_id,
@@ -60,7 +72,7 @@ class EventAnalytics:
                 )
             ).first()
 
-            if deployments.total == 0:
+            if not deployments or deployments.total == 0:
                 return 0.0
             return (deployments.successful / deployments.total) * 100
 
@@ -115,15 +127,21 @@ class EventAnalytics:
                 )
             ).all()
 
-            total_bugs = len(bugs)
-            fixed_bugs = len([bug for bug in bugs if bug.status == 'resolved'])
-            avg_resolution_time = None
+            fixed_bugs = session.query(Bug).filter(
+                and_(
+                    Bug.event_id == event_id,
+                    Bug.created_date.between(start_date, end_date),
+                    Bug.status == 'resolved'
+                )
+            ).count()
 
-            if fixed_bugs > 0:
-                resolution_times = [bug.resolution_time_hours for bug in bugs 
-                                 if bug.status == 'resolved' and bug.resolution_time_hours]
-                if resolution_times:
-                    avg_resolution_time = sum(resolution_times) / len(resolution_times)
+            resolution_times = [
+                bug.resolution_time_hours for bug in bugs 
+                if bug.status == 'resolved' and bug.resolution_time_hours is not None
+            ]
+            avg_resolution_time = None  # Initialize avg_resolution_time
+            if resolution_times:  # Check if resolution_times is not empty
+                avg_resolution_time = sum(resolution_times) / len(resolution_times)
 
             # Group by severity
             severity_counts = {}
@@ -131,9 +149,9 @@ class EventAnalytics:
                 severity_counts[bug.severity] = severity_counts.get(bug.severity, 0) + 1
 
             return {
-                'total_bugs': total_bugs,
+                'total_bugs': len(bugs),
                 'fixed_bugs': fixed_bugs,
-                'fix_rate': (fixed_bugs / total_bugs * 100) if total_bugs > 0 else 0,
+                'fix_rate': (fixed_bugs / len(bugs) * 100) if len(bugs) > 0 else 0,
                 'avg_resolution_time_hours': avg_resolution_time,
                 'severity_distribution': severity_counts
             }
@@ -141,7 +159,7 @@ class EventAnalytics:
     def get_team_performance_metrics(self, event_id: str, time_window: timedelta) -> Dict[str, Any]:
         """Get team performance metrics over time"""
         with self.db_manager.get_session() as session:
-            end_date = datetime.utcnow()
+            end_date = datetime.now()
             start_date = end_date - time_window
 
             metrics = session.query(TeamMetrics).filter(
@@ -155,7 +173,38 @@ class EventAnalytics:
                 return {}
 
             return {
-                'avg_velocity': sum(m.velocity for m in metrics if m.velocity) / len(metrics),
-                'avg_code_review_turnaround': sum(m.code_review_turnaround_hours for m in metrics if m.code_review_turnaround_hours) / len(metrics),
-                'avg_build_success_rate': sum(m.build_success_rate for m in metrics if m.build_success_rate) / len(metrics),
-                'avg_test_coverage': sum(m.test_coverage for m in metrics if m.test_coverage)
+                'avg_velocity': sum(m.velocity for m in metrics if m.velocity is not None) / len(metrics),
+                'avg_code_review_turnaround': sum(m.code_review_turnaround_hours for m in metrics if m.code_review_turnaround_hours is not None) / len(metrics),
+                'avg_build_success_rate': sum(m.build_success_rate for m in metrics if m.build_success_rate is not None) / len(metrics),
+                'avg_test_coverage': sum(m.test_coverage for m in metrics if m.test_coverage is not None) / len(metrics)
+            }
+
+def main():
+    db_manager = initialize_db_manager()  # Use initialize_db_manager to initialize db_manager
+
+    event_id = "example_event_id"
+    start_date = datetime(2020, 1, 1)
+    end_date = datetime(2024, 12, 31)
+    environment = "production"
+    time_window = timedelta(days=30)
+
+    analytics = EventAnalytics(db_manager)
+
+    commit_stats = analytics.get_commit_statistics(event_id, start_date, end_date)
+    deployment_success_rate = analytics.get_deployment_success_rate(event_id, environment, time_window)
+    project_timeline = analytics.get_project_timeline(event_id)
+    bug_report = analytics.get_bug_report(event_id, start_date, end_date)
+    team_performance_metrics = analytics.get_team_performance_metrics(event_id, time_window)
+
+    results = {
+        "commit_statistics": commit_stats,
+        "deployment_success_rate": deployment_success_rate,
+        "project_timeline": project_timeline,
+        "bug_report": bug_report,
+        "team_performance_metrics": team_performance_metrics
+    }
+
+    print(json.dumps(results, indent=4, default=str))
+
+if __name__ == "__main__":
+    main()

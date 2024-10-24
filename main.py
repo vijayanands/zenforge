@@ -6,6 +6,7 @@ from demo_code.ic.dashboard import show_ic_dashboard
 from demo_code.second_line_manager_or_director.dashboard import \
     show_director_dashboard
 from demo_code.ui.title_bar import set_title_bar
+from model.load_timescaledb import load_sample_data_into_timeseries_db
 
 # Constants
 PAGE_TITLE = "Pathforge ZenForge"
@@ -67,5 +68,11 @@ def main():
         st.write(UNIMPLEMENTED_MESSAGE.format(persona))
 
 
+def create_end_to_end_timechart_for_project():
+    project = "PRJ-001"
+    print(f"Displaying end to end view of project {project}")
+
 if __name__ == "__main__":
-    main()
+    load_sample_data_into_timeseries_db()
+    create_end_to_end_timechart_for_project()
+    # main()
