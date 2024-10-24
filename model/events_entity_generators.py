@@ -4,7 +4,8 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import numpy as np
-from events_data_generation_core import DataGenerator
+
+from model.events_data_generation_core import DataGenerator
 
 # Global variables (former class-level variables)
 # Add any class-level variables here as globals

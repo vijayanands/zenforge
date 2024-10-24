@@ -1,10 +1,17 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from events_schema import (Bug, CICDEvent, CodeCommit, DesignEvent,
-                           JiraItem, Project, Sprint, StageType,
-                           TeamMetrics)
-
+from model.events_schema import (
+    Bug,
+    CICDEvent,
+    CodeCommit,
+    DesignEvent,
+    JiraItem,
+    Project,
+    Sprint,
+    StageType,
+    TeamMetrics,
+)
 from model.timescaledb_init import DatabaseManager
 
 

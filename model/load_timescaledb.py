@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, text
-from events_crud import CRUDManager
-from events_entity_generators import get_sample_data
 
+from model.events_crud import CRUDManager
+from model.events_entity_generators import get_sample_data
 from model.timescaledb_init import DatabaseManager
 
 # Define your database connection details
@@ -21,7 +21,7 @@ connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 engine = create_engine(server_connection_string)
 
 
-def create_database_if_not_exists(engine, db_name):
+def create_database_if_not_exists():
     # Connect to the server and check if the database exists
     with engine.connect() as connection:
         connection.execute(text("commit"))  # Commit any existing transaction
@@ -48,15 +48,6 @@ def initialize_db_manager():
         print(f"Error creating schemas: {e}")
     return db_manager
 
-
-# Call the function to create the database if it does not exist
-create_database_if_not_exists(engine, db_name)
-
-# Create a connection string for the new database
-connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
-
-# Initialize the DatabaseManager using the new function
-db_manager = initialize_db_manager()
 
 def load_data(db_manager):
     # Initialize the CRUD manager
@@ -97,15 +88,17 @@ def load_data(db_manager):
     for team_metric in all_data["team_metrics"]:
         crud_manager.create_team_metrics(team_metric)
 
+
 def load_sample_data_into_timeseries_db():
     # Call the function to create the database if it does not exist
-    create_database_if_not_exists(engine, db_name)
+    create_database_if_not_exists()
 
     # Initialize the DatabaseManager using the new function
     db_manager = initialize_db_manager()
 
     load_data(db_manager)
     print("Data has been loaded into the sdlc_timeseries schema.")
+
 
 if __name__ == "__main__":
     load_sample_data_into_timeseries_db()
