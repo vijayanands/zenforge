@@ -67,9 +67,37 @@ def zenforge_dashboard():
         st.write(UNIMPLEMENTED_MESSAGE.format(persona))
 
 
-def create_end_to_end_timechart_for_project():
-    project = "PRJ-001"
+def create_end_to_end_timechart_for_project(project:str):
     print(f"Displaying end to end view of project {project}")
+    """
+    This will be the pseudo code for this
+    
+    jira_list <= get list of jiras for project
+    Let us first find the events in the design phase
+    design_jiras <= filter for type=Design in jira_list
+    create a list of dictionaries that contain the following
+        jira_id
+        title
+        status
+        start_time
+        end_time
+        assigned_to
+        estimated_hours
+        actual_hours
+    
+    Now let us get the sprints related stats
+    sprint_list <= get the list of sprints for project
+    for each sprint in the project create a list of dictionary that contains the following
+        start_date
+        end_date
+        planned_story points
+        completed_story_points
+        burndown_efficiency
+        team_velocity
+        team satisfaction score
+        
+    
+    """
 
 
 if __name__ == "__main__":
@@ -78,6 +106,7 @@ if __name__ == "__main__":
     if function_input == 'load_data':
         load_sample_data_into_timeseries_db()
     elif function_input == 'view_project':
-        create_end_to_end_timechart_for_project()
+        project = "PRJ-001"
+        create_end_to_end_timechart_for_project(project)
     else:
         print("Invalid option. Please choose 'load_data' or 'view_project'.")
