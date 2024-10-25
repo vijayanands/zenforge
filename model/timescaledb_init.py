@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 from model.events_schema import Base
 
+
 class DatabaseManager:
     def __init__(self, connection_string: str):
         self.engine = create_engine(connection_string)
@@ -31,52 +32,90 @@ class DatabaseManager:
     def _create_regular_indexes(self):
         """Create indexes for non-hypertables"""
         with self.engine.begin() as connection:
-            # Create indexes for timestamp columns in regular tables
-            indexes = [
-                ("cicd_events", "timestamp"),
-                ("bugs", "created_date"),
-                ("jira_items", "created_date"),
-                ("sprints", "start_date")
-            ]
-
-            for table, column in indexes:
-                try:
-                    connection.execute(
-                        text(
-                            f"""
-                            CREATE INDEX IF NOT EXISTS idx_{table}_{column} 
-                            ON sdlc_timeseries.{table} ({column});
-                            """
-                        )
+            try:
+                # Create indexes for timestamp columns in regular tables
+                connection.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_cicd_events_timestamp 
+                        ON sdlc_timeseries.cicd_events (timestamp);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_bugs_created_date 
+                        ON sdlc_timeseries.bugs (created_date);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_jira_items_created_date 
+                        ON sdlc_timeseries.jira_items (created_date);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_sprints_start_date 
+                        ON sdlc_timeseries.sprints (start_date);
+                        """
                     )
-                    print(f"Created index for {table}.{column}")
-                except Exception as e:
-                    print(f"Error creating index for {table}: {e}")
-                    raise
+                )
+
+                # Create indexes for association tables
+                connection.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_cicd_commit_assoc_cicd 
+                        ON sdlc_timeseries.cicd_commit_association (cicd_id);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_cicd_commit_assoc_commit 
+                        ON sdlc_timeseries.cicd_commit_association (commit_id, commit_timestamp);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_sprint 
+                        ON sdlc_timeseries.sprint_jira_association (sprint_id);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_jira 
+                        ON sdlc_timeseries.sprint_jira_association (jira_id);
+                        """
+                    )
+                )
+
+                print("Created regular indexes")
+            except Exception as e:
+                print(f"Error creating indexes: {e}")
+                raise
 
     def _create_hypertables(self):
         """Convert specific tables to hypertables"""
         hypertables = [
             ("design_events", "timestamp"),
             ("code_commits", "timestamp"),
-            ("team_metrics", "week_starting")
+            ("team_metrics", "week_starting"),
         ]
 
         with self.engine.begin() as connection:
             for table, time_column in hypertables:
                 try:
-                    connection.execute(
-                        text(
-                            f"""
-                            SELECT create_hypertable(
-                                'sdlc_timeseries.{table}',
-                                '{time_column}',
-                                if_not_exists => TRUE,
-                                create_default_indexes => TRUE
-                            );
-                            """
+                    # For code_commits, we need to handle the unique constraint specially
+                    if table == "code_commits":
+                        connection.execute(
+                            text(
+                                f"""
+                                SELECT create_hypertable(
+                                    'sdlc_timeseries.{table}',
+                                    '{time_column}',
+                                    if_not_exists => TRUE,
+                                    migrate_data => TRUE
+                                );
+                                CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_id_time 
+                                ON sdlc_timeseries.{table} (id, {time_column});
+                                """
+                            )
                         )
-                    )
+                    else:
+                        connection.execute(
+                            text(
+                                f"""
+                                SELECT create_hypertable(
+                                    'sdlc_timeseries.{table}',
+                                    '{time_column}',
+                                    if_not_exists => TRUE,
+                                    migrate_data => TRUE
+                                );
+                                """
+                            )
+                        )
                     print(f"Created hypertable for {table}")
 
                     # Create additional indexes for foreign keys
@@ -100,8 +139,11 @@ class DatabaseManager:
         try:
             # Drop and recreate schema
             with self.engine.begin() as connection:
-                connection.execute(text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE"))
+                connection.execute(
+                    text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE")
+                )
                 connection.execute(text("CREATE SCHEMA sdlc_timeseries"))
+                connection.execute(text("COMMIT"))
 
             # Create all tables first
             Base.metadata.create_all(self.engine)

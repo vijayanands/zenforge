@@ -13,7 +13,9 @@ from model.events_schema import StageType
 data_generator = DataGenerator()
 
 
-def generate_design_related_jiras(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+def generate_design_related_jiras(
+    projects: Dict[str, Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     """Generate Jira items specifically for design phases"""
     design_jiras = []
     design_phases = data_generator.generate_design_phases()
@@ -26,34 +28,47 @@ def generate_design_related_jiras(projects: Dict[str, Dict[str, Any]]) -> List[D
             jira_id = f"{proj_id}-{phase.upper()}-1"
 
             # Determine status based on completion state
-            if completion_state in ["design_only", "design_and_sprint", "pre_release", "all_complete"]:
+            if completion_state in [
+                "design_only",
+                "design_and_sprint",
+                "pre_release",
+                "all_complete",
+            ]:
                 status = "Done"
                 completed_date = start_date + timedelta(days=14)
                 actual_hours = np.random.randint(16, 32)
             elif completion_state == "mixed":
                 status = np.random.choice(["Done", "In Progress"], p=[0.7, 0.3])
-                completed_date = start_date + timedelta(days=14) if status == "Done" else None
+                completed_date = (
+                    start_date + timedelta(days=14) if status == "Done" else None
+                )
                 actual_hours = np.random.randint(16, 32) if status == "Done" else None
             else:  # mixed_all
-                status = np.random.choice(["Done", "In Progress", "To Do"], p=[0.5, 0.3, 0.2])
-                completed_date = start_date + timedelta(days=14) if status == "Done" else None
+                status = np.random.choice(
+                    ["Done", "In Progress", "To Do"], p=[0.5, 0.3, 0.2]
+                )
+                completed_date = (
+                    start_date + timedelta(days=14) if status == "Done" else None
+                )
                 actual_hours = np.random.randint(16, 32) if status == "Done" else None
 
-            design_jiras.append({
-                "id": jira_id,
-                "event_id": proj_id,
-                "type": "Design",
-                "title": f"{phase.replace('_', ' ').title()} Design for {details['title']}",
-                "status": status,
-                "created_date": start_date,
-                "completed_date": completed_date,
-                "priority": "High",
-                "story_points": np.random.randint(5, 13),
-                "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
-                "assigned_developer": f"{phase.split('_')[0]}@example.com",
-                "estimated_hours": np.random.randint(8, 24),
-                "actual_hours": actual_hours
-            })
+            design_jiras.append(
+                {
+                    "id": jira_id,
+                    "event_id": proj_id,
+                    "type": "Design",
+                    "title": f"{phase.replace('_', ' ').title()} Design for {details['title']}",
+                    "status": status,
+                    "created_date": start_date,
+                    "completed_date": completed_date,
+                    "priority": "High",
+                    "story_points": np.random.randint(5, 13),
+                    "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
+                    "assigned_developer": f"{phase.split('_')[0]}@example.com",
+                    "estimated_hours": np.random.randint(8, 24),
+                    "actual_hours": actual_hours,
+                }
+            )
 
     return design_jiras
 
@@ -68,78 +83,99 @@ def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str
         completion_state = details["completion_state"]
 
         for phase in design_phases:
-            phase_status = data_generator.get_design_event_status(completion_state, phase)
+            phase_status = data_generator.get_design_event_status(
+                completion_state, phase
+            )
             jira_id = f"{proj_id}-{phase.upper()}-1"  # Matches the ID format from generate_design_related_jiras
 
             # Initial event (START)
-            design_events.append({
-                "id": f"{proj_id}-{phase.upper()}",
-                "event_id": proj_id,
-                "design_type": phase,
-                "stage": StageType.START,
-                "timestamp": start_date,
-                "author": f"{phase.split('_')[0]}@example.com",
-                "jira": jira_id,
-                "stakeholders": data_generator.generate_stakeholders(),
-                "review_status": "Pending"
-            })
+            design_events.append(
+                {
+                    "id": f"{proj_id}-{phase.upper()}",
+                    "event_id": proj_id,
+                    "design_type": phase,
+                    "stage": StageType.START,
+                    "timestamp": start_date,
+                    "author": f"{phase.split('_')[0]}@example.com",
+                    "jira": jira_id,
+                    "stakeholders": data_generator.generate_stakeholders(),
+                    "review_status": "Pending",
+                }
+            )
 
-            current_date = start_date + timedelta(days=2)  # Base date for subsequent events
+            current_date = start_date + timedelta(
+                days=2
+            )  # Base date for subsequent events
 
             if phase_status["stage"] != "start":
                 if phase_status["stage"] in ["blocked", "resume"]:
                     # Generate blocked-resume cycles
                     num_revisions = np.random.randint(1, 3)
-                    days_between_events = np.random.randint(2, 4)  # 2-4 days between status changes
+                    days_between_events = np.random.randint(
+                        2, 4
+                    )  # 2-4 days between status changes
 
                     for rev_idx in range(num_revisions):
                         # Blocked state
-                        design_events.append({
-                            "id": f"{proj_id}-{phase.upper()}-BLOCK{rev_idx + 1}",
-                            "event_id": proj_id,
-                            "design_type": phase,
-                            "stage": StageType.BLOCKED,
-                            "timestamp": current_date,
-                            "author": f"{phase.split('_')[0]}@example.com",
-                            "jira": jira_id,
-                            "stakeholders": data_generator.generate_stakeholders(),
-                            "review_status": "In Review"
-                        })
+                        design_events.append(
+                            {
+                                "id": f"{proj_id}-{phase.upper()}-BLOCK{rev_idx + 1}",
+                                "event_id": proj_id,
+                                "design_type": phase,
+                                "stage": StageType.BLOCKED,
+                                "timestamp": current_date,
+                                "author": f"{phase.split('_')[0]}@example.com",
+                                "jira": jira_id,
+                                "stakeholders": data_generator.generate_stakeholders(),
+                                "review_status": "In Review",
+                            }
+                        )
                         current_date += timedelta(days=days_between_events)
 
                         # Resume state
-                        design_events.append({
-                            "id": f"{proj_id}-{phase.upper()}-RESUME{rev_idx + 1}",
-                            "event_id": proj_id,
-                            "design_type": phase,
-                            "stage": StageType.RESUME,
-                            "timestamp": current_date,
-                            "author": f"{phase.split('_')[0]}@example.com",
-                            "jira": jira_id,
-                            "stakeholders": data_generator.generate_stakeholders(),
-                            "review_status": "In Review"
-                        })
+                        design_events.append(
+                            {
+                                "id": f"{proj_id}-{phase.upper()}-RESUME{rev_idx + 1}",
+                                "event_id": proj_id,
+                                "design_type": phase,
+                                "stage": StageType.RESUME,
+                                "timestamp": current_date,
+                                "author": f"{phase.split('_')[0]}@example.com",
+                                "jira": jira_id,
+                                "stakeholders": data_generator.generate_stakeholders(),
+                                "review_status": "In Review",
+                            }
+                        )
                         current_date += timedelta(days=days_between_events)
 
                 # Final completion event (END)
-                if phase_status["stage"] == "end" or completion_state in ["design_only", "design_and_sprint",
-                                                                          "pre_release", "all_complete"]:
-                    final_date = max(current_date,
-                                     start_date + timedelta(days=7))  # Ensure minimum 7 days for completion
-                    design_events.append({
-                        "id": f"{proj_id}-{phase.upper()}-FINAL",
-                        "event_id": proj_id,
-                        "design_type": phase,
-                        "stage": StageType.END,
-                        "timestamp": final_date,
-                        "author": f"{phase.split('_')[0]}@example.com",
-                        "jira": jira_id,
-                        "stakeholders": data_generator.generate_stakeholders(),
-                        "review_status": phase_status["review_status"]
-                    })
+                if phase_status["stage"] == "end" or completion_state in [
+                    "design_only",
+                    "design_and_sprint",
+                    "pre_release",
+                    "all_complete",
+                ]:
+                    final_date = max(
+                        current_date, start_date + timedelta(days=7)
+                    )  # Ensure minimum 7 days for completion
+                    design_events.append(
+                        {
+                            "id": f"{proj_id}-{phase.upper()}-FINAL",
+                            "event_id": proj_id,
+                            "design_type": phase,
+                            "stage": StageType.END,
+                            "timestamp": final_date,
+                            "author": f"{phase.split('_')[0]}@example.com",
+                            "jira": jira_id,
+                            "stakeholders": data_generator.generate_stakeholders(),
+                            "review_status": phase_status["review_status"],
+                        }
+                    )
 
             # Move start date for next phase
-            start_date += timedelta(days=15)  # Each phase starts 15 days after the previous one
+            start_date += timedelta(
+                days=15
+            )  # Each phase starts 15 days after the previous one
 
     # Sort all events by timestamp to ensure chronological order
     design_events.sort(key=lambda x: (x["event_id"], x["design_type"], x["timestamp"]))
@@ -149,23 +185,22 @@ def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str
 
 def get_design_event_status(completion_state: str, phase: str) -> Dict[str, Any]:
     """Helper function to get design event status based on completion state"""
-    if completion_state in ["design_only", "design_and_sprint", "pre_release", "all_complete"]:
-        return {
-            "stage": "end",
-            "review_status": "Approved"
-        }
+    if completion_state in [
+        "design_only",
+        "design_and_sprint",
+        "pre_release",
+        "all_complete",
+    ]:
+        return {"stage": "end", "review_status": "Approved"}
     elif completion_state == "mixed":
         if np.random.random() < 0.7:
             status = np.random.choice(["end", "blocked"], p=[0.7, 0.3])
             return {
                 "stage": status,
-                "review_status": "Approved" if status == "end" else "In Review"
+                "review_status": "Approved" if status == "end" else "In Review",
             }
         else:
-            return {
-                "stage": "start",
-                "review_status": "Pending"
-            }
+            return {"stage": "start", "review_status": "Pending"}
     else:  # mixed_all
         status = np.random.choice(["start", "end", "blocked"], p=[0.2, 0.5, 0.3])
         return {
@@ -173,9 +208,10 @@ def get_design_event_status(completion_state: str, phase: str) -> Dict[str, Any]
             "review_status": {
                 "start": "Pending",
                 "end": "Approved",
-                "blocked": "In Review"
-            }[status]
+                "blocked": "In Review",
+            }[status],
         }
+
 
 def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Generate Jira items for all projects, including design, epics, stories and tasks"""
@@ -189,7 +225,9 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
         # Generate Epics
         for epic_num in range(1, 6):
             status = data_generator.get_jira_status(completion_state)
-            epic_completion = start_date + timedelta(days=epic_num + 25) if status == "Done" else None
+            epic_completion = (
+                start_date + timedelta(days=epic_num + 25) if status == "Done" else None
+            )
 
             epic_id = f"{proj_id}-E{epic_num}"
             epic_data = {
@@ -206,15 +244,18 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                 "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
                 "assigned_developer": None,
                 "estimated_hours": None,
-                "actual_hours": None
+                "actual_hours": None,
             }
             all_jiras.append(epic_data)
 
             # Generate Stories for Epic
             for story_num in range(1, 6):
                 story_status = data_generator.get_jira_status(completion_state)
-                story_completion = start_date + timedelta(
-                    days=epic_num + story_num + 20) if story_status == "Done" else None
+                story_completion = (
+                    start_date + timedelta(days=epic_num + story_num + 20)
+                    if story_status == "Done"
+                    else None
+                )
                 story_id = f"{epic_id}-S{story_num}"
 
                 story_data = {
@@ -231,7 +272,7 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                     "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
                     "assigned_developer": None,
                     "estimated_hours": None,
-                    "actual_hours": None
+                    "actual_hours": None,
                 }
                 all_jiras.append(story_data)
 
@@ -239,9 +280,17 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                 for task_num in range(1, 6):
                     task_status = data_generator.get_jira_status(completion_state)
                     estimated_hours = np.random.randint(4, 16)
-                    actual_hours = int(estimated_hours * np.random.uniform(0.8, 1.3)) if task_status == "Done" else None
-                    task_completion = start_date + timedelta(
-                        days=epic_num + story_num + task_num + 15) if task_status == "Done" else None
+                    actual_hours = (
+                        int(estimated_hours * np.random.uniform(0.8, 1.3))
+                        if task_status == "Done"
+                        else None
+                    )
+                    task_completion = (
+                        start_date
+                        + timedelta(days=epic_num + story_num + task_num + 15)
+                        if task_status == "Done"
+                        else None
+                    )
 
                     task_data = {
                         "id": f"{story_id}-T{task_num}",
@@ -250,7 +299,8 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                         "type": "Task",
                         "title": f"Task {task_num} for Story {story_num}",
                         "status": task_status,
-                        "created_date": start_date + timedelta(days=epic_num + story_num + task_num),
+                        "created_date": start_date
+                        + timedelta(days=epic_num + story_num + task_num),
                         "completed_date": task_completion,
                         "priority": np.random.choice(["High", "Medium", "Low"]),
                         "story_points": np.random.randint(1, 5),
@@ -274,48 +324,61 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
         if project_details and project_details["completion_state"] == "all_complete":
             if jira["type"] != "Design":  # Don't modify design Jiras
                 jira["status"] = "Done"
-                jira["completed_date"] = jira["created_date"] + timedelta(days=np.random.randint(5, 15))
+                jira["completed_date"] = jira["created_date"] + timedelta(
+                    days=np.random.randint(5, 15)
+                )
                 if jira["type"] == "Task":
-                    jira["actual_hours"] = int(jira["estimated_hours"] * np.random.uniform(0.8, 1.3))
+                    jira["actual_hours"] = int(
+                        jira["estimated_hours"] * np.random.uniform(0.8, 1.3)
+                    )
 
     return all_jiras
 
 
-def generate_commits(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Generate code commits for all projects with Jira associations"""
+def generate_commits(
+    projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Generate code commits with proper timestamps and Jira associations"""
     commits = []
-    commit_types = ["feature", "bugfix", "refactor", "docs", "test"]
 
-    # Create a map of project to available Jira IDs
+    # Create a map of available Jira IDs per project
     project_jiras = {}
     for jira in jira_items:
-        if jira['event_id'] not in project_jiras:
-            project_jiras[jira['event_id']] = []
-        project_jiras[jira['event_id']].append(jira['id'])
+        if jira["event_id"] not in project_jiras:
+            project_jiras[jira["event_id"]] = []
+        project_jiras[jira["event_id"]].append(jira["id"])
 
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
-        start_date = details["start_date"] + timedelta(days=20)
         available_jiras = project_jiras.get(proj_id, [])
 
         if not available_jiras:
             continue
 
-        commit_count = 200 if completion_state in ["pre_release", "all_complete"] else np.random.randint(50, 150)
+        num_commits = (
+            200
+            if completion_state in ["pre_release", "all_complete"]
+            else np.random.randint(50, 150)
+        )
+        start_date = details["start_date"] + timedelta(
+            days=20
+        )  # Start commits after design phase
 
-        for i in range(commit_count):
-            commit_date = start_date + timedelta(days=i // 4)
-            commit_metrics = data_generator.get_commit_status(completion_state)
+        for i in range(num_commits):
+            # Calculate commit date - ensure proper chronological order
+            commit_date = start_date + timedelta(days=i // 4)  # Up to 4 commits per day
 
             # Assign a random Jira ID from the project
             associated_jira = random.choice(available_jiras)
 
-            files_changed, lines_added, lines_removed, _, _ = data_generator.generate_commit_metrics()
+            commit_metrics = data_generator.get_commit_status(completion_state)
+            files_changed, lines_added, lines_removed, _, _ = (
+                data_generator.generate_commit_metrics()
+            )
 
-            commits.append({
-                "id": data_generator.generate_unique_id("commit_"),
+            commit = {
+                "id": f"commit_{uuid.uuid4().hex[:8]}",
                 "event_id": proj_id,
-                "jira_id": associated_jira,  # New field
                 "timestamp": commit_date,
                 "repository": f"{proj_id.lower()}-repo",
                 "branch": f"feature/sprint-{i // 40 + 1}",
@@ -326,133 +389,158 @@ def generate_commits(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
                 "lines_removed": lines_removed,
                 "code_coverage": commit_metrics["code_coverage"],
                 "lint_score": commit_metrics["lint_score"],
-                "commit_type": np.random.choice(commit_types, p=[0.4, 0.3, 0.15, 0.1, 0.05]),
+                "commit_type": np.random.choice(
+                    ["feature", "bugfix", "refactor", "docs", "test"],
+                    p=[0.4, 0.3, 0.15, 0.1, 0.05],
+                ),
                 "review_time_minutes": commit_metrics["review_time_minutes"],
                 "comments_count": np.random.randint(0, 10),
-                "approved_by": f"reviewer{np.random.randint(1, 4)}@example.com"
-            })
+                "approved_by": f"reviewer{np.random.randint(1, 4)}@example.com",
+                "jira_id": associated_jira,
+            }
 
+            commits.append(commit)
+
+    # Sort all commits by timestamp
+    commits.sort(key=lambda x: x["timestamp"])
     return commits
 
 
-def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]) -> Tuple[
-    List[Dict[str, Any]], Dict[str, List[str]]]:
-    """Generate CI/CD events for all projects with commit associations"""
+# Update generate_cicd_events function
+def generate_cicd_events(
+    projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
+    """Generate CI/CD events ensuring proper temporal relationships with commits"""
     cicd_events = []
+    cicd_commit_map = {}
     environments = ["dev", "staging", "qa", "uat", "production"]
 
-    # Create a map of project to available commits
+    # Create a map of project to available commits with timestamps
     project_commits = {}
     for commit in commits:
-        if commit['event_id'] not in project_commits:
-            project_commits[commit['event_id']] = []
-        project_commits[commit['event_id']].append(commit['id'])
+        if commit["event_id"] not in project_commits:
+            project_commits[commit["event_id"]] = []
+        project_commits[commit["event_id"]].append(
+            {"id": commit["id"], "timestamp": commit["timestamp"]}
+        )
 
-    # Track build IDs to ensure uniqueness
+    # Track used build IDs
     used_build_ids = set()
 
-    # Will store CICD to commit associations
-    cicd_commit_map = {}
-
     for proj_id, details in projects.items():
-        completion_state = details["completion_state"]
-        deploy_start = details["start_date"] + timedelta(days=25)
-        available_commits = project_commits.get(proj_id, [])
-
-        if not available_commits:
+        if proj_id not in project_commits or not project_commits[proj_id]:
             continue
 
-        for i in range(50):
-            deploy_date = deploy_start + timedelta(days=i)
+        completion_state = details["completion_state"]
+
+        # Sort project commits by timestamp
+        proj_commits = sorted(project_commits[proj_id], key=lambda x: x["timestamp"])
+
+        # Start CICD events one day after first commit
+        current_date = proj_commits[0]["timestamp"] + timedelta(days=1)
+        build_counter = 0
+
+        while build_counter < 50:
+            # Find commits that happened before this build
+            valid_commits = [
+                commit for commit in proj_commits if commit["timestamp"] < current_date
+            ]
+
+            if not valid_commits:
+                current_date += timedelta(days=1)
+                continue
 
             for env in environments:
                 cicd_status = data_generator.get_cicd_status(completion_state)
 
-                # Create unique build ID
+                # Generate unique build ID
+                build_id = None
                 while True:
-                    build_id = data_generator.generate_unique_id("build_")
+                    build_id = f"build_{uuid.uuid4().hex[:8]}"
                     if build_id not in used_build_ids:
                         used_build_ids.add(build_id)
                         break
 
-                build_success = cicd_status["status"] == "success"
+                # Select recent commits for this build
+                recent_commits = sorted(
+                    valid_commits, key=lambda x: x["timestamp"], reverse=True
+                )[:5]
+                num_commits = random.randint(1, len(recent_commits))
+                selected_commits = recent_commits[:num_commits]
 
-                # Associate commits with this build
-                associated_commits = data_generator.get_random_commit_ids(
-                    available_commits,
-                    min_count=1,
-                    max_count=5
-                )
-
-                # Build event
-                build_event_id = data_generator.generate_unique_id("cicd_")
+                # Create build event
+                build_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
                 build_event = {
                     "id": build_event_id,
                     "event_id": proj_id,
-                    "timestamp": deploy_date,
+                    "timestamp": current_date,
                     "environment": env,
                     "event_type": "build",
                     "build_id": build_id,
                     "status": cicd_status["status"],
                     "duration_seconds": np.random.randint(180, 900),
                     "metrics": cicd_status["metrics"],
-                    "reason": None
+                    "reason": None,
                 }
                 cicd_events.append(build_event)
-                cicd_commit_map[build_event_id] = associated_commits
+                cicd_commit_map[build_event_id] = [
+                    commit["id"] for commit in selected_commits
+                ]
 
-                if build_success:
+                # Handle successful builds
+                if cicd_status["status"] == "success":
                     deploy_success = completion_state in ["pre_release", "all_complete"]
 
-                    # Deployment event
-                    deploy_event_id = data_generator.generate_unique_id("cicd_")
+                    # Create deployment event
+                    deploy_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
                     deploy_event = {
                         "id": deploy_event_id,
                         "event_id": proj_id,
-                        "timestamp": deploy_date + timedelta(minutes=15),
+                        "timestamp": current_date + timedelta(minutes=15),
                         "environment": env,
                         "event_type": "deployment",
-                        "build_id": data_generator.generate_unique_id("build_"),  # New unique build ID for deployment
+                        "build_id": f"build_{uuid.uuid4().hex[:8]}",
                         "status": "success" if deploy_success else "failed",
                         "duration_seconds": np.random.randint(300, 1200),
                         "metrics": cicd_status["metrics"],
-                        "reason": None
+                        "reason": None,
                     }
                     cicd_events.append(deploy_event)
-                    cicd_commit_map[deploy_event_id] = associated_commits
+                    cicd_commit_map[deploy_event_id] = [
+                        commit["id"] for commit in selected_commits
+                    ]
 
+                    # Handle failed deployments
                     if not deploy_success:
-                        rollback_reasons = [
-                            "Performance degradation",
-                            "Critical bug found",
-                            "Integration test failure",
-                            "Database migration issue",
-                            "Memory leak detected",
-                            "API compatibility issue"
-                        ]
-
-                        # Rollback event
-                        rollback_event_id = data_generator.generate_unique_id("cicd_")
+                        rollback_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
                         rollback_event = {
                             "id": rollback_event_id,
                             "event_id": proj_id,
-                            "timestamp": deploy_date + timedelta(minutes=30),
+                            "timestamp": current_date + timedelta(minutes=30),
                             "environment": env,
                             "event_type": "rollback",
-                            "build_id": data_generator.generate_unique_id("build_"),  # New unique build ID for rollback
+                            "build_id": f"build_{uuid.uuid4().hex[:8]}",
                             "status": "success",
-                            "reason": np.random.choice(rollback_reasons),
                             "duration_seconds": np.random.randint(180, 600),
-                            "metrics": cicd_status["metrics"]
+                            "metrics": cicd_status["metrics"],
+                            "reason": data_generator.generate_root_cause(),
                         }
                         cicd_events.append(rollback_event)
-                        cicd_commit_map[rollback_event_id] = associated_commits
+                        cicd_commit_map[rollback_event_id] = [
+                            commit["id"] for commit in selected_commits
+                        ]
+
+            build_counter += 1
+            current_date += timedelta(days=1)
 
     return cicd_events, cicd_commit_map
 
-def generate_bugs(projects: Dict[str, Dict[str, Any]],
-                  jira_items: List[Dict[str, Any]],
-                  cicd_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+def generate_bugs(
+    projects: Dict[str, Dict[str, Any]],
+    jira_items: List[Dict[str, Any]],
+    cicd_events: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """Generate bugs for all projects with Jira and CICD associations"""
     bugs = []
     bug_types = ["Security", "Performance", "Functionality", "Data", "UI/UX"]
@@ -461,9 +549,9 @@ def generate_bugs(projects: Dict[str, Dict[str, Any]],
     # Create maps for available Jiras and build IDs by project
     project_jiras = {}
     for jira in jira_items:
-        if jira['event_id'] not in project_jiras:
-            project_jiras[jira['event_id']] = []
-        project_jiras[jira['event_id']].append(jira['id'])
+        if jira["event_id"] not in project_jiras:
+            project_jiras[jira["event_id"]] = []
+        project_jiras[jira["event_id"]].append(jira["id"])
 
     build_ids_by_project = data_generator.get_build_ids_by_project(cicd_events)
 
@@ -487,41 +575,65 @@ def generate_bugs(projects: Dict[str, Dict[str, Any]],
             bug_date = bug_start + timedelta(days=i * 2)
             resolution_time = np.random.randint(4, 72)
 
-            status = "Fixed" if completion_state in ["pre_release", "all_complete"] else \
-                np.random.choice(["Fixed", "In Progress", "Open"], p=[0.6, 0.3, 0.1])
+            status = (
+                "Fixed"
+                if completion_state in ["pre_release", "all_complete"]
+                else np.random.choice(
+                    ["Fixed", "In Progress", "Open"], p=[0.6, 0.3, 0.1]
+                )
+            )
 
             # Associate with a random Jira and build ID
             associated_jira = random.choice(available_jiras)
             associated_build = random.choice(available_builds)
 
-            bugs.append({
-                "id": f"{proj_id}-BUG-{i + 1}",
-                "event_id": proj_id,
-                "jira_id": associated_jira,
-                "build_id": associated_build,
-                "bug_type": np.random.choice(bug_types),
-                "impact_area": np.random.choice(impact_areas),
-                "severity": "P0",
-                "title": f"Critical bug in {details['title']}",
-                "status": status,
-                "created_date": bug_date,
-                "resolved_date": bug_date + timedelta(hours=resolution_time) if status == "Fixed" else None,
-                "resolution_time_hours": resolution_time if status == "Fixed" else None,
-                "assigned_to": f"dev{np.random.randint(1, 6)}@example.com",
-                "environment_found": np.random.choice(["Production", "Staging", "QA"]),
-                "number_of_customers_affected": np.random.randint(1, 1000) if np.random.random() > 0.5 else 0,
-                "root_cause": data_generator.generate_root_cause(),
-                "fix_version": f"{proj_id.lower()}-v1.{np.random.randint(0, 9)}.{np.random.randint(0, 9)}",
-                "regression_test_status": "Passed" if status == "Fixed" else "In Progress",
-                "customer_communication_needed": np.random.choice([True, False]),
-                "postmortem_link": f"https://wiki.example.com/postmortem/{proj_id}-BUG-{i + 1}" if status == "Fixed" else None
-            })
+            bugs.append(
+                {
+                    "id": f"{proj_id}-BUG-{i + 1}",
+                    "event_id": proj_id,
+                    "jira_id": associated_jira,
+                    "build_id": associated_build,
+                    "bug_type": np.random.choice(bug_types),
+                    "impact_area": np.random.choice(impact_areas),
+                    "severity": "P0",
+                    "title": f"Critical bug in {details['title']}",
+                    "status": status,
+                    "created_date": bug_date,
+                    "resolved_date": (
+                        bug_date + timedelta(hours=resolution_time)
+                        if status == "Fixed"
+                        else None
+                    ),
+                    "resolution_time_hours": (
+                        resolution_time if status == "Fixed" else None
+                    ),
+                    "assigned_to": f"dev{np.random.randint(1, 6)}@example.com",
+                    "environment_found": np.random.choice(
+                        ["Production", "Staging", "QA"]
+                    ),
+                    "number_of_customers_affected": (
+                        np.random.randint(1, 1000) if np.random.random() > 0.5 else 0
+                    ),
+                    "root_cause": data_generator.generate_root_cause(),
+                    "fix_version": f"{proj_id.lower()}-v1.{np.random.randint(0, 9)}.{np.random.randint(0, 9)}",
+                    "regression_test_status": (
+                        "Passed" if status == "Fixed" else "In Progress"
+                    ),
+                    "customer_communication_needed": np.random.choice([True, False]),
+                    "postmortem_link": (
+                        f"https://wiki.example.com/postmortem/{proj_id}-BUG-{i + 1}"
+                        if status == "Fixed"
+                        else None
+                    ),
+                }
+            )
 
     return bugs
 
 
-def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> Tuple[
-    List[Dict[str, Any]], Dict[str, List[str]]]:
+def generate_sprints(
+    projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
     """Generate sprints for all projects with Jira associations"""
     sprints = []
     sprint_jira_map = {}
@@ -529,17 +641,19 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
     # Group jiras by project
     project_jiras = {}
     for jira in jira_items:
-        if jira['event_id'] not in project_jiras:
-            project_jiras[jira['event_id']] = []
-        project_jiras[jira['event_id']].append(jira)
+        if jira["event_id"] not in project_jiras:
+            project_jiras[jira["event_id"]] = []
+        project_jiras[jira["event_id"]].append(jira)
 
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
         sprint_start = details["start_date"] + timedelta(days=14)
-        project_completion = details["start_date"] + timedelta(weeks=12)  # Assuming 12 weeks project duration
+        project_completion = details["start_date"] + timedelta(
+            weeks=12
+        )  # Assuming 12 weeks project duration
 
         available_jiras = project_jiras.get(proj_id, [])
-        unassigned_jiras = set(jira['id'] for jira in available_jiras)
+        unassigned_jiras = set(jira["id"] for jira in available_jiras)
 
         for sprint_num in range(1, 9):
             sprint_id = f"{proj_id}-Sprint-{sprint_num}"
@@ -547,15 +661,24 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
             sprint_end_date = sprint_start_date + timedelta(days=14)
 
             # Determine completion based on project state
-            is_completed = completion_state in ["design_and_sprint", "pre_release", "all_complete"] or \
-                           (completion_state in ["mixed", "mixed_all"] and np.random.random() < 0.7)
+            is_completed = completion_state in [
+                "design_and_sprint",
+                "pre_release",
+                "all_complete",
+            ] or (
+                completion_state in ["mixed", "mixed_all"] and np.random.random() < 0.7
+            )
 
             # Filter jiras that can be included in this sprint
             eligible_jiras = [
-                jira['id'] for jira in available_jiras
-                if jira['id'] in unassigned_jiras and
-                jira['created_date'] <= sprint_end_date and
-                (not jira.get('completed_date') or jira['completed_date'] >= sprint_start_date)
+                jira["id"]
+                for jira in available_jiras
+                if jira["id"] in unassigned_jiras
+                and jira["created_date"] <= sprint_end_date
+                and (
+                    not jira.get("completed_date")
+                    or jira["completed_date"] >= sprint_start_date
+                )
             ]
 
             # Assign jiras to sprint based on completion state
@@ -567,8 +690,7 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
                     sprint_jiras = list(unassigned_jiras)
                 else:
                     num_jiras = random.randint(
-                        min(3, len(eligible_jiras)),
-                        min(8, len(eligible_jiras))
+                        min(3, len(eligible_jiras)), min(8, len(eligible_jiras))
                     )
                     sprint_jiras = random.sample(eligible_jiras, num_jiras)
 
@@ -576,15 +698,25 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
                 unassigned_jiras -= set(sprint_jiras)
 
             # Calculate metrics based on assigned jiras
-            sprint_jiras_data = [j for j in available_jiras if j['id'] in sprint_jiras]
-            planned_story_points = sum(j['story_points'] for j in sprint_jiras_data)
+            sprint_jiras_data = [j for j in available_jiras if j["id"] in sprint_jiras]
+            planned_story_points = sum(j["story_points"] for j in sprint_jiras_data)
             completed_story_points = int(
-                planned_story_points * (np.random.uniform(0.9, 1.1) if is_completed else np.random.uniform(0.5, 0.8))
+                planned_story_points
+                * (
+                    np.random.uniform(0.9, 1.1)
+                    if is_completed
+                    else np.random.uniform(0.5, 0.8)
+                )
             )
 
             planned_stories = len(sprint_jiras)
             completed_stories = int(
-                planned_stories * (np.random.uniform(0.9, 1.0) if is_completed else np.random.uniform(0.5, 0.8))
+                planned_stories
+                * (
+                    np.random.uniform(0.9, 1.0)
+                    if is_completed
+                    else np.random.uniform(0.5, 0.8)
+                )
             )
 
             sprint_data = {
@@ -597,18 +729,30 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
                 "planned_stories": planned_stories,
                 "completed_stories": completed_stories,
                 "team_velocity": completed_story_points,
-                "burndown_efficiency": np.random.uniform(0.9, 1.1) if is_completed else np.random.uniform(0.6, 0.9),
+                "burndown_efficiency": (
+                    np.random.uniform(0.9, 1.1)
+                    if is_completed
+                    else np.random.uniform(0.6, 0.9)
+                ),
                 "sprint_goals": f"Complete features for {details['title']} phase {sprint_num}",
-                "retrospective_summary": np.random.choice([
-                    "Improved team collaboration",
-                    "Technical debt addressed",
-                    "Communication challenges identified",
-                    "Process improvements implemented",
-                    "Knowledge sharing enhanced"
-                ]),
-                "blockers_encountered": np.random.randint(0, 2) if is_completed else np.random.randint(2, 5),
-                "team_satisfaction_score": np.random.uniform(8, 10) if is_completed else np.random.uniform(6, 8),
-                "status": "Completed" if is_completed else "In Progress"
+                "retrospective_summary": np.random.choice(
+                    [
+                        "Improved team collaboration",
+                        "Technical debt addressed",
+                        "Communication challenges identified",
+                        "Process improvements implemented",
+                        "Knowledge sharing enhanced",
+                    ]
+                ),
+                "blockers_encountered": (
+                    np.random.randint(0, 2) if is_completed else np.random.randint(2, 5)
+                ),
+                "team_satisfaction_score": (
+                    np.random.uniform(8, 10)
+                    if is_completed
+                    else np.random.uniform(6, 8)
+                ),
+                "status": "Completed" if is_completed else "In Progress",
             }
             sprints.append(sprint_data)
 
@@ -627,7 +771,9 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
     return sprints, sprint_jira_map
 
 
-def update_jiras_with_sprints(jira_items: List[Dict[str, Any]], sprint_jira_map: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+def update_jiras_with_sprints(
+    jira_items: List[Dict[str, Any]], sprint_jira_map: Dict[str, List[str]]
+) -> List[Dict[str, Any]]:
     """Update jira items with their sprint assignments"""
     # Create reverse mapping of jira_id to sprint_id
     jira_to_sprint = {}
@@ -639,10 +785,11 @@ def update_jiras_with_sprints(jira_items: List[Dict[str, Any]], sprint_jira_map:
     updated_jiras = []
     for jira in jira_items:
         jira_copy = jira.copy()
-        jira_copy['sprint_id'] = jira_to_sprint.get(jira['id'])
+        jira_copy["sprint_id"] = jira_to_sprint.get(jira["id"])
         updated_jiras.append(jira_copy)
 
     return updated_jiras
+
 
 def generate_team_metrics(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Generate team metrics for all projects"""
@@ -656,78 +803,267 @@ def generate_team_metrics(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str,
             week_start = start_date + timedelta(weeks=week)
 
             # Adjust metrics based on completion state
-            is_mature = completion_state in ["pre_release", "all_complete"] or \
-                        (completion_state in ["design_and_sprint", "mixed_all"] and week > 6)
+            is_mature = completion_state in ["pre_release", "all_complete"] or (
+                completion_state in ["design_and_sprint", "mixed_all"] and week > 6
+            )
 
-            team_metrics.append({
-                "id": f"{proj_id}-TM-{week + 1}",
-                "event_id": proj_id,
-                "week_starting": week_start,
-                "team_size": details["team_size"],
-                "velocity": np.random.randint(30, 40) if is_mature else np.random.randint(20, 30),
-                "code_review_turnaround_hours": np.random.uniform(2, 24) if is_mature else np.random.uniform(24, 48),
-                "build_success_rate": np.random.uniform(95, 100) if is_mature else np.random.uniform(85, 95),
-                "test_coverage": np.random.uniform(85, 95) if is_mature else np.random.uniform(75, 85),
-                "bugs_reported": np.random.randint(1, 5) if is_mature else np.random.randint(5, 10),
-                "bugs_fixed": np.random.randint(3, 8) if is_mature else np.random.randint(1, 5),
-                "technical_debt_hours": np.random.randint(5, 20) if is_mature else np.random.randint(20, 40),
-                "pair_programming_hours": np.random.randint(10, 20) if is_mature else np.random.randint(5, 10),
-                "code_review_comments": np.random.randint(20, 50) if is_mature else np.random.randint(50, 100),
-                "documentation_updates": np.random.randint(5, 8) if is_mature else np.random.randint(2, 5),
-                "knowledge_sharing_sessions": np.random.randint(2, 3) if is_mature else np.random.randint(1, 2),
-                "team_satisfaction": np.random.uniform(8, 9.5) if is_mature else np.random.uniform(7, 8),
-                "sprint_completion_rate": np.random.uniform(90, 100) if is_mature else np.random.uniform(70, 90)
-            })
+            team_metrics.append(
+                {
+                    "id": f"{proj_id}-TM-{week + 1}",
+                    "event_id": proj_id,
+                    "week_starting": week_start,
+                    "team_size": details["team_size"],
+                    "velocity": (
+                        np.random.randint(30, 40)
+                        if is_mature
+                        else np.random.randint(20, 30)
+                    ),
+                    "code_review_turnaround_hours": (
+                        np.random.uniform(2, 24)
+                        if is_mature
+                        else np.random.uniform(24, 48)
+                    ),
+                    "build_success_rate": (
+                        np.random.uniform(95, 100)
+                        if is_mature
+                        else np.random.uniform(85, 95)
+                    ),
+                    "test_coverage": (
+                        np.random.uniform(85, 95)
+                        if is_mature
+                        else np.random.uniform(75, 85)
+                    ),
+                    "bugs_reported": (
+                        np.random.randint(1, 5)
+                        if is_mature
+                        else np.random.randint(5, 10)
+                    ),
+                    "bugs_fixed": (
+                        np.random.randint(3, 8)
+                        if is_mature
+                        else np.random.randint(1, 5)
+                    ),
+                    "technical_debt_hours": (
+                        np.random.randint(5, 20)
+                        if is_mature
+                        else np.random.randint(20, 40)
+                    ),
+                    "pair_programming_hours": (
+                        np.random.randint(10, 20)
+                        if is_mature
+                        else np.random.randint(5, 10)
+                    ),
+                    "code_review_comments": (
+                        np.random.randint(20, 50)
+                        if is_mature
+                        else np.random.randint(50, 100)
+                    ),
+                    "documentation_updates": (
+                        np.random.randint(5, 8)
+                        if is_mature
+                        else np.random.randint(2, 5)
+                    ),
+                    "knowledge_sharing_sessions": (
+                        np.random.randint(2, 3)
+                        if is_mature
+                        else np.random.randint(1, 2)
+                    ),
+                    "team_satisfaction": (
+                        np.random.uniform(8, 9.5)
+                        if is_mature
+                        else np.random.uniform(7, 8)
+                    ),
+                    "sprint_completion_rate": (
+                        np.random.uniform(90, 100)
+                        if is_mature
+                        else np.random.uniform(70, 90)
+                    ),
+                }
+            )
 
     return team_metrics
 
 
+def verify_temporal_consistency(
+    commits: List[Dict[str, Any]],
+    cicd_events: List[Dict[str, Any]],
+    cicd_commit_map: Dict[str, List[str]],
+) -> List[str]:
+    """Verify temporal consistency between commits and CICD events"""
+    errors = []
+
+    # Create timestamp lookup for commits
+    commit_timestamps = {commit["id"]: commit["timestamp"] for commit in commits}
+
+    # Check each CICD event
+    for event in cicd_events:
+        associated_commits = cicd_commit_map.get(event["id"], [])
+        for commit_id in associated_commits:
+            if commit_id not in commit_timestamps:
+                errors.append(
+                    f"CICD event {event['id']} references non-existent commit {commit_id}"
+                )
+                continue
+
+            commit_time = commit_timestamps[commit_id]
+            if commit_time >= event["timestamp"]:
+                errors.append(
+                    f"Temporal inconsistency: Commit {commit_id} ({commit_time.isoformat()}) "
+                    f"is newer than CICD event {event['id']} ({event['timestamp'].isoformat()})"
+                )
+
+    return errors
+
+
+def verify_project_references(all_data: Dict[str, Any]) -> List[str]:
+    """Verify all project references are valid"""
+    errors = []
+
+    # Get set of valid project IDs
+    project_ids = {proj["id"] for proj in all_data["projects"]}
+
+    # Check commits
+    for commit in all_data["commits"]:
+        if commit["event_id"] not in project_ids:
+            errors.append(
+                f"Commit {commit['id']} references invalid project {commit['event_id']}"
+            )
+
+    # Check CICD events
+    for event in all_data["cicd_events"]:
+        if event["event_id"] not in project_ids:
+            errors.append(
+                f"CICD event {event['id']} references invalid project {event['event_id']}"
+            )
+
+    # Check sprints
+    for sprint in all_data["sprints"]:
+        if sprint["event_id"] not in project_ids:
+            errors.append(
+                f"Sprint {sprint['id']} references invalid project {sprint['event_id']}"
+            )
+
+    return errors
+
+
+def verify_jira_references(all_data: Dict[str, Any]) -> List[str]:
+    """Verify all Jira references are valid"""
+    errors = []
+
+    # Get set of valid Jira IDs
+    jira_ids = {jira["id"] for jira in all_data["jira_items"]}
+
+    # Check commits
+    for commit in all_data["commits"]:
+        if commit["jira_id"] not in jira_ids:
+            errors.append(
+                f"Commit {commit['id']} references invalid Jira {commit['jira_id']}"
+            )
+
+    # Check sprint associations
+    for sprint_id, sprint_jiras in all_data["relationships"][
+        "sprint_jira_associations"
+    ].items():
+        for jira_id in sprint_jiras:
+            if jira_id not in jira_ids:
+                errors.append(f"Sprint {sprint_id} references invalid Jira {jira_id}")
+
+    return errors
+
+
 def generate_all_data() -> Dict[str, Any]:
-    """Generate all data for the application with new relationships"""
-    # Generate base project data
-    projects = data_generator.generate_project_base_data()
+    """Generate all data for the application with comprehensive validation"""
+    try:
+        print("Generating project data...")
+        projects = data_generator.generate_project_base_data()
+        project_details = data_generator.generate_project_details(projects)
 
-    # Generate project details
-    project_details = data_generator.generate_project_details(projects)
+        print("Generating Jira items...")
+        jira_items = generate_jira_items(projects)
 
-    # Generate design events
-    design_events = generate_design_events(projects)
+        print("Generating design events...")
+        design_events = generate_design_events(projects)
 
-    # Generate Jira items first as they're needed for relationships
-    jira_items = generate_jira_items(projects)
+        print("Generating commits...")
+        commits = generate_commits(projects, jira_items)
 
-    # Generate commits with Jira associations
-    commits = generate_commits(projects, jira_items)
+        print("Generating CICD events...")
+        cicd_events, cicd_commit_map = generate_cicd_events(projects, commits)
 
-    # Generate CICD events with commit associations
-    cicd_events, cicd_commit_map = generate_cicd_events(projects, commits)
+        print("Generating sprints...")
+        sprints, sprint_jira_map = generate_sprints(projects, jira_items)
 
-    # Generate bugs with Jira and CICD associations
-    bugs = generate_bugs(projects, jira_items, cicd_events)
+        print("Generating bugs...")
+        bugs = generate_bugs(projects, jira_items, cicd_events)
 
-    # Generate sprints with Jira associations
-    sprints, sprint_jira_map = generate_sprints(projects, jira_items)
+        print("Generating team metrics...")
+        team_metrics = generate_team_metrics(projects)
 
-    # Generate team metrics
-    team_metrics = generate_team_metrics(projects)
-
-    # Combine all data
-    all_data = {
-        "projects": project_details,
-        "design_events": design_events,
-        "jira_items": jira_items,
-        "commits": commits,
-        "cicd_events": cicd_events,
-        "bugs": bugs,
-        "sprints": sprints,
-        "team_metrics": team_metrics,
-        "relationships": {
-            "sprint_jira_associations": sprint_jira_map,
-            "cicd_commit_associations": cicd_commit_map
+        # Combine all data
+        all_data = {
+            "projects": project_details,
+            "design_events": design_events,
+            "jira_items": jira_items,
+            "commits": commits,
+            "cicd_events": cicd_events,
+            "bugs": bugs,
+            "sprints": sprints,
+            "team_metrics": team_metrics,
+            "relationships": {
+                "sprint_jira_associations": sprint_jira_map,
+                "cicd_commit_associations": cicd_commit_map,
+            },
         }
-    }
 
-    return all_data
+        print("Verifying data consistency...")
+
+        # Verify temporal consistency
+        temporal_errors = verify_temporal_consistency(
+            commits, cicd_events, cicd_commit_map
+        )
+        if temporal_errors:
+            print("Temporal consistency errors:")
+            for error in temporal_errors:
+                print(f"  - {error}")
+
+        # Verify project references
+        project_errors = verify_project_references(all_data)
+        if project_errors:
+            print("Project reference errors:")
+            for error in project_errors:
+                print(f"  - {error}")
+
+        # Verify Jira references
+        jira_errors = verify_jira_references(all_data)
+        if jira_errors:
+            print("Jira reference errors:")
+            for error in jira_errors:
+                print(f"  - {error}")
+
+        # Verify data completeness
+        for key in [
+            "projects",
+            "design_events",
+            "jira_items",
+            "commits",
+            "cicd_events",
+            "bugs",
+            "sprints",
+            "team_metrics",
+        ]:
+            if not all_data[key]:
+                print(f"Warning: {key} data is empty")
+
+        all_errors = temporal_errors + project_errors + jira_errors
+        if all_errors:
+            raise ValueError(f"Found {len(all_errors)} data consistency errors")
+
+        print("Data generation completed successfully")
+        return all_data
+
+    except Exception as e:
+        print(f"Error generating data: {str(e)}")
+        raise
 
 
 def validate_relationships(data: Dict[str, Any]) -> List[str]:
@@ -738,7 +1074,9 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
     jira_ids = set(jira["id"] for jira in data["jira_items"])
     for commit in data["commits"]:
         if commit["jira_id"] not in jira_ids:
-            validation_errors.append(f"Commit {commit['id']} has invalid jira_id {commit['jira_id']}")
+            validation_errors.append(
+                f"Commit {commit['id']} has invalid jira_id {commit['jira_id']}"
+            )
 
     # Validate bugs have valid Jira IDs and build IDs
     build_ids = set()
@@ -748,82 +1086,115 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
 
     for bug in data["bugs"]:
         if bug["jira_id"] not in jira_ids:
-            validation_errors.append(f"Bug {bug['id']} has invalid jira_id {bug['jira_id']}")
+            validation_errors.append(
+                f"Bug {bug['id']} has invalid jira_id {bug['jira_id']}"
+            )
         if bug["build_id"] not in build_ids:
-            validation_errors.append(f"Bug {bug['id']} has invalid build_id {bug['build_id']}")
+            validation_errors.append(
+                f"Bug {bug['id']} has invalid build_id {bug['build_id']}"
+            )
 
     # Validate sprint-jira associations
     sprint_ids = set(sprint["id"] for sprint in data["sprints"])
-    for sprint_id, associated_jiras in data["relationships"]["sprint_jira_associations"].items():
+    for sprint_id, associated_jiras in data["relationships"][
+        "sprint_jira_associations"
+    ].items():
         if sprint_id not in sprint_ids:
-            validation_errors.append(f"Invalid sprint_id {sprint_id} in sprint-jira associations")
+            validation_errors.append(
+                f"Invalid sprint_id {sprint_id} in sprint-jira associations"
+            )
         for jira_id in associated_jiras:
             if jira_id not in jira_ids:
-                validation_errors.append(f"Invalid jira_id {jira_id} in sprint-jira associations")
+                validation_errors.append(
+                    f"Invalid jira_id {jira_id} in sprint-jira associations"
+                )
 
     # Validate CICD-commit associations
     commit_ids = set(commit["id"] for commit in data["commits"])
     cicd_ids = set(cicd["id"] for cicd in data["cicd_events"])
-    for cicd_id, associated_commits in data["relationships"]["cicd_commit_associations"].items():
+    for cicd_id, associated_commits in data["relationships"][
+        "cicd_commit_associations"
+    ].items():
         if cicd_id not in cicd_ids:
-            validation_errors.append(f"Invalid cicd_id {cicd_id} in cicd-commit associations")
+            validation_errors.append(
+                f"Invalid cicd_id {cicd_id} in cicd-commit associations"
+            )
         for commit_id in associated_commits:
             if commit_id not in commit_ids:
-                validation_errors.append(f"Invalid commit_id {commit_id} in cicd-commit associations")
+                validation_errors.append(
+                    f"Invalid commit_id {commit_id} in cicd-commit associations"
+                )
 
     return validation_errors
 
 
 def get_sample_data() -> Dict[str, Any]:
-    """Helper function to get sample data with validation"""
-    # Generate base project data
-    projects = data_generator.generate_project_base_data()
-    project_details = data_generator.generate_project_details(projects)
+    """Get sample data with validation"""
+    try:
+        print("Starting sample data generation...")
 
-    # Generate other data
-    design_events = generate_design_events(projects)
-    jira_items = generate_jira_items(projects)
-    commits = generate_commits(projects, jira_items)
-    cicd_events, cicd_commit_map = generate_cicd_events(projects, commits)
-    bugs = generate_bugs(projects, jira_items, cicd_events)
-    sprints, sprint_jira_map = generate_sprints(projects, jira_items)
+        # Generate data using the enhanced generate_all_data function
+        all_data = generate_all_data()
 
-    # No need to modify jira items with sprint information since we're using a junction table
+        print("Performing final validation checks...")
 
-    team_metrics = generate_team_metrics(projects)
-
-    all_data = {
-        "projects": project_details,
-        "design_events": design_events,
-        "jira_items": jira_items,
-        "commits": commits,
-        "cicd_events": cicd_events,
-        "bugs": bugs,
-        "sprints": sprints,
-        "team_metrics": team_metrics,
-        "relationships": {
-            "sprint_jira_associations": sprint_jira_map,
-            "cicd_commit_associations": cicd_commit_map
+        # Verify required keys exist
+        required_keys = {
+            "projects",
+            "design_events",
+            "jira_items",
+            "commits",
+            "cicd_events",
+            "bugs",
+            "sprints",
+            "team_metrics",
+            "relationships",
         }
-    }
+        missing_keys = required_keys - set(all_data.keys())
+        if missing_keys:
+            raise ValueError(f"Missing required data sections: {missing_keys}")
 
-    validation_errors = validate_relationships(all_data)
-    if validation_errors:
-        print("Validation errors found:")
-        for error in validation_errors:
-            print(f"- {error}")
+        # Verify relationships structure
+        required_relationships = {
+            "sprint_jira_associations",
+            "cicd_commit_associations",
+        }
+        missing_relationships = required_relationships - set(
+            all_data["relationships"].keys()
+        )
+        if missing_relationships:
+            raise ValueError(
+                f"Missing required relationship maps: {missing_relationships}"
+            )
 
-    return all_data
+        # Verify data types
+        type_checks = {
+            "projects": list,
+            "commits": list,
+            "cicd_events": list,
+            "relationships": dict,
+        }
+        for key, expected_type in type_checks.items():
+            if not isinstance(all_data[key], expected_type):
+                raise TypeError(
+                    f"Invalid type for {key}: expected {expected_type}, got {type(all_data[key])}"
+                )
+
+        print("Sample data generation and validation completed successfully")
+        return all_data
+
+    except Exception as e:
+        print(f"Error in get_sample_data: {str(e)}")
+        raise
 
 
 def write_sample_data(filename: str = "sample_data.json") -> None:
     """Write sample data to a JSON file"""
     data = get_sample_data()
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         json.dump(data, f, indent=2, default=str)
     print(f"Sample data written to {filename}")
 
 
 if __name__ == "__main__":
     write_sample_data()
-

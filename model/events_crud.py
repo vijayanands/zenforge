@@ -1,5 +1,7 @@
+# events_crud.py
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from sqlalchemy import and_
 
 from model.events_schema import (
     Bug,
@@ -19,7 +21,6 @@ class CRUDManager:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
 
-    # Project Operations (unchanged as they use 'id')
     def create_project(self, project_data: Dict[str, Any]) -> Project:
         with self.db_manager.get_session() as session:
             project = Project(**project_data)
@@ -47,7 +48,6 @@ class CRUDManager:
             session.commit()
             return result > 0
 
-    # Design Event Operations
     def create_design_event(self, event_data: Dict[str, Any]) -> DesignEvent:
         if "stage" in event_data:
             event_data["stage"] = StageType(event_data["stage"])
@@ -66,7 +66,6 @@ class CRUDManager:
                 query = query.filter(DesignEvent.design_type == design_type)
             return query.order_by(DesignEvent.timestamp).all()
 
-    # Jira Operations
     def create_jira_item(self, jira_data: Dict[str, Any]) -> JiraItem:
         with self.db_manager.get_session() as session:
             jira = JiraItem(**jira_data)
@@ -98,13 +97,17 @@ class CRUDManager:
             session.commit()
             return result > 0
 
-    # Code Commit Operations
     def create_commit(self, commit_data: Dict[str, Any]) -> CodeCommit:
         with self.db_manager.get_session() as session:
-            commit = CodeCommit(**commit_data)
-            session.add(commit)
-            session.commit()
-            return commit
+            try:
+                commit = CodeCommit(**commit_data)
+                session.add(commit)
+                session.commit()
+                return commit
+            except Exception as e:
+                session.rollback()
+                print(f"Error creating commit: {e}")
+                raise
 
     def get_commits(
         self,
@@ -120,13 +123,46 @@ class CRUDManager:
                 query = query.filter(CodeCommit.timestamp <= end_date)
             return query.order_by(CodeCommit.timestamp).all()
 
-    # CICD Event Operations
     def create_cicd_event(self, event_data: Dict[str, Any]) -> CICDEvent:
         with self.db_manager.get_session() as session:
-            event = CICDEvent(**event_data)
-            session.add(event)
-            session.commit()
-            return event
+            try:
+                # Get commit associations from the data
+                commit_pairs = event_data.pop("commit_pairs", [])
+
+                # Create CICD event first
+                event = CICDEvent(**event_data)
+                session.add(event)
+                session.flush()  # Flush to get the event ID
+
+                # Associate commits if provided
+                if commit_pairs:
+                    for commit_id, timestamp in commit_pairs:
+                        commit = (
+                            session.query(CodeCommit)
+                            .filter(
+                                and_(
+                                    CodeCommit.id == commit_id,
+                                    CodeCommit.timestamp == timestamp,
+                                    CodeCommit.timestamp < event.timestamp,
+                                )
+                            )
+                            .first()
+                        )
+
+                        if commit:
+                            event.commits.append(commit)
+                        else:
+                            print(
+                                f"Warning: Commit {commit_id} at {timestamp} not found or is newer than CICD event"
+                            )
+
+                session.commit()
+                return event
+
+            except Exception as e:
+                session.rollback()
+                print(f"Error creating CICD event: {e}")
+                raise
 
     def get_cicd_events(
         self,
@@ -142,7 +178,6 @@ class CRUDManager:
                 query = query.filter(CICDEvent.event_type == event_type)
             return query.order_by(CICDEvent.timestamp).all()
 
-    # Bug Operations
     def create_bug(self, bug_data: Dict[str, Any]) -> Bug:
         with self.db_manager.get_session() as session:
             bug = Bug(**bug_data)
@@ -181,11 +216,10 @@ class CRUDManager:
             session.commit()
             return result > 0
 
-    # Sprint Operations
     def create_sprint(self, sprint_data: Dict[str, Any]) -> Sprint:
         with self.db_manager.get_session() as session:
             # Remove jira_items from the data before creating Sprint
-            jira_items = sprint_data.pop('jira_items', [])
+            jira_items = sprint_data.pop("jira_items", [])
             sprint = Sprint(**sprint_data)
             session.add(sprint)
             session.commit()
@@ -198,8 +232,9 @@ class CRUDManager:
                 query = query.filter(Sprint.status == status)
             return query.order_by(Sprint.start_date).all()
 
-    def create_sprint_jira_associations(self, sprint_id: str, jira_ids: List[str]) -> bool:
-        """Create associations between a sprint and multiple jira items"""
+    def create_sprint_jira_associations(
+        self, sprint_id: str, jira_ids: List[str]
+    ) -> bool:
         with self.db_manager.get_session() as session:
             try:
                 sprint = session.query(Sprint).filter(Sprint.id == sprint_id).first()
@@ -215,7 +250,6 @@ class CRUDManager:
                 session.rollback()
                 return False
 
-    # Team Metrics Operations
     def create_team_metrics(self, metrics_data: Dict[str, Any]) -> TeamMetrics:
         with self.db_manager.get_session() as session:
             metrics = TeamMetrics(**metrics_data)
@@ -237,7 +271,6 @@ class CRUDManager:
                 query = query.filter(TeamMetrics.week_starting <= end_date)
             return query.order_by(TeamMetrics.week_starting).all()
 
-    # Batch Operations
     def bulk_insert(self, model_class: Any, items: List[Dict[str, Any]]) -> bool:
         with self.db_manager.get_session() as session:
             try:

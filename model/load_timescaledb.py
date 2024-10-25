@@ -22,6 +22,7 @@ connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 # Create an engine for the server connection
 engine = create_engine(server_connection_string)
 
+
 def create_database_if_not_exists():
     # Connect to the server and check if the database exists
     with engine.connect() as connection:
@@ -37,6 +38,7 @@ def create_database_if_not_exists():
             connection.execute(text("commit"))  # Commit any existing transaction
             connection.execute(text(f"CREATE DATABASE {db_name}"))
             print(f"Database {db_name} created successfully")
+
 
 def initialize_db_manager():
     # Create the DatabaseManager instance and initialize the database
@@ -92,12 +94,17 @@ def load_data(db_manager):
         for jira in stories:
             # Verify parent epic exists
             with db_manager.get_session() as session:
-                epic_exists = session.query(JiraItem).filter(
-                    JiraItem.id == jira['parent_id']
-                ).first() is not None
+                epic_exists = (
+                    session.query(JiraItem)
+                    .filter(JiraItem.id == jira["parent_id"])
+                    .first()
+                    is not None
+                )
 
                 if not epic_exists:
-                    print(f"Warning: Parent epic {jira['parent_id']} not found for story {jira['id']}")
+                    print(
+                        f"Warning: Parent epic {jira['parent_id']} not found for story {jira['id']}"
+                    )
                     continue
 
             crud_manager.create_jira_item(jira)
@@ -106,12 +113,17 @@ def load_data(db_manager):
         for jira in tasks:
             # Verify parent story exists
             with db_manager.get_session() as session:
-                story_exists = session.query(JiraItem).filter(
-                    JiraItem.id == jira['parent_id']
-                ).first() is not None
+                story_exists = (
+                    session.query(JiraItem)
+                    .filter(JiraItem.id == jira["parent_id"])
+                    .first()
+                    is not None
+                )
 
                 if not story_exists:
-                    print(f"Warning: Parent story {jira['parent_id']} not found for task {jira['id']}")
+                    print(
+                        f"Warning: Parent story {jira['parent_id']} not found for task {jira['id']}"
+                    )
                     continue
 
             crud_manager.create_jira_item(jira)
@@ -121,12 +133,17 @@ def load_data(db_manager):
         for design_event in all_data["design_events"]:
             # Verify referenced Jira exists
             with db_manager.get_session() as session:
-                jira_exists = session.query(JiraItem).filter(
-                    JiraItem.id == design_event['jira']
-                ).first() is not None
+                jira_exists = (
+                    session.query(JiraItem)
+                    .filter(JiraItem.id == design_event["jira"])
+                    .first()
+                    is not None
+                )
 
                 if not jira_exists:
-                    print(f"Warning: Jira {design_event['jira']} not found for design event {design_event['id']}")
+                    print(
+                        f"Warning: Jira {design_event['jira']} not found for design event {design_event['id']}"
+                    )
                     continue
 
             crud_manager.create_design_event(design_event)
@@ -138,12 +155,15 @@ def load_data(db_manager):
 
         # Create sprint-jira associations
         print("Creating sprint-jira associations...")
-        for sprint_id, jira_ids in all_data["relationships"]["sprint_jira_associations"].items():
+        for sprint_id, jira_ids in all_data["relationships"][
+            "sprint_jira_associations"
+        ].items():
             # Verify sprint exists
             with db_manager.get_session() as session:
-                sprint_exists = session.query(Sprint).filter(
-                    Sprint.id == sprint_id
-                ).first() is not None
+                sprint_exists = (
+                    session.query(Sprint).filter(Sprint.id == sprint_id).first()
+                    is not None
+                )
 
                 if not sprint_exists:
                     print(f"Warning: Sprint {sprint_id} not found for associations")
@@ -152,29 +172,39 @@ def load_data(db_manager):
                 # Verify all referenced Jiras exist
                 valid_jira_ids = []
                 for jira_id in jira_ids:
-                    jira_exists = session.query(JiraItem).filter(
-                        JiraItem.id == jira_id
-                    ).first() is not None
+                    jira_exists = (
+                        session.query(JiraItem).filter(JiraItem.id == jira_id).first()
+                        is not None
+                    )
 
                     if jira_exists:
                         valid_jira_ids.append(jira_id)
                     else:
-                        print(f"Warning: Jira {jira_id} not found for sprint {sprint_id}")
+                        print(
+                            f"Warning: Jira {jira_id} not found for sprint {sprint_id}"
+                        )
 
                 if valid_jira_ids:
-                    crud_manager.create_sprint_jira_associations(sprint_id, valid_jira_ids)
+                    crud_manager.create_sprint_jira_associations(
+                        sprint_id, valid_jira_ids
+                    )
 
         # Load remaining entities that depend on Jiras
         print("Loading commits...")
         for commit in all_data["commits"]:
             # Verify Jira exists
             with db_manager.get_session() as session:
-                jira_exists = session.query(JiraItem).filter(
-                    JiraItem.id == commit['jira_id']
-                ).first() is not None
+                jira_exists = (
+                    session.query(JiraItem)
+                    .filter(JiraItem.id == commit["jira_id"])
+                    .first()
+                    is not None
+                )
 
                 if not jira_exists:
-                    print(f"Warning: Jira {commit['jira_id']} not found for commit {commit['id']}")
+                    print(
+                        f"Warning: Jira {commit['jira_id']} not found for commit {commit['id']}"
+                    )
                     continue
 
             crud_manager.create_commit(commit)
@@ -187,12 +217,17 @@ def load_data(db_manager):
         for bug in all_data["bugs"]:
             # Verify Jira and build exist
             with db_manager.get_session() as session:
-                jira_exists = session.query(JiraItem).filter(
-                    JiraItem.id == bug['jira_id']
-                ).first() is not None
+                jira_exists = (
+                    session.query(JiraItem)
+                    .filter(JiraItem.id == bug["jira_id"])
+                    .first()
+                    is not None
+                )
 
                 if not jira_exists:
-                    print(f"Warning: Jira {bug['jira_id']} not found for bug {bug['id']}")
+                    print(
+                        f"Warning: Jira {bug['jira_id']} not found for bug {bug['id']}"
+                    )
                     continue
 
             crud_manager.create_bug(bug)
@@ -206,6 +241,7 @@ def load_data(db_manager):
     except Exception as e:
         print(f"Error loading data: {e}")
         raise
+
 
 def load_sample_data_into_timeseries_db():
     try:
@@ -222,6 +258,7 @@ def load_sample_data_into_timeseries_db():
     except Exception as e:
         print(f"Failed to load sample data: {e}")
         raise
+
 
 if __name__ == "__main__":
     load_sample_data_into_timeseries_db()

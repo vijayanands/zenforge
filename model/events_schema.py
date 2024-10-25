@@ -1,5 +1,6 @@
 # events_schema.py
 import enum
+from operator import and_
 
 from sqlalchemy import (
     Boolean,
@@ -14,6 +15,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Table,
+    ForeignKeyConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
@@ -21,23 +23,28 @@ from sqlalchemy.orm import relationship
 
 Base = declarative_base()
 
-# Junction table for sprint-jira relationship
-sprint_jira_association = Table(
-    'sprint_jira_association',
+# Junction tables
+cicd_commit_association = Table(
+    "cicd_commit_association",
     Base.metadata,
-    Column('sprint_id', String, ForeignKey('sdlc_timeseries.sprints.id')),
-    Column('jira_id', String, ForeignKey('sdlc_timeseries.jira_items.id')),
-    schema='sdlc_timeseries'
+    Column("cicd_id", String, ForeignKey("sdlc_timeseries.cicd_events.id")),
+    Column("commit_id", String),
+    Column("commit_timestamp", DateTime),
+    ForeignKeyConstraint(
+        ["commit_id", "commit_timestamp"],
+        ["sdlc_timeseries.code_commits.id", "sdlc_timeseries.code_commits.timestamp"],
+    ),
+    schema="sdlc_timeseries",
 )
 
+sprint_jira_association = Table(
+    "sprint_jira_association",
+    Base.metadata,
+    Column("sprint_id", String, ForeignKey("sdlc_timeseries.sprints.id")),
+    Column("jira_id", String, ForeignKey("sdlc_timeseries.jira_items.id")),
+    schema="sdlc_timeseries",
+)
 
-class EventType(enum.Enum):
-    DESIGN = "design"
-    SPRINT_PLANNING = "sprint_planning"
-    IMPLEMENTATION = "implementation"
-    CODE_COMMIT = "code_commit"
-    PULL_REQUEST = "pull_request"
-    CI_CD = "ci_cd"
 
 class StageType(enum.Enum):
     START = "start"
@@ -45,13 +52,8 @@ class StageType(enum.Enum):
     BLOCKED = "blocked"
     RESUME = "resume"
 
-class PRState(enum.Enum):
-    OPENED = "opened"
-    APPROVED = "approved"
-    MERGED = "merged"
 
-
-# Regular tables (not hypertables)
+# Regular tables
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = {"schema": "sdlc_timeseries"}
@@ -90,8 +92,9 @@ class JiraItem(Base):
     estimated_hours = Column(Integer)
     actual_hours = Column(Integer)
 
-    # Define many-to-many relationship
-    sprints = relationship("Sprint", secondary=sprint_jira_association, back_populates="jira_items")
+    sprints = relationship(
+        "Sprint", secondary=sprint_jira_association, back_populates="jira_items"
+    )
 
 
 class Sprint(Base):
@@ -114,28 +117,66 @@ class Sprint(Base):
     team_satisfaction_score = Column(Float)
     status = Column(String)
 
-    # Define many-to-many relationship
-    jira_items = relationship("JiraItem", secondary=sprint_jira_association, back_populates="sprints")
+    jira_items = relationship(
+        "JiraItem", secondary=sprint_jira_association, back_populates="sprints"
+    )
+
+
+class CodeCommit(Base):
+    __tablename__ = "code_commits"
+    __table_args__ = (
+        UniqueConstraint("id", "timestamp"),
+        {"schema": "sdlc_timeseries"},
+    )
+
+    id = Column(String)
+    timestamp = Column(DateTime, nullable=False)
+    __mapper_args__ = {"primary_key": [id, timestamp]}
+
+    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
+    repository = Column(String)
+    branch = Column(String)
+    author = Column(String)
+    commit_hash = Column(String)
+    files_changed = Column(Integer)
+    lines_added = Column(Integer)
+    lines_removed = Column(Integer)
+    code_coverage = Column(Float)
+    lint_score = Column(Float)
+    commit_type = Column(String)
+    review_time_minutes = Column(Integer)
+    comments_count = Column(Integer)
+    approved_by = Column(String)
+    jira_id = Column(
+        String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False
+    )
 
 
 class CICDEvent(Base):
     __tablename__ = "cicd_events"
-    __table_args__ = (
-        PrimaryKeyConstraint("id"),
-        UniqueConstraint("build_id"),  # Keep build_id unique
-        {"schema": "sdlc_timeseries"}
-    )
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)
     event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     timestamp = Column(DateTime, nullable=False)
     environment = Column(String)
     event_type = Column(String)
-    build_id = Column(String, nullable=False, unique=True)  # Explicitly mark as unique
+    build_id = Column(String, nullable=False, unique=True)
     status = Column(String)
     duration_seconds = Column(Integer)
     metrics = Column(JSONB)
     reason = Column(String, nullable=True)
+
+    commits = relationship(
+        "CodeCommit",
+        secondary=cicd_commit_association,
+        primaryjoin=(id == cicd_commit_association.c.cicd_id),
+        secondaryjoin=and_(
+            CodeCommit.id == cicd_commit_association.c.commit_id,
+            CodeCommit.timestamp == cicd_commit_association.c.commit_timestamp,
+        ),
+    )
+
 
 class Bug(Base):
     __tablename__ = "bugs"
@@ -159,10 +200,14 @@ class Bug(Base):
     regression_test_status = Column(String)
     customer_communication_needed = Column(Boolean)
     postmortem_link = Column(String)
-    jira_id = Column(String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False)
-    build_id = Column(String, ForeignKey("sdlc_timeseries.cicd_events.build_id"), nullable=False)
+    jira_id = Column(
+        String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False
+    )
+    build_id = Column(
+        String, ForeignKey("sdlc_timeseries.cicd_events.build_id"), nullable=False
+    )
 
-# Hypertables
+
 class DesignEvent(Base):
     __tablename__ = "design_events"
     __table_args__ = (
@@ -176,35 +221,10 @@ class DesignEvent(Base):
     design_type = Column(String, nullable=False)
     stage = Column(Enum(StageType), nullable=False)
     author = Column(String)
-    jira = Column(String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=True)  # Make nullable
+    jira = Column(String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=True)
     stakeholders = Column(String)
     review_status = Column(String)
 
-
-class CodeCommit(Base):
-    __tablename__ = "code_commits"
-    __table_args__ = (
-        PrimaryKeyConstraint("id", "timestamp"),
-        {"schema": "sdlc_timeseries"},
-    )
-
-    id = Column(String)
-    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
-    timestamp = Column(DateTime, nullable=False)
-    repository = Column(String)
-    branch = Column(String)
-    author = Column(String)
-    commit_hash = Column(String)
-    files_changed = Column(Integer)
-    lines_added = Column(Integer)
-    lines_removed = Column(Integer)
-    code_coverage = Column(Float)
-    lint_score = Column(Float)
-    commit_type = Column(String)
-    review_time_minutes = Column(Integer)
-    comments_count = Column(Integer)
-    approved_by = Column(String)
-    jira_id = Column(String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False)
 
 class TeamMetrics(Base):
     __tablename__ = "team_metrics"
