@@ -259,6 +259,3 @@ def load_sample_data_into_timeseries_db():
         print(f"Failed to load sample data: {e}")
         raise
 
-
-if __name__ == "__main__":
-    load_sample_data_into_timeseries_db()

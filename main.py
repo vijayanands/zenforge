@@ -1,4 +1,5 @@
 import streamlit as st
+import argparse
 
 from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
 from demo_code.ic.dashboard import show_ic_dashboard
@@ -35,7 +36,7 @@ PERSONA_NAVIGATION = {
 }
 
 
-def main():
+def zenforge_dashboard():
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
 
     # Add the title bar
@@ -72,6 +73,11 @@ def create_end_to_end_timechart_for_project():
 
 
 if __name__ == "__main__":
-    load_sample_data_into_timeseries_db()
-    create_end_to_end_timechart_for_project()
-    # main()
+    # Prompt the user to enter the value for --function instead of expecting it as an argument
+    function_input = input("Please enter the function to run ('load_data' or 'view_project'): ")
+    if function_input == 'load_data':
+        load_sample_data_into_timeseries_db()
+    elif function_input == 'view_project':
+        create_end_to_end_timechart_for_project()
+    else:
+        print("Invalid option. Please choose 'load_data' or 'view_project'.")
