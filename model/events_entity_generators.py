@@ -8,11 +8,58 @@ import random
 import numpy as np
 
 from model.events_data_generation_core import DataGenerator
+from model.events_schema import StageType
 
 data_generator = DataGenerator()
 
+
+def generate_design_related_jiras(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Generate Jira items specifically for design phases"""
+    design_jiras = []
+    design_phases = data_generator.generate_design_phases()
+
+    for proj_id, details in projects.items():
+        start_date = details["start_date"]
+        completion_state = details["completion_state"]
+
+        for phase in design_phases:
+            jira_id = f"{proj_id}-{phase.upper()}-1"
+
+            # Determine status based on completion state
+            if completion_state in ["design_only", "design_and_sprint", "pre_release", "all_complete"]:
+                status = "Done"
+                completed_date = start_date + timedelta(days=14)
+                actual_hours = np.random.randint(16, 32)
+            elif completion_state == "mixed":
+                status = np.random.choice(["Done", "In Progress"], p=[0.7, 0.3])
+                completed_date = start_date + timedelta(days=14) if status == "Done" else None
+                actual_hours = np.random.randint(16, 32) if status == "Done" else None
+            else:  # mixed_all
+                status = np.random.choice(["Done", "In Progress", "To Do"], p=[0.5, 0.3, 0.2])
+                completed_date = start_date + timedelta(days=14) if status == "Done" else None
+                actual_hours = np.random.randint(16, 32) if status == "Done" else None
+
+            design_jiras.append({
+                "id": jira_id,
+                "event_id": proj_id,
+                "type": "Design",
+                "title": f"{phase.replace('_', ' ').title()} Design for {details['title']}",
+                "status": status,
+                "created_date": start_date,
+                "completed_date": completed_date,
+                "priority": "High",
+                "story_points": np.random.randint(5, 13),
+                "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
+                "assigned_developer": f"{phase.split('_')[0]}@example.com",
+                "estimated_hours": np.random.randint(8, 24),
+                "actual_hours": actual_hours
+            })
+
+    return design_jiras
+
+
 def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Generate design events for all projects"""
+    """Generate design events for all projects with proper Jira linking and status transitions"""
     design_events = []
     design_phases = data_generator.generate_design_phases()
 
@@ -22,26 +69,28 @@ def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str
 
         for phase in design_phases:
             phase_status = data_generator.get_design_event_status(completion_state, phase)
+            jira_id = f"{proj_id}-{phase.upper()}-1"  # Matches the ID format from generate_design_related_jiras
 
-            # Initial event
+            # Initial event (START)
             design_events.append({
                 "id": f"{proj_id}-{phase.upper()}",
                 "event_id": proj_id,
                 "design_type": phase,
-                "stage": "start",
+                "stage": StageType.START,
                 "timestamp": start_date,
                 "author": f"{phase.split('_')[0]}@example.com",
-                "jira": f"{proj_id}-{phase.upper()}-1",
+                "jira": jira_id,
                 "stakeholders": data_generator.generate_stakeholders(),
                 "review_status": "Pending"
             })
 
+            current_date = start_date + timedelta(days=2)  # Base date for subsequent events
+
             if phase_status["stage"] != "start":
                 if phase_status["stage"] in ["blocked", "resume"]:
+                    # Generate blocked-resume cycles
                     num_revisions = np.random.randint(1, 3)
-                    revision_dates = data_generator.generate_date_sequence(
-                        start_date, num_revisions * 2
-                    )
+                    days_between_events = np.random.randint(2, 4)  # 2-4 days between status changes
 
                     for rev_idx in range(num_revisions):
                         # Blocked state
@@ -49,48 +98,89 @@ def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str
                             "id": f"{proj_id}-{phase.upper()}-BLOCK{rev_idx + 1}",
                             "event_id": proj_id,
                             "design_type": phase,
-                            "stage": "blocked",
-                            "timestamp": revision_dates[rev_idx * 2],
+                            "stage": StageType.BLOCKED,
+                            "timestamp": current_date,
                             "author": f"{phase.split('_')[0]}@example.com",
-                            "jira": f"{proj_id}-{phase.upper()}-1",
+                            "jira": jira_id,
                             "stakeholders": data_generator.generate_stakeholders(),
                             "review_status": "In Review"
                         })
+                        current_date += timedelta(days=days_between_events)
 
                         # Resume state
                         design_events.append({
                             "id": f"{proj_id}-{phase.upper()}-RESUME{rev_idx + 1}",
                             "event_id": proj_id,
                             "design_type": phase,
-                            "stage": "resume",
-                            "timestamp": revision_dates[rev_idx * 2 + 1],
+                            "stage": StageType.RESUME,
+                            "timestamp": current_date,
                             "author": f"{phase.split('_')[0]}@example.com",
-                            "jira": f"{proj_id}-{phase.upper()}-1",
+                            "jira": jira_id,
                             "stakeholders": data_generator.generate_stakeholders(),
                             "review_status": "In Review"
                         })
+                        current_date += timedelta(days=days_between_events)
 
-                # Final completion event
-                if phase_status["stage"] == "end":
+                # Final completion event (END)
+                if phase_status["stage"] == "end" or completion_state in ["design_only", "design_and_sprint",
+                                                                          "pre_release", "all_complete"]:
+                    final_date = max(current_date,
+                                     start_date + timedelta(days=7))  # Ensure minimum 7 days for completion
                     design_events.append({
                         "id": f"{proj_id}-{phase.upper()}-FINAL",
                         "event_id": proj_id,
                         "design_type": phase,
-                        "stage": "end",
-                        "timestamp": start_date + timedelta(days=14),
+                        "stage": StageType.END,
+                        "timestamp": final_date,
                         "author": f"{phase.split('_')[0]}@example.com",
-                        "jira": f"{proj_id}-{phase.upper()}-1",
+                        "jira": jira_id,
                         "stakeholders": data_generator.generate_stakeholders(),
                         "review_status": phase_status["review_status"]
                     })
 
-            start_date += timedelta(days=15)
+            # Move start date for next phase
+            start_date += timedelta(days=15)  # Each phase starts 15 days after the previous one
+
+    # Sort all events by timestamp to ensure chronological order
+    design_events.sort(key=lambda x: (x["event_id"], x["design_type"], x["timestamp"]))
 
     return design_events
 
+
+def get_design_event_status(completion_state: str, phase: str) -> Dict[str, Any]:
+    """Helper function to get design event status based on completion state"""
+    if completion_state in ["design_only", "design_and_sprint", "pre_release", "all_complete"]:
+        return {
+            "stage": "end",
+            "review_status": "Approved"
+        }
+    elif completion_state == "mixed":
+        if np.random.random() < 0.7:
+            status = np.random.choice(["end", "blocked"], p=[0.7, 0.3])
+            return {
+                "stage": status,
+                "review_status": "Approved" if status == "end" else "In Review"
+            }
+        else:
+            return {
+                "stage": "start",
+                "review_status": "Pending"
+            }
+    else:  # mixed_all
+        status = np.random.choice(["start", "end", "blocked"], p=[0.2, 0.5, 0.3])
+        return {
+            "stage": status,
+            "review_status": {
+                "start": "Pending",
+                "end": "Approved",
+                "blocked": "In Review"
+            }[status]
+        }
+
 def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Generate Jira items for all projects"""
-    jira_items = []
+    """Generate Jira items for all projects, including design, epics, stories and tasks"""
+    # First generate design-related Jiras
+    all_jiras = generate_design_related_jiras(projects)
 
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
@@ -99,27 +189,32 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
         # Generate Epics
         for epic_num in range(1, 6):
             status = data_generator.get_jira_status(completion_state)
-            epic_completion = start_date + timedelta(days=epic_num + 25)
+            epic_completion = start_date + timedelta(days=epic_num + 25) if status == "Done" else None
 
             epic_id = f"{proj_id}-E{epic_num}"
             epic_data = {
                 "id": epic_id,
                 "event_id": proj_id,
+                "parent_id": None,
                 "type": "Epic",
                 "title": f"Epic {epic_num} for {details['title']}",
                 "status": status,
                 "created_date": start_date + timedelta(days=epic_num),
+                "completed_date": epic_completion,
                 "priority": np.random.choice(["High", "Medium", "Low"]),
                 "story_points": np.random.randint(20, 40),
                 "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
-                "completed_date": epic_completion if status == "Done" else None
+                "assigned_developer": None,
+                "estimated_hours": None,
+                "actual_hours": None
             }
-            jira_items.append(epic_data)
+            all_jiras.append(epic_data)
 
             # Generate Stories for Epic
             for story_num in range(1, 6):
                 story_status = data_generator.get_jira_status(completion_state)
-                story_completion = start_date + timedelta(days=epic_num + story_num + 20)
+                story_completion = start_date + timedelta(
+                    days=epic_num + story_num + 20) if story_status == "Done" else None
                 story_id = f"{epic_id}-S{story_num}"
 
                 story_data = {
@@ -130,19 +225,23 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                     "title": f"Story {story_num} for Epic {epic_num}",
                     "status": story_status,
                     "created_date": start_date + timedelta(days=epic_num + story_num),
+                    "completed_date": story_completion,
                     "priority": np.random.choice(["High", "Medium", "Low"]),
                     "story_points": np.random.randint(5, 13),
                     "assigned_team": f"Team {chr(65 + np.random.randint(0, 3))}",
-                    "completed_date": story_completion if story_status == "Done" else None
+                    "assigned_developer": None,
+                    "estimated_hours": None,
+                    "actual_hours": None
                 }
-                jira_items.append(story_data)
+                all_jiras.append(story_data)
 
                 # Generate Tasks for Story
                 for task_num in range(1, 6):
                     task_status = data_generator.get_jira_status(completion_state)
                     estimated_hours = np.random.randint(4, 16)
-                    actual_hours = int(estimated_hours * np.random.uniform(0.8, 1.3))
-                    task_completion = start_date + timedelta(days=epic_num + story_num + task_num + 15)
+                    actual_hours = int(estimated_hours * np.random.uniform(0.8, 1.3)) if task_status == "Done" else None
+                    task_completion = start_date + timedelta(
+                        days=epic_num + story_num + task_num + 15) if task_status == "Done" else None
 
                     task_data = {
                         "id": f"{story_id}-T{task_num}",
@@ -152,16 +251,35 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                         "title": f"Task {task_num} for Story {story_num}",
                         "status": task_status,
                         "created_date": start_date + timedelta(days=epic_num + story_num + task_num),
+                        "completed_date": task_completion,
                         "priority": np.random.choice(["High", "Medium", "Low"]),
                         "story_points": np.random.randint(1, 5),
                         "assigned_developer": f"dev{np.random.randint(1, 6)}@example.com",
                         "estimated_hours": estimated_hours,
-                        "actual_hours": actual_hours if task_status == "Done" else None,
-                        "completed_date": task_completion if task_status == "Done" else None
+                        "actual_hours": actual_hours,
                     }
-                    jira_items.append(task_data)
+                    all_jiras.append(task_data)
 
-    return jira_items
+                    # Update story and epic completion based on task status
+                    if task_status != "Done" and story_data["status"] == "Done":
+                        story_data["status"] = "In Progress"
+                        story_data["completed_date"] = None
+                    if task_status != "Done" and epic_data["status"] == "Done":
+                        epic_data["status"] = "In Progress"
+                        epic_data["completed_date"] = None
+
+    # For completed projects, ensure all non-design Jiras are marked as Done
+    for jira in all_jiras:
+        project_details = projects.get(jira["event_id"])
+        if project_details and project_details["completion_state"] == "all_complete":
+            if jira["type"] != "Design":  # Don't modify design Jiras
+                jira["status"] = "Done"
+                jira["completed_date"] = jira["created_date"] + timedelta(days=np.random.randint(5, 15))
+                if jira["type"] == "Task":
+                    jira["actual_hours"] = int(jira["estimated_hours"] * np.random.uniform(0.8, 1.3))
+
+    return all_jiras
+
 
 def generate_commits(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Generate code commits for all projects with Jira associations"""
@@ -408,9 +526,20 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
     sprints = []
     sprint_jira_map = {}
 
+    # Group jiras by project
+    project_jiras = {}
+    for jira in jira_items:
+        if jira['event_id'] not in project_jiras:
+            project_jiras[jira['event_id']] = []
+        project_jiras[jira['event_id']].append(jira)
+
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
         sprint_start = details["start_date"] + timedelta(days=14)
+        project_completion = details["start_date"] + timedelta(weeks=12)  # Assuming 12 weeks project duration
+
+        available_jiras = project_jiras.get(proj_id, [])
+        unassigned_jiras = set(jira['id'] for jira in available_jiras)
 
         for sprint_num in range(1, 9):
             sprint_id = f"{proj_id}-Sprint-{sprint_num}"
@@ -421,15 +550,44 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
             is_completed = completion_state in ["design_and_sprint", "pre_release", "all_complete"] or \
                            (completion_state in ["mixed", "mixed_all"] and np.random.random() < 0.7)
 
-            planned_story_points = np.random.randint(30, 50)
+            # Filter jiras that can be included in this sprint
+            eligible_jiras = [
+                jira['id'] for jira in available_jiras
+                if jira['id'] in unassigned_jiras and
+                jira['created_date'] <= sprint_end_date and
+                (not jira.get('completed_date') or jira['completed_date'] >= sprint_start_date)
+            ]
+
+            # Assign jiras to sprint based on completion state
+            sprint_jiras = []
+            if eligible_jiras:
+                # Determine number of jiras to assign
+                if completion_state == "all_complete" and sprint_num == 8:
+                    # Assign all remaining jiras for completed projects in final sprint
+                    sprint_jiras = list(unassigned_jiras)
+                else:
+                    num_jiras = random.randint(
+                        min(3, len(eligible_jiras)),
+                        min(8, len(eligible_jiras))
+                    )
+                    sprint_jiras = random.sample(eligible_jiras, num_jiras)
+
+                # Update unassigned jiras set
+                unassigned_jiras -= set(sprint_jiras)
+
+            # Calculate metrics based on assigned jiras
+            sprint_jiras_data = [j for j in available_jiras if j['id'] in sprint_jiras]
+            planned_story_points = sum(j['story_points'] for j in sprint_jiras_data)
             completed_story_points = int(
-                planned_story_points * (np.random.uniform(0.9, 1.1) if is_completed else np.random.uniform(0.5, 0.8)))
+                planned_story_points * (np.random.uniform(0.9, 1.1) if is_completed else np.random.uniform(0.5, 0.8))
+            )
 
-            planned_stories = np.random.randint(8, 15)
+            planned_stories = len(sprint_jiras)
             completed_stories = int(
-                planned_stories * (np.random.uniform(0.9, 1.0) if is_completed else np.random.uniform(0.5, 0.8)))
+                planned_stories * (np.random.uniform(0.9, 1.0) if is_completed else np.random.uniform(0.5, 0.8))
+            )
 
-            sprints.append({
+            sprint_data = {
                 "id": sprint_id,
                 "event_id": proj_id,
                 "start_date": sprint_start_date,
@@ -451,13 +609,40 @@ def generate_sprints(projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[
                 "blockers_encountered": np.random.randint(0, 2) if is_completed else np.random.randint(2, 5),
                 "team_satisfaction_score": np.random.uniform(8, 10) if is_completed else np.random.uniform(6, 8),
                 "status": "Completed" if is_completed else "In Progress"
-            })
+            }
+            sprints.append(sprint_data)
 
-    # Create sprint-jira associations
-    sprint_jira_map = data_generator.associate_jiras_with_sprints(sprints, jira_items)
+            # Update sprint_jira_map if we have associations
+            if sprint_jiras:
+                sprint_jira_map[sprint_id] = sprint_jiras
+
+        # For completed projects, ensure all Jiras are assigned to a sprint
+        if completion_state == "all_complete" and unassigned_jiras:
+            # Assign remaining Jiras to the last sprint
+            last_sprint_id = f"{proj_id}-Sprint-8"
+            if last_sprint_id not in sprint_jira_map:
+                sprint_jira_map[last_sprint_id] = []
+            sprint_jira_map[last_sprint_id].extend(list(unassigned_jiras))
 
     return sprints, sprint_jira_map
 
+
+def update_jiras_with_sprints(jira_items: List[Dict[str, Any]], sprint_jira_map: Dict[str, List[str]]) -> List[Dict[str, Any]]:
+    """Update jira items with their sprint assignments"""
+    # Create reverse mapping of jira_id to sprint_id
+    jira_to_sprint = {}
+    for sprint_id, jira_ids in sprint_jira_map.items():
+        for jira_id in jira_ids:
+            jira_to_sprint[jira_id] = sprint_id
+
+    # Update jira items with sprint information
+    updated_jiras = []
+    for jira in jira_items:
+        jira_copy = jira.copy()
+        jira_copy['sprint_id'] = jira_to_sprint.get(jira['id'])
+        updated_jiras.append(jira_copy)
+
+    return updated_jiras
 
 def generate_team_metrics(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Generate team metrics for all projects"""
@@ -591,15 +776,44 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
 
 def get_sample_data() -> Dict[str, Any]:
     """Helper function to get sample data with validation"""
-    data = generate_all_data()
-    validation_errors = validate_relationships(data)
+    # Generate base project data
+    projects = data_generator.generate_project_base_data()
+    project_details = data_generator.generate_project_details(projects)
 
+    # Generate other data
+    design_events = generate_design_events(projects)
+    jira_items = generate_jira_items(projects)
+    commits = generate_commits(projects, jira_items)
+    cicd_events, cicd_commit_map = generate_cicd_events(projects, commits)
+    bugs = generate_bugs(projects, jira_items, cicd_events)
+    sprints, sprint_jira_map = generate_sprints(projects, jira_items)
+
+    # No need to modify jira items with sprint information since we're using a junction table
+
+    team_metrics = generate_team_metrics(projects)
+
+    all_data = {
+        "projects": project_details,
+        "design_events": design_events,
+        "jira_items": jira_items,
+        "commits": commits,
+        "cicd_events": cicd_events,
+        "bugs": bugs,
+        "sprints": sprints,
+        "team_metrics": team_metrics,
+        "relationships": {
+            "sprint_jira_associations": sprint_jira_map,
+            "cicd_commit_associations": cicd_commit_map
+        }
+    }
+
+    validation_errors = validate_relationships(all_data)
     if validation_errors:
         print("Validation errors found:")
         for error in validation_errors:
             print(f"- {error}")
 
-    return data
+    return all_data
 
 
 def write_sample_data(filename: str = "sample_data.json") -> None:

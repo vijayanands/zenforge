@@ -4,6 +4,7 @@ from sqlalchemy import create_engine, text
 from model.events_crud import CRUDManager
 from model.events_entity_generators import get_sample_data
 from model.timescaledb_init import DatabaseManager
+from model.events_schema import JiraItem, Sprint
 
 # Define your database connection details
 db_name = "zenforge_sample_data"
@@ -47,8 +48,9 @@ def initialize_db_manager():
         print(f"Error creating schemas: {e}")
     return db_manager
 
+
 def load_data(db_manager):
-    # Initialize the CRUD manager
+    """Load data into the database handling all relationships and dependencies"""
     crud_manager = CRUDManager(db_manager)
 
     try:
@@ -60,31 +62,121 @@ def load_data(db_manager):
         for project in all_data["projects"]:
             crud_manager.create_project(project)
 
-        # Then load Jira items (depends on projects)
-        print("Loading Jira items...")
-        for jira_item in all_data["jira_items"]:
-            crud_manager.create_jira_item(jira_item)
+        # Group Jira items by type for ordered loading
+        print("Grouping Jira items by type...")
+        design_jiras = []
+        epics = []
+        stories = []
+        tasks = []
 
-        # Create a map of design event IDs to their corresponding Jira IDs
-        design_jira_map = {}
         for jira in all_data["jira_items"]:
-            if jira["type"] == "Design":  # Assuming design Jiras are marked with type "Design"
-                design_jira_map[jira["id"].replace("-1", "")] = jira["id"]
+            if jira["type"] == "Design":
+                design_jiras.append(jira)
+            elif jira["type"] == "Epic":
+                epics.append(jira)
+            elif jira["type"] == "Story":
+                stories.append(jira)
+            elif jira["type"] == "Task":
+                tasks.append(jira)
 
-        # Load design events with correct Jira references
+        # Load Jiras in hierarchical order
+        print("Loading design Jiras...")
+        for jira in design_jiras:
+            crud_manager.create_jira_item(jira)
+
+        print("Loading epics...")
+        for jira in epics:
+            crud_manager.create_jira_item(jira)
+
+        print("Loading stories...")
+        for jira in stories:
+            # Verify parent epic exists
+            with db_manager.get_session() as session:
+                epic_exists = session.query(JiraItem).filter(
+                    JiraItem.id == jira['parent_id']
+                ).first() is not None
+
+                if not epic_exists:
+                    print(f"Warning: Parent epic {jira['parent_id']} not found for story {jira['id']}")
+                    continue
+
+            crud_manager.create_jira_item(jira)
+
+        print("Loading tasks...")
+        for jira in tasks:
+            # Verify parent story exists
+            with db_manager.get_session() as session:
+                story_exists = session.query(JiraItem).filter(
+                    JiraItem.id == jira['parent_id']
+                ).first() is not None
+
+                if not story_exists:
+                    print(f"Warning: Parent story {jira['parent_id']} not found for task {jira['id']}")
+                    continue
+
+            crud_manager.create_jira_item(jira)
+
+        # Now load design events (depends on design Jiras)
         print("Loading design events...")
         for design_event in all_data["design_events"]:
-            # Only set the jira field if we have a matching Jira item
-            event_base_id = design_event["id"]
-            if event_base_id in design_jira_map:
-                design_event["jira"] = design_jira_map[event_base_id]
-            else:
-                design_event["jira"] = None  # Set to None if no matching Jira exists
+            # Verify referenced Jira exists
+            with db_manager.get_session() as session:
+                jira_exists = session.query(JiraItem).filter(
+                    JiraItem.id == design_event['jira']
+                ).first() is not None
+
+                if not jira_exists:
+                    print(f"Warning: Jira {design_event['jira']} not found for design event {design_event['id']}")
+                    continue
+
             crud_manager.create_design_event(design_event)
 
-        # Load remaining entities
+        # Load sprints
+        print("Loading sprints...")
+        for sprint in all_data["sprints"]:
+            crud_manager.create_sprint(sprint)
+
+        # Create sprint-jira associations
+        print("Creating sprint-jira associations...")
+        for sprint_id, jira_ids in all_data["relationships"]["sprint_jira_associations"].items():
+            # Verify sprint exists
+            with db_manager.get_session() as session:
+                sprint_exists = session.query(Sprint).filter(
+                    Sprint.id == sprint_id
+                ).first() is not None
+
+                if not sprint_exists:
+                    print(f"Warning: Sprint {sprint_id} not found for associations")
+                    continue
+
+                # Verify all referenced Jiras exist
+                valid_jira_ids = []
+                for jira_id in jira_ids:
+                    jira_exists = session.query(JiraItem).filter(
+                        JiraItem.id == jira_id
+                    ).first() is not None
+
+                    if jira_exists:
+                        valid_jira_ids.append(jira_id)
+                    else:
+                        print(f"Warning: Jira {jira_id} not found for sprint {sprint_id}")
+
+                if valid_jira_ids:
+                    crud_manager.create_sprint_jira_associations(sprint_id, valid_jira_ids)
+
+        # Load remaining entities that depend on Jiras
         print("Loading commits...")
         for commit in all_data["commits"]:
+            # Verify Jira exists
+            with db_manager.get_session() as session:
+                jira_exists = session.query(JiraItem).filter(
+                    JiraItem.id == commit['jira_id']
+                ).first() is not None
+
+                if not jira_exists:
+                    print(f"Warning: Jira {commit['jira_id']} not found for commit {commit['id']}")
+                    continue
+
             crud_manager.create_commit(commit)
 
         print("Loading CICD events...")
@@ -93,11 +185,17 @@ def load_data(db_manager):
 
         print("Loading bugs...")
         for bug in all_data["bugs"]:
-            crud_manager.create_bug(bug)
+            # Verify Jira and build exist
+            with db_manager.get_session() as session:
+                jira_exists = session.query(JiraItem).filter(
+                    JiraItem.id == bug['jira_id']
+                ).first() is not None
 
-        print("Loading sprints...")
-        for sprint in all_data["sprints"]:
-            crud_manager.create_sprint(sprint)
+                if not jira_exists:
+                    print(f"Warning: Jira {bug['jira_id']} not found for bug {bug['id']}")
+                    continue
+
+            crud_manager.create_bug(bug)
 
         print("Loading team metrics...")
         for team_metric in all_data["team_metrics"]:
@@ -108,7 +206,6 @@ def load_data(db_manager):
     except Exception as e:
         print(f"Error loading data: {e}")
         raise
-
 
 def load_sample_data_into_timeseries_db():
     try:

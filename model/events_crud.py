@@ -184,6 +184,8 @@ class CRUDManager:
     # Sprint Operations
     def create_sprint(self, sprint_data: Dict[str, Any]) -> Sprint:
         with self.db_manager.get_session() as session:
+            # Remove jira_items from the data before creating Sprint
+            jira_items = sprint_data.pop('jira_items', [])
             sprint = Sprint(**sprint_data)
             session.add(sprint)
             session.commit()
@@ -195,6 +197,23 @@ class CRUDManager:
             if status:
                 query = query.filter(Sprint.status == status)
             return query.order_by(Sprint.start_date).all()
+
+    def create_sprint_jira_associations(self, sprint_id: str, jira_ids: List[str]) -> bool:
+        """Create associations between a sprint and multiple jira items"""
+        with self.db_manager.get_session() as session:
+            try:
+                sprint = session.query(Sprint).filter(Sprint.id == sprint_id).first()
+                if not sprint:
+                    return False
+
+                jiras = session.query(JiraItem).filter(JiraItem.id.in_(jira_ids)).all()
+                sprint.jira_items.extend(jiras)
+                session.commit()
+                return True
+            except Exception as e:
+                print(f"Error creating sprint-jira associations: {e}")
+                session.rollback()
+                return False
 
     # Team Metrics Operations
     def create_team_metrics(self, metrics_data: Dict[str, Any]) -> TeamMetrics:

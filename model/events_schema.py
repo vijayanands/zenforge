@@ -13,11 +13,23 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Table,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 Base = declarative_base()
+
+# Junction table for sprint-jira relationship
+sprint_jira_association = Table(
+    'sprint_jira_association',
+    Base.metadata,
+    Column('sprint_id', String, ForeignKey('sdlc_timeseries.sprints.id')),
+    Column('jira_id', String, ForeignKey('sdlc_timeseries.jira_items.id')),
+    schema='sdlc_timeseries'
+)
+
 
 class EventType(enum.Enum):
     DESIGN = "design"
@@ -38,6 +50,7 @@ class PRState(enum.Enum):
     APPROVED = "approved"
     MERGED = "merged"
 
+
 # Regular tables (not hypertables)
 class Project(Base):
     __tablename__ = "projects"
@@ -56,6 +69,7 @@ class Project(Base):
     total_commits = Column(Integer)
     avg_code_coverage = Column(Float)
     total_p0_bugs = Column(Integer)
+
 
 class JiraItem(Base):
     __tablename__ = "jira_items"
@@ -76,6 +90,10 @@ class JiraItem(Base):
     estimated_hours = Column(Integer)
     actual_hours = Column(Integer)
 
+    # Define many-to-many relationship
+    sprints = relationship("Sprint", secondary=sprint_jira_association, back_populates="jira_items")
+
+
 class Sprint(Base):
     __tablename__ = "sprints"
     __table_args__ = {"schema": "sdlc_timeseries"}
@@ -95,6 +113,10 @@ class Sprint(Base):
     blockers_encountered = Column(Integer)
     team_satisfaction_score = Column(Float)
     status = Column(String)
+
+    # Define many-to-many relationship
+    jira_items = relationship("JiraItem", secondary=sprint_jira_association, back_populates="sprints")
+
 
 class CICDEvent(Base):
     __tablename__ = "cicd_events"
