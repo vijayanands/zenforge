@@ -1,3 +1,4 @@
+# load_timescaledb.py
 from sqlalchemy import create_engine, text
 
 from model.events_crud import CRUDManager
@@ -20,7 +21,6 @@ connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
 # Create an engine for the server connection
 engine = create_engine(server_connection_string)
 
-
 def create_database_if_not_exists():
     # Connect to the server and check if the database exists
     with engine.connect() as connection:
@@ -37,7 +37,6 @@ def create_database_if_not_exists():
             connection.execute(text(f"CREATE DATABASE {db_name}"))
             print(f"Database {db_name} created successfully")
 
-
 def initialize_db_manager():
     # Create the DatabaseManager instance and initialize the database
     db_manager = DatabaseManager(connection_string)
@@ -48,57 +47,84 @@ def initialize_db_manager():
         print(f"Error creating schemas: {e}")
     return db_manager
 
-
 def load_data(db_manager):
     # Initialize the CRUD manager
     crud_manager = CRUDManager(db_manager)
 
-    # Get the sample data
-    all_data = get_sample_data()
+    try:
+        # Get the sample data
+        all_data = get_sample_data()
 
-    # Load projects
-    for project in all_data["projects"]:
-        crud_manager.create_project(project)
+        # First load projects (no dependencies)
+        print("Loading projects...")
+        for project in all_data["projects"]:
+            crud_manager.create_project(project)
 
-    # Load design events
-    for design_event in all_data["design_events"]:
-        crud_manager.create_design_event(design_event)
+        # Then load Jira items (depends on projects)
+        print("Loading Jira items...")
+        for jira_item in all_data["jira_items"]:
+            crud_manager.create_jira_item(jira_item)
 
-    # Load Jira items
-    for jira_item in all_data["jira_items"]:
-        crud_manager.create_jira_item(jira_item)
+        # Create a map of design event IDs to their corresponding Jira IDs
+        design_jira_map = {}
+        for jira in all_data["jira_items"]:
+            if jira["type"] == "Design":  # Assuming design Jiras are marked with type "Design"
+                design_jira_map[jira["id"].replace("-1", "")] = jira["id"]
 
-    # Load code commits
-    for commit in all_data["commits"]:
-        crud_manager.create_commit(commit)
+        # Load design events with correct Jira references
+        print("Loading design events...")
+        for design_event in all_data["design_events"]:
+            # Only set the jira field if we have a matching Jira item
+            event_base_id = design_event["id"]
+            if event_base_id in design_jira_map:
+                design_event["jira"] = design_jira_map[event_base_id]
+            else:
+                design_event["jira"] = None  # Set to None if no matching Jira exists
+            crud_manager.create_design_event(design_event)
 
-    # Load CI/CD events
-    for cicd_event in all_data["cicd_events"]:
-        crud_manager.create_cicd_event(cicd_event)
+        # Load remaining entities
+        print("Loading commits...")
+        for commit in all_data["commits"]:
+            crud_manager.create_commit(commit)
 
-    # Load bugs
-    for bug in all_data["bugs"]:
-        crud_manager.create_bug(bug)
+        print("Loading CICD events...")
+        for cicd_event in all_data["cicd_events"]:
+            crud_manager.create_cicd_event(cicd_event)
 
-    # Load sprints
-    for sprint in all_data["sprints"]:
-        crud_manager.create_sprint(sprint)
+        print("Loading bugs...")
+        for bug in all_data["bugs"]:
+            crud_manager.create_bug(bug)
 
-    # Load team metrics
-    for team_metric in all_data["team_metrics"]:
-        crud_manager.create_team_metrics(team_metric)
+        print("Loading sprints...")
+        for sprint in all_data["sprints"]:
+            crud_manager.create_sprint(sprint)
+
+        print("Loading team metrics...")
+        for team_metric in all_data["team_metrics"]:
+            crud_manager.create_team_metrics(team_metric)
+
+        print("Data loading completed successfully")
+
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        raise
 
 
 def load_sample_data_into_timeseries_db():
-    # Call the function to create the database if it does not exist
-    create_database_if_not_exists()
+    try:
+        # Call the function to create the database if it does not exist
+        create_database_if_not_exists()
 
-    # Initialize the DatabaseManager using the new function
-    db_manager = initialize_db_manager()
+        # Initialize the DatabaseManager using the new function
+        db_manager = initialize_db_manager()
 
-    load_data(db_manager)
-    print("Data has been loaded into the sdlc_timeseries schema.")
+        # Load the data
+        load_data(db_manager)
+        print("Data has been loaded into the sdlc_timeseries schema.")
 
+    except Exception as e:
+        print(f"Failed to load sample data: {e}")
+        raise
 
 if __name__ == "__main__":
     load_sample_data_into_timeseries_db()
