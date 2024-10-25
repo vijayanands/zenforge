@@ -4,7 +4,6 @@ from sqlalchemy.orm import sessionmaker
 
 from model.events_schema import Base
 
-
 class DatabaseManager:
     def __init__(self, connection_string: str):
         self.engine = create_engine(connection_string)
@@ -48,6 +47,9 @@ class DatabaseManager:
                         
                         CREATE INDEX IF NOT EXISTS idx_sprints_start_date 
                         ON sdlc_timeseries.sprints (start_date);
+
+                        CREATE INDEX IF NOT EXISTS idx_pr_comments_created_at 
+                        ON sdlc_timeseries.pr_comments (created_at);
                         """
                     )
                 )
@@ -67,6 +69,12 @@ class DatabaseManager:
                         
                         CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_jira 
                         ON sdlc_timeseries.sprint_jira_association (jira_id);
+
+                        CREATE INDEX IF NOT EXISTS idx_pr_commit_assoc_pr 
+                        ON sdlc_timeseries.pr_commit_association (pr_id, pr_created_at);
+                        
+                        CREATE INDEX IF NOT EXISTS idx_pr_commit_assoc_commit 
+                        ON sdlc_timeseries.pr_commit_association (commit_id, commit_timestamp);
                         """
                     )
                 )
@@ -79,54 +87,40 @@ class DatabaseManager:
     def _create_hypertables(self):
         """Convert specific tables to hypertables"""
         hypertables = [
-            ("design_events", "timestamp"),
-            ("code_commits", "timestamp"),
-            ("team_metrics", "week_starting"),
+            ("design_events", "timestamp", "event_id"),
+            ("code_commits", "timestamp", "event_id"),
+            ("team_metrics", "week_starting", "event_id"),
+            ("pull_requests", "created_at", "project_id"),
         ]
 
         with self.engine.begin() as connection:
-            for table, time_column in hypertables:
+            for table, time_column, project_column in hypertables:
                 try:
-                    # For code_commits, we need to handle the unique constraint specially
-                    if table == "code_commits":
-                        connection.execute(
-                            text(
-                                f"""
-                                SELECT create_hypertable(
-                                    'sdlc_timeseries.{table}',
-                                    '{time_column}',
-                                    if_not_exists => TRUE,
-                                    migrate_data => TRUE
-                                );
-                                CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_id_time 
-                                ON sdlc_timeseries.{table} (id, {time_column});
-                                """
-                            )
-                        )
-                    else:
-                        connection.execute(
-                            text(
-                                f"""
-                                SELECT create_hypertable(
-                                    'sdlc_timeseries.{table}',
-                                    '{time_column}',
-                                    if_not_exists => TRUE,
-                                    migrate_data => TRUE
-                                );
-                                """
-                            )
-                        )
-                    print(f"Created hypertable for {table}")
-
-                    # Create additional indexes for foreign keys
+                    # Create hypertable
                     connection.execute(
                         text(
                             f"""
-                            CREATE INDEX IF NOT EXISTS idx_{table}_event_time 
-                            ON sdlc_timeseries.{table} (event_id, {time_column});
+                            SELECT create_hypertable(
+                                'sdlc_timeseries.{table}',
+                                '{time_column}',
+                                if_not_exists => TRUE,
+                                migrate_data => TRUE
+                            );
                             """
                         )
                     )
+                    print(f"Created hypertable for {table}")
+
+                    # Create additional indexes if needed
+                    if project_column and project_column != 'event_id':
+                        connection.execute(
+                            text(
+                                f"""
+                                CREATE INDEX IF NOT EXISTS idx_{table}_project_time 
+                                ON sdlc_timeseries.{table} ({project_column}, {time_column});
+                                """
+                            )
+                        )
                 except Exception as e:
                     print(f"Error creating hypertable for {table}: {e}")
                     raise

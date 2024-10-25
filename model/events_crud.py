@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from sqlalchemy import and_
+from sqlalchemy.orm import joinedload
 
 from model.events_schema import (
     Bug,
@@ -12,7 +13,7 @@ from model.events_schema import (
     Project,
     Sprint,
     StageType,
-    TeamMetrics,
+    TeamMetrics, PullRequest, PullRequestComment, PRStatus,
 )
 from model.timescaledb_init import DatabaseManager
 
@@ -281,3 +282,202 @@ class CRUDManager:
                 session.rollback()
                 print(f"Bulk insert failed: {str(e)}")
                 return False
+
+
+def create_pull_request(self, pr_data: Dict[str, Any]) -> PullRequest:
+    with self.db_manager.get_session() as session:
+        try:
+            # Extract commit associations if present
+            commit_pairs = pr_data.pop("commit_pairs", [])
+
+            # Set the status as enum
+            if "status" in pr_data:
+                pr_data["status"] = PRStatus(pr_data["status"])
+
+            # Create PR
+            pr = PullRequest(**pr_data)
+            session.add(pr)
+            session.flush()  # Flush to get the PR ID
+
+            # Associate commits if provided
+            if commit_pairs:
+                for commit_id, timestamp in commit_pairs:
+                    commit = (
+                        session.query(CodeCommit)
+                        .filter(
+                            and_(
+                                CodeCommit.id == commit_id,
+                                CodeCommit.timestamp == timestamp,
+                                CodeCommit.timestamp <= pr.created_at
+                            )
+                        )
+                        .first()
+                    )
+
+                    if commit:
+                        pr.commits.append(commit)
+                    else:
+                        print(f"Warning: Commit {commit_id} at {timestamp} not found or is newer than PR")
+
+            session.commit()
+            return pr
+
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating pull request: {e}")
+            raise
+
+
+def get_pull_requests(
+        self,
+        project_id: str,
+        status: Optional[PRStatus] = None,
+        author: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+        include_comments: bool = False
+) -> List[PullRequest]:
+    with self.db_manager.get_session() as session:
+        query = session.query(PullRequest).filter(PullRequest.project_id == project_id)
+
+        if status:
+            query = query.filter(PullRequest.status == status)
+        if author:
+            query = query.filter(PullRequest.author == author)
+        if start_date:
+            query = query.filter(PullRequest.created_at >= start_date)
+        if end_date:
+            query = query.filter(PullRequest.created_at <= end_date)
+
+        # Optionally eager load comments
+        if include_comments:
+            query = query.options(joinedload(PullRequest.comments))
+
+        return query.order_by(PullRequest.created_at.desc()).all()
+
+
+def update_pull_request_status(
+        self,
+        pr_id: str,
+        created_at: datetime,
+        new_status: PRStatus,
+        merged_at: Optional[datetime] = None
+) -> bool:
+    with self.db_manager.get_session() as session:
+        try:
+            update_data = {"status": new_status}
+            if merged_at and new_status == PRStatus.MERGED:
+                update_data["merged_at"] = merged_at
+
+            result = (
+                session.query(PullRequest)
+                .filter(
+                    and_(
+                        PullRequest.event_id == pr_id,
+                        PullRequest.created_at == created_at
+                    )
+                )
+                .update(update_data)
+            )
+            session.commit()
+            return result > 0
+        except Exception as e:
+            session.rollback()
+            print(f"Error updating pull request status: {e}")
+            return False
+
+
+def create_pr_comment(self, comment_data: Dict[str, Any]) -> PullRequestComment:
+    with self.db_manager.get_session() as session:
+        try:
+            # Extract PR identifiers to verify PR exists
+            pr_id = comment_data.get('pr_id')
+            pr_created_at = comment_data.get('pr_created_at')
+
+            # Verify the PR exists first
+            pr = (
+                session.query(PullRequest)
+                .filter(
+                    and_(
+                        PullRequest.event_id == pr_id,
+                        PullRequest.created_at == pr_created_at
+                    )
+                )
+                .first()
+            )
+
+            if not pr:
+                raise ValueError(f"Pull Request {pr_id} created at {pr_created_at} not found")
+
+            # Create comment with relationship to PR
+            comment = PullRequestComment(**comment_data)
+
+            # Explicitly set the relationship
+            comment.pull_request = pr
+
+            session.add(comment)
+            session.commit()
+            return comment
+        except Exception as e:
+            session.rollback()
+            print(f"Error creating PR comment: {e}")
+            raise
+
+
+def get_pr_comments(
+        self,
+        pr_id: str,
+        pr_created_at: datetime,
+        author: Optional[str] = None,
+        include_pr: bool = False
+) -> List[PullRequestComment]:
+    with self.db_manager.get_session() as session:
+        query = session.query(PullRequestComment).filter(
+            and_(
+                PullRequestComment.pr_id == pr_id,
+                PullRequestComment.pr_created_at == pr_created_at
+            )
+        )
+
+        if author:
+            query = query.filter(PullRequestComment.author == author)
+
+        # Optionally eager load the parent PR
+        if include_pr:
+            query = query.options(joinedload(PullRequestComment.pull_request))
+
+        return query.order_by(PullRequestComment.created_at).all()
+
+
+def delete_pr_comment(self, comment_id: str) -> bool:
+    with self.db_manager.get_session() as session:
+        try:
+            result = (
+                session.query(PullRequestComment)
+                .filter(PullRequestComment.id == comment_id)
+                .delete()
+            )
+            session.commit()
+            return result > 0
+        except Exception as e:
+            session.rollback()
+            print(f"Error deleting PR comment: {e}")
+            return False
+
+
+def get_pr_with_comments(self, pr_id: str, pr_created_at: datetime) -> Optional[PullRequest]:
+    """
+    Get a specific PR with all its comments loaded
+    """
+    with self.db_manager.get_session() as session:
+        return (
+            session.query(PullRequest)
+            .options(joinedload(PullRequest.comments))
+            .filter(
+                and_(
+                    PullRequest.event_id == pr_id,
+                    PullRequest.created_at == pr_created_at
+                )
+            )
+            .first()
+        )

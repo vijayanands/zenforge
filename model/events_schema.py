@@ -45,6 +45,23 @@ sprint_jira_association = Table(
     schema="sdlc_timeseries",
 )
 
+pr_commit_association = Table(
+    "pr_commit_association",
+    Base.metadata,
+    Column("pr_id", String),
+    Column("pr_created_at", DateTime),
+    Column("commit_id", String),
+    Column("commit_timestamp", DateTime),
+    ForeignKeyConstraint(
+        ['pr_id', 'pr_created_at'],
+        ['sdlc_timeseries.pull_requests.event_id', 'sdlc_timeseries.pull_requests.created_at']
+    ),
+    ForeignKeyConstraint(
+        ["commit_id", "commit_timestamp"],
+        ["sdlc_timeseries.code_commits.id", "sdlc_timeseries.code_commits.timestamp"],
+    ),
+    schema="sdlc_timeseries",
+)
 
 class StageType(enum.Enum):
     START = "start"
@@ -52,6 +69,11 @@ class StageType(enum.Enum):
     BLOCKED = "blocked"
     RESUME = "resume"
 
+class PRStatus(enum.Enum):
+    OPEN = "open"
+    CLOSED = "closed"
+    MERGED = "merged"
+    BLOCKED = "blocked"
 
 # Regular tables
 class Project(Base):
@@ -250,3 +272,56 @@ class TeamMetrics(Base):
     knowledge_sharing_sessions = Column(Integer)
     team_satisfaction = Column(Float)
     sprint_completion_rate = Column(Float)
+
+
+class PullRequest(Base):
+    __tablename__ = "pull_requests"
+    __table_args__ = (
+        PrimaryKeyConstraint("event_id", "created_at"),
+        {"schema": "sdlc_timeseries"}
+    )
+
+    event_id = Column(String)
+    created_at = Column(DateTime, nullable=False)
+    project_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    branch_from = Column(String, nullable=False)
+    branch_to = Column(String, nullable=False)
+    author = Column(String, nullable=False)
+    status = Column(Enum(PRStatus), nullable=False)
+    merged_at = Column(DateTime)
+
+    comments = relationship("PullRequestComment", back_populates="pull_request")
+    commits = relationship(
+        "CodeCommit",
+        secondary=pr_commit_association,
+        primaryjoin=and_(
+            event_id == pr_commit_association.c.pr_id,
+            created_at == pr_commit_association.c.pr_created_at
+        ),
+        secondaryjoin=and_(
+            CodeCommit.id == pr_commit_association.c.commit_id,
+            CodeCommit.timestamp == pr_commit_association.c.commit_timestamp,
+        ),
+    )
+
+
+class PullRequestComment(Base):
+    __tablename__ = "pr_comments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['pr_id', 'pr_created_at'],
+            ['sdlc_timeseries.pull_requests.event_id', 'sdlc_timeseries.pull_requests.created_at']
+        ),
+        {"schema": "sdlc_timeseries"}
+    )
+
+    id = Column(String, primary_key=True)
+    pr_id = Column(String)
+    pr_created_at = Column(DateTime)
+    author = Column(String, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    content = Column(Text)
+    
+    pull_request = relationship("PullRequest", back_populates="comments")
