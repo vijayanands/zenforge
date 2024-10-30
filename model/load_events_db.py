@@ -1,23 +1,10 @@
-# load_timescaledb.py
+# load_events_db.py
 from sqlalchemy import create_engine, text
 
-from model.events_crud import CRUDManager
-from model.events_entity_generators import get_sample_data
-from model.timescaledb_init import DatabaseManager
-from model.events_schema import JiraItem, Sprint
-
-# Define your database connection details
-db_name = "zenforge_sample_data"
-user = "postgres"
-password = "postgres"
-host = "localhost"  # or your database host
-port = "5432"  # default PostgreSQL port
-
-# Create a connection string for the PostgreSQL server (not a specific database)
-server_connection_string = f"postgresql://{user}:{password}@{host}:{port}/postgres"
-
-# Create a connection string for the new database
-connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
+from model.events_data_generator import get_sample_data
+from model.sdlc_events import JiraItem, Sprint, create_project, create_design_event, create_jira_item, create_commit, \
+    create_cicd_event, create_bug, create_sprint, create_sprint_jira_associations, create_team_metrics, DatabaseManager, \
+    db_name, server_connection_string, connection_string
 
 # Create an engine for the server connection
 engine = create_engine(server_connection_string)
@@ -53,8 +40,6 @@ def initialize_db_manager():
 
 def load_data(db_manager):
     """Load data into the database handling all relationships and dependencies"""
-    crud_manager = CRUDManager(db_manager)
-
     try:
         # Get the sample data
         all_data = get_sample_data()
@@ -62,7 +47,7 @@ def load_data(db_manager):
         # First load projects (no dependencies)
         print("Loading projects...")
         for project in all_data["projects"]:
-            crud_manager.create_project(project)
+            create_project(project)
 
         # Group Jira items by type for ordered loading
         print("Grouping Jira items by type...")
@@ -84,11 +69,11 @@ def load_data(db_manager):
         # Load Jiras in hierarchical order
         print("Loading design Jiras...")
         for jira in design_jiras:
-            crud_manager.create_jira_item(jira)
+            create_jira_item(jira)
 
         print("Loading epics...")
         for jira in epics:
-            crud_manager.create_jira_item(jira)
+            create_jira_item(jira)
 
         print("Loading stories...")
         for jira in stories:
@@ -107,7 +92,7 @@ def load_data(db_manager):
                     )
                     continue
 
-            crud_manager.create_jira_item(jira)
+            create_jira_item(jira)
 
         print("Loading tasks...")
         for jira in tasks:
@@ -126,7 +111,7 @@ def load_data(db_manager):
                     )
                     continue
 
-            crud_manager.create_jira_item(jira)
+            create_jira_item(jira)
 
         # Now load design events (depends on design Jiras)
         print("Loading design events...")
@@ -146,12 +131,12 @@ def load_data(db_manager):
                     )
                     continue
 
-            crud_manager.create_design_event(design_event)
+            create_design_event(design_event)
 
         # Load sprints
         print("Loading sprints...")
         for sprint in all_data["sprints"]:
-            crud_manager.create_sprint(sprint)
+            create_sprint(sprint)
 
         # Create sprint-jira associations
         print("Creating sprint-jira associations...")
@@ -185,9 +170,7 @@ def load_data(db_manager):
                         )
 
                 if valid_jira_ids:
-                    crud_manager.create_sprint_jira_associations(
-                        sprint_id, valid_jira_ids
-                    )
+                    create_sprint_jira_associations(sprint_id, valid_jira_ids)
 
         # Load remaining entities that depend on Jiras
         print("Loading commits...")
@@ -207,11 +190,11 @@ def load_data(db_manager):
                     )
                     continue
 
-            crud_manager.create_commit(commit)
+            create_commit(commit)
 
         print("Loading CICD events...")
         for cicd_event in all_data["cicd_events"]:
-            crud_manager.create_cicd_event(cicd_event)
+            create_cicd_event(cicd_event)
 
         print("Loading bugs...")
         for bug in all_data["bugs"]:
@@ -230,11 +213,11 @@ def load_data(db_manager):
                     )
                     continue
 
-            crud_manager.create_bug(bug)
+            create_bug(bug)
 
         print("Loading team metrics...")
         for team_metric in all_data["team_metrics"]:
-            crud_manager.create_team_metrics(team_metric)
+            create_team_metrics(team_metric)
 
         print("Data loading completed successfully")
 

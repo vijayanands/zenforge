@@ -4,16 +4,15 @@ from typing import Any, Dict, List
 
 from sqlalchemy import Integer, and_, case, func
 
-from model.events_schema import (
+from model.sdlc_events import (
     Bug,
     CICDEvent,
     CodeCommit,
     DesignEvent,
     Sprint,
-    TeamMetrics,
+    TeamMetrics, DatabaseManager,
 )
-from model.load_timescaledb import initialize_db_manager
-from model.timescaledb_init import DatabaseManager
+from model.load_events_db import initialize_db_manager
 
 
 class EventAnalytics:
