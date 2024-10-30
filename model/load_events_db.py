@@ -1,10 +1,10 @@
 # load_events_db.py
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import get_sample_data
+from model.events_data_generator import get_sample_data, generate_pull_requests
 from model.sdlc_events import JiraItem, Sprint, create_project, create_design_event, create_jira_item, create_commit, \
     create_cicd_event, create_bug, create_sprint, create_sprint_jira_associations, create_team_metrics, DatabaseManager, \
-    db_name, server_connection_string, connection_string
+    db_name, server_connection_string, connection_string, create_pull_request, create_pr_comment
 
 # Create an engine for the server connection
 engine = create_engine(server_connection_string)
@@ -191,6 +191,14 @@ def load_data(db_manager):
                     continue
 
             create_commit(commit)
+
+        # loading commit and comments
+        print("Generating and loading pull requests and comments...")
+        pull_requests, pr_comments = generate_pull_requests(all_data["projects"], all_data["commits"])
+        for pr in pull_requests:
+            create_pull_request(pr)
+        for comment in pr_comments:
+            create_pr_comment(comment)
 
         print("Loading CICD events...")
         for cicd_event in all_data["cicd_events"]:

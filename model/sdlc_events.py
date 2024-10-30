@@ -1,8 +1,9 @@
 # sdlc_events.py
-import enum
-from datetime import datetime
 from operator import and_
-from typing import Dict, Any, Optional, List
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Enum as SQLEnum
+import enum
 
 from sqlalchemy import (
     Boolean,
@@ -510,6 +511,153 @@ def get_team_metrics(event_id: str, start_date: Optional[datetime] = None, end_d
         return query.order_by(TeamMetrics.week_starting).all()
 
 
+# Add new enum for PR status
+class PRStatus(enum.Enum):
+    OPEN = "OPEN"
+    BLOCKED = "BLOCKED"
+    MERGED = "MERGED"
+
+
+class PRStatus(enum.Enum):
+    OPEN = "OPEN"
+    BLOCKED = "BLOCKED"
+    MERGED = "MERGED"
+
+
+class PullRequest(Base):
+    __tablename__ = "pull_requests"
+
+    id = Column(String)
+    created_at = Column(DateTime, nullable=False)
+    project_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    branch_from = Column(String, nullable=False)
+    branch_to = Column(String, nullable=False)
+    author = Column(String, nullable=False)
+    status = Column(SQLEnum(PRStatus), nullable=False)
+    merged_at = Column(DateTime)
+    commit_id = Column(String)
+    commit_timestamp = Column(DateTime)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("id", "created_at"),
+        ForeignKeyConstraint(
+            ['commit_id', 'commit_timestamp'],
+            ['sdlc_timeseries.code_commits.id', 'sdlc_timeseries.code_commits.timestamp']
+        ),
+        {"schema": "sdlc_timeseries"}
+    )
+
+    # Relationship to associated commit
+    commit = relationship(
+        "CodeCommit",
+        foreign_keys=[commit_id, commit_timestamp],
+        primaryjoin="and_(PullRequest.commit_id==CodeCommit.id, "
+                    "PullRequest.commit_timestamp==CodeCommit.timestamp)"
+    )
+
+
+class PRComment(Base):
+    __tablename__ = "pr_comments"
+
+    id = Column(String)
+    created_at = Column(DateTime, nullable=False)
+    pr_id = Column(String)
+    pr_created_at = Column(DateTime)
+    author = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("id", "created_at"),
+        ForeignKeyConstraint(
+            ['pr_id', 'pr_created_at'],
+            ['sdlc_timeseries.pull_requests.id', 'sdlc_timeseries.pull_requests.created_at']
+        ),
+        {"schema": "sdlc_timeseries"}
+    )
+
+    # Relationship to parent PR
+    pull_request = relationship(
+        "PullRequest",
+        foreign_keys=[pr_id, pr_created_at],
+        primaryjoin="and_(PRComment.pr_id==PullRequest.id, "
+                    "PRComment.pr_created_at==PullRequest.created_at)"
+    )
+
+
+# Add CRUD functions for Pull Requests
+def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
+    with db_manager.get_session() as session:
+        if "status" in pr_data:
+            pr_data["status"] = PRStatus(pr_data["status"])
+        pr = PullRequest(**pr_data)
+        session.add(pr)
+        session.commit()
+        return pr
+
+
+def get_pull_requests(
+        project_id: str,
+        status: Optional[PRStatus] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+) -> List[PullRequest]:
+    with db_manager.get_session() as session:
+        query = session.query(PullRequest).filter(PullRequest.project_id == project_id)
+        if status:
+            query = query.filter(PullRequest.status == status)
+        if start_date:
+            query = query.filter(PullRequest.created_at >= start_date)
+        if end_date:
+            query = query.filter(PullRequest.created_at <= end_date)
+        return query.order_by(PullRequest.created_at).all()
+
+
+def update_pull_request_status(
+        pr_id: str,
+        created_at: datetime,
+        new_status: PRStatus,
+        merged_at: Optional[datetime] = None
+) -> bool:
+    with db_manager.get_session() as session:
+        update_data = {"status": new_status}
+        if merged_at:
+            update_data["merged_at"] = merged_at
+        result = (
+            session.query(PullRequest)
+            .filter(and_(PullRequest.id == pr_id, PullRequest.created_at == created_at))
+            .update(update_data)
+        )
+        session.commit()
+        return result > 0
+
+
+# Add CRUD functions for PR Comments
+def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
+    with db_manager.get_session() as session:
+        comment = PRComment(**comment_data)
+        session.add(comment)
+        session.commit()
+        return comment
+
+
+def get_pr_comments(
+        pr_id: str,
+        pr_created_at: datetime,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+) -> List[PRComment]:
+    with db_manager.get_session() as session:
+        query = session.query(PRComment).filter(
+            and_(PRComment.pr_id == pr_id, PRComment.pr_created_at == pr_created_at)
+        )
+        if start_date:
+            query = query.filter(PRComment.created_at >= start_date)
+        if end_date:
+            query = query.filter(PRComment.created_at <= end_date)
+        return query.order_by(PRComment.created_at).all()
+
 class DatabaseManager:
     def __init__(self, connection_string: str):
         self.engine = create_engine(connection_string)
@@ -587,6 +735,8 @@ class DatabaseManager:
             ("design_events", "timestamp", "event_id"),
             ("code_commits", "timestamp", "event_id"),
             ("team_metrics", "week_starting", "event_id"),
+            ("pull_requests", "created_at", "project_id"),  # Add PR table
+            ("pr_comments", "created_at", "pr_id"),  # Add PR comments table
         ]
 
         with self.engine.begin() as connection:
@@ -607,16 +757,29 @@ class DatabaseManager:
                     )
                     print(f"Created hypertable for {table}")
 
-                    # Create additional indexes if needed
-                    if project_column and project_column != 'event_id':
+                    # Create additional indexes for PR-specific tables
+                    if table == "pull_requests":
                         connection.execute(
                             text(
-                                f"""
-                                CREATE INDEX IF NOT EXISTS idx_{table}_project_time 
-                                ON sdlc_timeseries.{table} ({project_column}, {time_column});
+                                """
+                                CREATE INDEX IF NOT EXISTS idx_pull_requests_status 
+                                ON sdlc_timeseries.pull_requests (status);
+
+                                CREATE INDEX IF NOT EXISTS idx_pull_requests_commit 
+                                ON sdlc_timeseries.pull_requests (commit_id, commit_timestamp);
                                 """
                             )
                         )
+                    elif table == "pr_comments":
+                        connection.execute(
+                            text(
+                                """
+                                CREATE INDEX IF NOT EXISTS idx_pr_comments_pr 
+                                ON sdlc_timeseries.pr_comments (pr_id, pr_created_at);
+                                """
+                            )
+                        )
+
                 except Exception as e:
                     print(f"Error creating hypertable for {table}: {e}")
                     raise

@@ -1451,6 +1451,109 @@ def verify_jira_references(all_data: Dict[str, Any]) -> List[str]:
     return errors
 
 
+def generate_pull_requests(
+        projects: List[Dict[str, Any]],
+        commits: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Generate pull requests and comments for all projects"""
+    pull_requests = []
+    pr_comments = []
+
+    # Create a map of project commits that are not on main/release branches
+    project_commits = {}
+    for commit in commits:
+        if not any(branch in commit["branch"].lower() for branch in ["main", "release"]):
+            if commit["event_id"] not in project_commits:
+                project_commits[commit["event_id"]] = []
+            project_commits[commit["event_id"]].append(commit)
+
+    comment_templates = [
+        "Please review the changes in {file}",
+        "I've addressed the previous comments",
+        "LGTM 👍",
+        "Can you add more tests for {file}?",
+        "Consider refactoring this part",
+        "The changes look good, but needs documentation",
+        "This might impact performance",
+        "Approved after addressing comments",
+        "Need to fix the failing tests",
+        "Should we add logging here?"
+    ]
+
+    # Create a map of projects for easier lookup
+    projects_map = {project["id"]: project for project in projects}
+
+    for proj_id, feature_commits in project_commits.items():
+        project = projects_map.get(proj_id)
+        if not project:
+            continue
+
+        # Create PRs for eligible commits
+        for commit in feature_commits:
+            # Not all commits need PRs
+            if np.random.random() > 0.8:  # 80% of feature commits get PRs
+                continue
+
+            pr_id = f"PR-{commit['id']}"
+            created_at = commit["timestamp"] + timedelta(minutes=np.random.randint(5, 30))
+
+            # Determine PR status based on project state
+            if project["status"] == "Completed":
+                status = "MERGED"
+                merged_at = created_at + timedelta(days=np.random.randint(1, 3))
+            else:
+                status = np.random.choice(
+                    ["OPEN", "BLOCKED", "MERGED"],
+                    p=[0.4, 0.3, 0.3]
+                )
+                merged_at = (
+                    created_at + timedelta(days=np.random.randint(1, 3))
+                    if status == "MERGED"
+                    else None
+                )
+
+            # Create PR
+            pull_requests.append({
+                "id": pr_id,
+                "created_at": created_at,
+                "project_id": proj_id,
+                "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
+                "description": f"Implementing changes for {project['title']}",
+                "branch_from": commit["branch"],
+                "branch_to": "main",
+                "author": commit["author"],
+                "status": status,
+                "merged_at": merged_at,
+                "commit_id": commit["id"],
+                "commit_timestamp": commit["timestamp"]
+            })
+
+            # Generate comments for the PR
+            num_comments = np.random.randint(2, 8)
+            comment_time = created_at
+
+            for _ in range(num_comments):
+                comment_time += timedelta(hours=np.random.randint(1, 8))
+                if merged_at and comment_time > merged_at:
+                    break
+
+                # Select a random file from the commit for comment templates
+                template = np.random.choice(comment_templates)
+                content = template.format(
+                    file=f"file_{np.random.randint(1, commit['files_changed'] + 1)}.py"
+                ) if "{file}" in template else template
+
+                pr_comments.append({
+                    "id": f"COM-{uuid.uuid4().hex[:8]}",
+                    "pr_id": pr_id,
+                    "pr_created_at": created_at,
+                    "created_at": comment_time,
+                    "author": f"reviewer{np.random.randint(1, 4)}@example.com",
+                    "content": content
+                })
+
+    return pull_requests, pr_comments
+
 def generate_all_data() -> Dict[str, Any]:
     """Generate all data for the application with comprehensive validation"""
     try:
