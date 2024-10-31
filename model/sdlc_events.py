@@ -523,11 +523,13 @@ class PRStatus(enum.Enum):
     BLOCKED = "BLOCKED"
     MERGED = "MERGED"
 
+# Update the PR and PR Comment classes in sdlc_events.py
 
 class PullRequest(Base):
     __tablename__ = "pull_requests"
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
-    id = Column(String)
+    id = Column(String, primary_key=True)
     created_at = Column(DateTime, nullable=False)
     project_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     title = Column(String, nullable=False)
@@ -540,51 +542,19 @@ class PullRequest(Base):
     commit_id = Column(String)
     commit_timestamp = Column(DateTime)
 
-    __table_args__ = (
-        PrimaryKeyConstraint("id", "created_at"),
-        ForeignKeyConstraint(
-            ['commit_id', 'commit_timestamp'],
-            ['sdlc_timeseries.code_commits.id', 'sdlc_timeseries.code_commits.timestamp']
-        ),
-        {"schema": "sdlc_timeseries"}
-    )
-
-    # Relationship to associated commit
-    commit = relationship(
-        "CodeCommit",
-        foreign_keys=[commit_id, commit_timestamp],
-        primaryjoin="and_(PullRequest.commit_id==CodeCommit.id, "
-                    "PullRequest.commit_timestamp==CodeCommit.timestamp)"
-    )
-
+    # Remove the foreign key constraint with commit
+    # Instead track the relationship through regular columns
 
 class PRComment(Base):
     __tablename__ = "pr_comments"
+    __table_args__ = {"schema": "sdlc_timeseries"}
 
-    id = Column(String)
+    id = Column(String, primary_key=True)
     created_at = Column(DateTime, nullable=False)
-    pr_id = Column(String)
-    pr_created_at = Column(DateTime)
+    pr_id = Column(String, nullable=False)
+    # Remove pr_created_at as it's not needed for the relationship
     author = Column(String, nullable=False)
     content = Column(Text, nullable=False)
-
-    __table_args__ = (
-        PrimaryKeyConstraint("id", "created_at"),
-        ForeignKeyConstraint(
-            ['pr_id', 'pr_created_at'],
-            ['sdlc_timeseries.pull_requests.id', 'sdlc_timeseries.pull_requests.created_at']
-        ),
-        {"schema": "sdlc_timeseries"}
-    )
-
-    # Relationship to parent PR
-    pull_request = relationship(
-        "PullRequest",
-        foreign_keys=[pr_id, pr_created_at],
-        primaryjoin="and_(PRComment.pr_id==PullRequest.id, "
-                    "PRComment.pr_created_at==PullRequest.created_at)"
-    )
-
 
 # Add CRUD functions for Pull Requests
 def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
@@ -635,8 +605,15 @@ def update_pull_request_status(
 
 # Add CRUD functions for PR Comments
 def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
+    """Create a PR comment with validated data"""
+    # Filter out any extra fields not in the model
+    valid_fields = {
+        'id', 'created_at', 'pr_id', 'author', 'content'
+    }
+    filtered_data = {k: v for k, v in comment_data.items() if k in valid_fields}
+
     with db_manager.get_session() as session:
-        comment = PRComment(**comment_data)
+        comment = PRComment(**filtered_data)
         session.add(comment)
         session.commit()
         return comment
@@ -732,17 +709,16 @@ class DatabaseManager:
     def _create_hypertables(self):
         """Convert specific tables to hypertables"""
         hypertables = [
-            ("design_events", "timestamp", "event_id"),
-            ("code_commits", "timestamp", "event_id"),
-            ("team_metrics", "week_starting", "event_id"),
-            ("pull_requests", "created_at", "project_id"),  # Add PR table
-            ("pr_comments", "created_at", "pr_id"),  # Add PR comments table
+            ("design_events", "timestamp"),
+            ("code_commits", "timestamp"),
+            ("team_metrics", "week_starting"),
+            ("pull_requests", "created_at"),
+            ("pr_comments", "created_at"),
         ]
 
         with self.engine.begin() as connection:
-            for table, time_column, project_column in hypertables:
+            for table, time_column in hypertables:
                 try:
-                    # Create hypertable
                     connection.execute(
                         text(
                             f"""
@@ -756,30 +732,6 @@ class DatabaseManager:
                         )
                     )
                     print(f"Created hypertable for {table}")
-
-                    # Create additional indexes for PR-specific tables
-                    if table == "pull_requests":
-                        connection.execute(
-                            text(
-                                """
-                                CREATE INDEX IF NOT EXISTS idx_pull_requests_status 
-                                ON sdlc_timeseries.pull_requests (status);
-
-                                CREATE INDEX IF NOT EXISTS idx_pull_requests_commit 
-                                ON sdlc_timeseries.pull_requests (commit_id, commit_timestamp);
-                                """
-                            )
-                        )
-                    elif table == "pr_comments":
-                        connection.execute(
-                            text(
-                                """
-                                CREATE INDEX IF NOT EXISTS idx_pr_comments_pr 
-                                ON sdlc_timeseries.pr_comments (pr_id, pr_created_at);
-                                """
-                            )
-                        )
-
                 except Exception as e:
                     print(f"Error creating hypertable for {table}: {e}")
                     raise

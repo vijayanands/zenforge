@@ -4,10 +4,14 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 import random
+from random import randint
 
 import numpy as np
 
-from model.sdlc_events import StageType
+from model.sdlc_events import StageType, db_manager
+from model.timeline_enforcer import enforce_design_sprint_timeline, adjust_sprint_dates, adjust_commit_dates, \
+    adjust_pr_dates, adjust_cicd_dates, adjust_bug_dates
+from model.timeline_validators import validate_all_timelines
 
 
 class DataGenerator:
@@ -241,14 +245,14 @@ class DataGenerator:
     ) -> List[str]:
         """Get random jira IDs for a project"""
         project_jiras = [j for j in available_jiras if j.startswith(project_id)]
-        count = min(random.randint(min_count, max_count), len(project_jiras))
+        count = min(randint(min_count, max_count), len(project_jiras))
         return random.sample(project_jiras, count) if project_jiras else []
 
     def get_random_commit_ids(
         self, available_commits: List[str], min_count: int = 1, max_count: int = 3
     ) -> List[str]:
         """Get random commit IDs"""
-        count = min(random.randint(min_count, max_count), len(available_commits))
+        count = min(randint(min_count, max_count), len(available_commits))
         return random.sample(available_commits, count) if available_commits else []
 
     def generate_commit_metrics(self) -> Tuple[int, int, int, float, float]:
@@ -426,7 +430,7 @@ class DataGenerator:
 
                 if available_commits:
                     # Select 1-5 commits for this CICD event
-                    commit_count = random.randint(1, min(5, len(available_commits)))
+                    commit_count = randint(1, min(5, len(available_commits)))
                     cicd_commit_map[cicd["id"]] = random.sample(
                         available_commits, commit_count
                     )
@@ -887,134 +891,53 @@ def generate_commits(
 
 
 # Update generate_cicd_events function
-def generate_cicd_events(
-    projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]
-) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
-    """Generate CI/CD events ensuring proper temporal relationships with commits"""
+def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]) -> Tuple[
+    List[Dict[str, Any]], Dict[str, List[str]]]:
+    """Modified CICD event generation to ensure proper temporal relationships"""
     cicd_events = []
     cicd_commit_map = {}
     environments = ["dev", "staging", "qa", "uat", "production"]
 
-    # Create a map of project to available commits with timestamps
+    # Group commits by project and sort by timestamp
     project_commits = {}
     for commit in commits:
-        if commit["event_id"] not in project_commits:
-            project_commits[commit["event_id"]] = []
-        project_commits[commit["event_id"]].append(
-            {"id": commit["id"], "timestamp": commit["timestamp"]}
-        )
+        if commit['event_id'] not in project_commits:
+            project_commits[commit['event_id']] = []
+        project_commits[commit['event_id']].append(commit)
 
-    # Track used build IDs
-    used_build_ids = set()
+    for proj_id in project_commits:
+        project_commits[proj_id].sort(key=lambda x: x['timestamp'])
 
-    for proj_id, details in projects.items():
-        if proj_id not in project_commits or not project_commits[proj_id]:
-            continue
+    for proj_id, proj_commits in project_commits.items():
+        completion_state = projects[proj_id]["completion_state"]
 
-        completion_state = details["completion_state"]
+        # Process commits in chronological order
+        for i, commit in enumerate(proj_commits):
+            # Only create CICD events for some commits
+            if randint(1, 100) <= 80:  # 80% chance of creating CICD events
+                commit_time = commit['timestamp']
 
-        # Sort project commits by timestamp
-        proj_commits = sorted(project_commits[proj_id], key=lambda x: x["timestamp"])
+                for env in environments:
+                    cicd_status = data_generator.get_cicd_status(completion_state)
 
-        # Start CICD events one day after first commit
-        current_date = proj_commits[0]["timestamp"] + timedelta(days=1)
-        build_counter = 0
-
-        while build_counter < 50:
-            # Find commits that happened before this build
-            valid_commits = [
-                commit for commit in proj_commits if commit["timestamp"] < current_date
-            ]
-
-            if not valid_commits:
-                current_date += timedelta(days=1)
-                continue
-
-            for env in environments:
-                cicd_status = data_generator.get_cicd_status(completion_state)
-
-                # Generate unique build ID
-                build_id = None
-                while True:
-                    build_id = f"build_{uuid.uuid4().hex[:8]}"
-                    if build_id not in used_build_ids:
-                        used_build_ids.add(build_id)
-                        break
-
-                # Select recent commits for this build
-                recent_commits = sorted(
-                    valid_commits, key=lambda x: x["timestamp"], reverse=True
-                )[:5]
-                num_commits = random.randint(1, len(recent_commits))
-                selected_commits = recent_commits[:num_commits]
-
-                # Create build event
-                build_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
-                build_event = {
-                    "id": build_event_id,
-                    "event_id": proj_id,
-                    "timestamp": current_date,
-                    "environment": env,
-                    "event_type": "build",
-                    "build_id": build_id,
-                    "status": cicd_status["status"],
-                    "duration_seconds": np.random.randint(180, 900),
-                    "metrics": cicd_status["metrics"],
-                    "reason": None,
-                }
-                cicd_events.append(build_event)
-                cicd_commit_map[build_event_id] = [
-                    commit["id"] for commit in selected_commits
-                ]
-
-                # Handle successful builds
-                if cicd_status["status"] == "success":
-                    deploy_success = completion_state in ["pre_release", "all_complete"]
-
-                    # Create deployment event
-                    deploy_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
-                    deploy_event = {
-                        "id": deploy_event_id,
+                    # Create build event after commit
+                    build_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
+                    build_event = {
+                        "id": build_event_id,
                         "event_id": proj_id,
-                        "timestamp": current_date + timedelta(minutes=15),
+                        "timestamp": commit_time + timedelta(minutes=randint(5, 30)),
                         "environment": env,
-                        "event_type": "deployment",
+                        "event_type": "build",
                         "build_id": f"build_{uuid.uuid4().hex[:8]}",
-                        "status": "success" if deploy_success else "failed",
-                        "duration_seconds": np.random.randint(300, 1200),
+                        "status": cicd_status["status"],
+                        "duration_seconds": randint(180, 900),
                         "metrics": cicd_status["metrics"],
                         "reason": None,
                     }
-                    cicd_events.append(deploy_event)
-                    cicd_commit_map[deploy_event_id] = [
-                        commit["id"] for commit in selected_commits
-                    ]
+                    cicd_events.append(build_event)
+                    cicd_commit_map[build_event_id] = [commit['id']]
 
-                    # Handle failed deployments
-                    if not deploy_success:
-                        rollback_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
-                        rollback_event = {
-                            "id": rollback_event_id,
-                            "event_id": proj_id,
-                            "timestamp": current_date + timedelta(minutes=30),
-                            "environment": env,
-                            "event_type": "rollback",
-                            "build_id": f"build_{uuid.uuid4().hex[:8]}",
-                            "status": "success",
-                            "duration_seconds": np.random.randint(180, 600),
-                            "metrics": cicd_status["metrics"],
-                            "reason": data_generator.generate_root_cause(),
-                        }
-                        cicd_events.append(rollback_event)
-                        cicd_commit_map[rollback_event_id] = [
-                            commit["id"] for commit in selected_commits
-                        ]
-
-            build_counter += 1
-            current_date += timedelta(days=1)
-
-    return cicd_events, cicd_commit_map
-
+    return sorted(cicd_events, key=lambda x: x['timestamp']), cicd_commit_map
 
 def generate_bugs(
     projects: Dict[str, Dict[str, Any]],
@@ -1455,34 +1378,27 @@ def generate_pull_requests(
         projects: List[Dict[str, Any]],
         commits: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Generate pull requests and comments for all projects"""
+    """Generate pull requests and comments with proper commit grouping"""
     pull_requests = []
     pr_comments = []
-
-    # Create a map of project commits that are not on main/release branches
-    project_commits = {}
-    for commit in commits:
-        if not any(branch in commit["branch"].lower() for branch in ["main", "release"]):
-            if commit["event_id"] not in project_commits:
-                project_commits[commit["event_id"]] = []
-            project_commits[commit["event_id"]].append(commit)
-
-    comment_templates = [
-        "Please review the changes in {file}",
-        "I've addressed the previous comments",
-        "LGTM 👍",
-        "Can you add more tests for {file}?",
-        "Consider refactoring this part",
-        "The changes look good, but needs documentation",
-        "This might impact performance",
-        "Approved after addressing comments",
-        "Need to fix the failing tests",
-        "Should we add logging here?"
-    ]
 
     # Create a map of projects for easier lookup
     projects_map = {project["id"]: project for project in projects}
 
+    # Group commits by project
+    project_commits = {}
+    for commit in commits:
+        if not commit["branch"].lower().startswith(("main", "master", "release")):
+            proj_id = commit["event_id"]
+            if proj_id not in project_commits:
+                project_commits[proj_id] = []
+            project_commits[proj_id].append(commit)
+
+    # Sort commits in each project by timestamp
+    for proj_commits in project_commits.values():
+        proj_commits.sort(key=lambda x: x["timestamp"])
+
+    # Generate PRs and comments for each project
     for proj_id, feature_commits in project_commits.items():
         project = projects_map.get(proj_id)
         if not project:
@@ -1491,23 +1407,23 @@ def generate_pull_requests(
         # Create PRs for eligible commits
         for commit in feature_commits:
             # Not all commits need PRs
-            if np.random.random() > 0.8:  # 80% of feature commits get PRs
+            if randint(1, 100) > 80:  # 80% of feature commits get PRs
                 continue
 
             pr_id = f"PR-{commit['id']}"
-            created_at = commit["timestamp"] + timedelta(minutes=np.random.randint(5, 30))
+            created_at = commit["timestamp"] + timedelta(minutes=randint(5, 30))
 
             # Determine PR status based on project state
             if project["status"] == "Completed":
                 status = "MERGED"
-                merged_at = created_at + timedelta(days=np.random.randint(1, 3))
+                merged_at = created_at + timedelta(days=randint(1, 3))
             else:
                 status = np.random.choice(
                     ["OPEN", "BLOCKED", "MERGED"],
                     p=[0.4, 0.3, 0.3]
                 )
                 merged_at = (
-                    created_at + timedelta(days=np.random.randint(1, 3))
+                    created_at + timedelta(days=randint(1, 3))
                     if status == "MERGED"
                     else None
                 )
@@ -1529,55 +1445,78 @@ def generate_pull_requests(
             })
 
             # Generate comments for the PR
-            num_comments = np.random.randint(2, 8)
+            num_comments = randint(2, 8)
             comment_time = created_at
 
+            comment_templates = [
+                "Please review the changes in file_{num}",
+                "I've addressed the previous comments",
+                "LGTM 👍",
+                "Can you add more tests?",
+                "Consider refactoring this part",
+                "The changes look good, but needs documentation",
+                "This might impact performance",
+                "Approved after addressing comments",
+                "Need to fix the failing tests",
+                "Should we add logging here?"
+            ]
+
             for _ in range(num_comments):
-                comment_time += timedelta(hours=np.random.randint(1, 8))
+                comment_time += timedelta(hours=randint(1, 8))
                 if merged_at and comment_time > merged_at:
                     break
 
-                # Select a random file from the commit for comment templates
                 template = np.random.choice(comment_templates)
-                content = template.format(
-                    file=f"file_{np.random.randint(1, commit['files_changed'] + 1)}.py"
-                ) if "{file}" in template else template
+                content = template.format(num=randint(1, commit['files_changed'])) \
+                    if "{num}" in template else template
 
                 pr_comments.append({
                     "id": f"COM-{uuid.uuid4().hex[:8]}",
                     "pr_id": pr_id,
-                    "pr_created_at": created_at,
                     "created_at": comment_time,
-                    "author": f"reviewer{np.random.randint(1, 4)}@example.com",
+                    "author": f"reviewer{randint(1, 4)}@example.com",
                     "content": content
                 })
 
     return pull_requests, pr_comments
 
 def generate_all_data() -> Dict[str, Any]:
-    """Generate all data for the application with comprehensive validation"""
+    """Generate all data for the application with comprehensive validation and timeline constraints"""
     try:
         print("Generating project data...")
         projects = data_generator.generate_project_base_data()
         project_details = data_generator.generate_project_details(projects)
 
-        print("Generating Jira items...")
-        jira_items = generate_jira_items(projects)
+        print("Calculating design phase completion times...")
+        design_completion_times = enforce_design_sprint_timeline(projects)
 
         print("Generating design events...")
         design_events = generate_design_events(projects)
 
-        print("Generating commits...")
+        print("Generating Jira items...")
+        jira_items = generate_jira_items(projects)
+
+        print("Generating and adjusting sprints...")
+        sprints, sprint_jira_map = generate_sprints(projects, jira_items)
+        sprints = adjust_sprint_dates(sprints, jira_items, design_completion_times)
+
+        print("Generating and adjusting commits...")
         commits = generate_commits(projects, jira_items)
+        commits = adjust_commit_dates(commits, jira_items)
+
+        print("Generating and adjusting pull requests...")
+        pull_requests, pr_comments = generate_pull_requests(project_details, commits)
+        pull_requests = adjust_pr_dates(pull_requests, commits)
 
         print("Generating CICD events...")
         cicd_events, cicd_commit_map = generate_cicd_events(projects, commits)
 
-        print("Generating sprints...")
-        sprints, sprint_jira_map = generate_sprints(projects, jira_items)
+        print("Adjusting CICD event dates...")
+        cicd_events = adjust_cicd_dates(cicd_events, pull_requests, cicd_commit_map)
 
-        print("Generating bugs...")
+        print("Generating and adjusting bugs...")
         bugs = generate_bugs(projects, jira_items, cicd_events)
+        bugs = adjust_bug_dates(bugs, cicd_events)
 
         print("Generating team metrics...")
         team_metrics = generate_team_metrics(projects)
@@ -1592,6 +1531,8 @@ def generate_all_data() -> Dict[str, Any]:
             "bugs": bugs,
             "sprints": sprints,
             "team_metrics": team_metrics,
+            "pull_requests": pull_requests,
+            "pr_comments": pr_comments,
             "relationships": {
                 "sprint_jira_associations": sprint_jira_map,
                 "cicd_commit_associations": cicd_commit_map,
@@ -1601,9 +1542,7 @@ def generate_all_data() -> Dict[str, Any]:
         print("Verifying data consistency...")
 
         # Verify temporal consistency
-        temporal_errors = verify_temporal_consistency(
-            commits, cicd_events, cicd_commit_map
-        )
+        temporal_errors = verify_temporal_consistency(commits, cicd_events, cicd_commit_map)
         if temporal_errors:
             print("Temporal consistency errors:")
             for error in temporal_errors:
@@ -1623,21 +1562,21 @@ def generate_all_data() -> Dict[str, Any]:
             for error in jira_errors:
                 print(f"  - {error}")
 
-        # Verify data completeness
-        for key in [
-            "projects",
-            "design_events",
-            "jira_items",
-            "commits",
-            "cicd_events",
-            "bugs",
-            "sprints",
-            "team_metrics",
-        ]:
-            if not all_data[key]:
-                print(f"Warning: {key} data is empty")
+        # Verify timeline constraints
+        with db_manager.get_session() as session:
+            timeline_validation = validate_all_timelines(session)
+            timeline_errors = []
+            for category, errors in timeline_validation.items():
+                if errors:
+                    timeline_errors.extend(errors)
 
-        all_errors = temporal_errors + project_errors + jira_errors
+            if timeline_errors:
+                print("Timeline constraint errors:")
+                for error in timeline_errors:
+                    print(f"  - {error}")
+
+        # Combine all errors
+        all_errors = temporal_errors + project_errors + jira_errors + timeline_errors
         if all_errors:
             raise ValueError(f"Found {len(all_errors)} data consistency errors")
 
@@ -1647,7 +1586,6 @@ def generate_all_data() -> Dict[str, Any]:
     except Exception as e:
         print(f"Error generating data: {str(e)}")
         raise
-
 
 def validate_relationships(data: Dict[str, Any]) -> List[str]:
     """Validate all relationships in the generated data"""
