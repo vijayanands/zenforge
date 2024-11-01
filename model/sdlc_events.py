@@ -1,4 +1,3 @@
-# sdlc_events.py
 import enum
 from datetime import datetime
 from operator import and_
@@ -491,7 +490,7 @@ Sprint Related CRUD
 def create_sprint(sprint_data: Dict[str, Any]) -> Sprint:
     with db_manager.get_session() as session:
         # Remove jira_items from the data before creating Sprint
-        jira_items = sprint_data.pop("jira_items", [])
+        _ = sprint_data.pop("jira_items", [])
         sprint = Sprint(**sprint_data)
         session.add(sprint)
         session.commit()
@@ -556,21 +555,14 @@ class PRStatus(enum.Enum):
     BLOCKED = "BLOCKED"
     MERGED = "MERGED"
 
-
-class PRStatus(enum.Enum):
-    OPEN = "OPEN"
-    BLOCKED = "BLOCKED"
-    MERGED = "MERGED"
-
-
-# Update the PR and PR Comment classes in sdlc_events.py
-
-
 class PullRequest(Base):
     __tablename__ = "pull_requests"
-    __table_args__ = {"schema": "sdlc_timeseries"}
+    __table_args__ = (
+        PrimaryKeyConstraint("id", "created_at"),
+        {"schema": "sdlc_timeseries"}
+    )
 
-    id = Column(String, primary_key=True)
+    id = Column(String)
     created_at = Column(DateTime, nullable=False)
     project_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     title = Column(String, nullable=False)
@@ -583,24 +575,87 @@ class PullRequest(Base):
     commit_id = Column(String)
     commit_timestamp = Column(DateTime)
 
-    # Remove the foreign key constraint with commit
-    # Instead track the relationship through regular columns
-
 
 class PRComment(Base):
     __tablename__ = "pr_comments"
-    __table_args__ = {"schema": "sdlc_timeseries"}
+    __table_args__ = (
+        PrimaryKeyConstraint("id", "created_at"),
+        # Remove the foreign key constraint but keep the columns for logical relationship
+        {"schema": "sdlc_timeseries"}
+    )
 
-    id = Column(String, primary_key=True)
+    id = Column(String)
     created_at = Column(DateTime, nullable=False)
     pr_id = Column(String, nullable=False)
-    # Remove pr_created_at as it's not needed for the relationship
+    pr_created_at = Column(DateTime, nullable=False)  # Keep for data consistency
     author = Column(String, nullable=False)
     content = Column(Text, nullable=False)
 
 
+def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
+    """
+    Create a new PR comment with validation of PR existence.
+
+    Args:
+        comment_data (Dict[str, Any]): Dictionary containing comment data
+
+    Returns:
+        PRComment: Created comment object
+
+    Raises:
+        ValueError: If the referenced PR doesn't exist
+    """
+    valid_fields = {"id", "pr_id", "created_at", "author", "content"}
+    filtered_data = {k: v for k, v in comment_data.items() if k in valid_fields}
+
+    with db_manager.get_session() as session:
+        # Verify PR exists but handle relationship manually
+        pr = session.query(PullRequest).filter(
+            PullRequest.id == filtered_data["pr_id"]
+        ).first()
+
+        if not pr:
+            raise ValueError(f"Pull request {filtered_data['pr_id']} not found")
+
+        # Add PR created_at to maintain relationship
+        filtered_data["pr_created_at"] = pr.created_at
+
+        comment = PRComment(**filtered_data)
+        session.add(comment)
+        session.commit()
+        return comment
+
+
+def get_pr_comments(
+        pr_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+) -> List[PRComment]:
+    """
+    Get comments for a specific PR.
+
+    Args:
+        pr_id (str): Pull request ID
+        start_date (Optional[datetime]): Start date filter
+        end_date (Optional[datetime]): End date filter
+
+    Returns:
+        List[PRComment]: List of matching comments
+    """
+    with db_manager.get_session() as session:
+        query = session.query(PRComment).filter(PRComment.pr_id == pr_id)
+
+        if start_date:
+            query = query.filter(PRComment.created_at >= start_date)
+        if end_date:
+            query = query.filter(PRComment.created_at <= end_date)
+
+        return query.order_by(PRComment.created_at).all()
+
 # Add CRUD functions for Pull Requests
+# Update CRUD functions for Pull Requests and Comments
 def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
+    """Create a pull request with the updated schema"""
     with db_manager.get_session() as session:
         if "status" in pr_data:
             pr_data["status"] = PRStatus(pr_data["status"])
@@ -611,11 +666,12 @@ def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
 
 
 def get_pull_requests(
-    project_id: str,
-    status: Optional[PRStatus] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+        project_id: str,
+        status: Optional[PRStatus] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
 ) -> List[PullRequest]:
+    """Get pull requests with the updated schema"""
     with db_manager.get_session() as session:
         query = session.query(PullRequest).filter(PullRequest.project_id == project_id)
         if status:
@@ -628,54 +684,89 @@ def get_pull_requests(
 
 
 def update_pull_request_status(
-    pr_id: str,
-    created_at: datetime,
-    new_status: PRStatus,
-    merged_at: Optional[datetime] = None,
+        pr_id: str,
+        created_at: datetime,
+        new_status: PRStatus,
+        merged_at: Optional[datetime] = None
 ) -> bool:
+    """Update pull request status with the updated schema"""
     with db_manager.get_session() as session:
         update_data = {"status": new_status}
         if merged_at:
             update_data["merged_at"] = merged_at
-        result = (
-            session.query(PullRequest)
-            .filter(and_(PullRequest.id == pr_id, PullRequest.created_at == created_at))
-            .update(update_data)
-        )
+        result = session.query(PullRequest).filter(
+            and_(
+                PullRequest.id == pr_id,
+                PullRequest.created_at == created_at
+            )
+        ).update(update_data)
+        session.commit()
+        return result > 0
+
+def update_pr_comment(comment_id: str, created_at: datetime, new_content: str) -> bool:
+    """
+    Update a PR comment's content.
+
+    Args:
+        comment_id (str): ID of the comment to update
+        created_at (datetime): Creation timestamp of the comment
+        new_content (str): New content for the comment
+
+    Returns:
+        bool: True if the comment was updated, False otherwise
+    """
+    with db_manager.get_session() as session:
+        result = session.query(PRComment).filter(
+            and_(
+                PRComment.id == comment_id,
+                PRComment.created_at == created_at
+            )
+        ).update({"content": new_content})
         session.commit()
         return result > 0
 
 
-# Add CRUD functions for PR Comments
-def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
-    """Create a PR comment with validated data"""
-    # Filter out any extra fields not in the model
-    valid_fields = {"id", "created_at", "pr_id", "author", "content"}
-    filtered_data = {k: v for k, v in comment_data.items() if k in valid_fields}
+def delete_pr_comment(comment_id: str, created_at: datetime) -> bool:
+    """
+    Delete a PR comment.
 
+    Args:
+        comment_id (str): ID of the comment to delete
+        created_at (datetime): Creation timestamp of the comment
+
+    Returns:
+        bool: True if the comment was deleted, False otherwise
+    """
     with db_manager.get_session() as session:
-        comment = PRComment(**filtered_data)
-        session.add(comment)
+        result = session.query(PRComment).filter(
+            and_(
+                PRComment.id == comment_id,
+                PRComment.created_at == created_at
+            )
+        ).delete()
         session.commit()
-        return comment
+        return result > 0
 
 
-def get_pr_comments(
-    pr_id: str,
-    pr_created_at: datetime,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-) -> List[PRComment]:
-    with db_manager.get_session() as session:
-        query = session.query(PRComment).filter(
-            and_(PRComment.pr_id == pr_id, PRComment.pr_created_at == pr_created_at)
-        )
-        if start_date:
-            query = query.filter(PRComment.created_at >= start_date)
-        if end_date:
-            query = query.filter(PRComment.created_at <= end_date)
-        return query.order_by(PRComment.created_at).all()
+# Helper function to convert PRComment object to dictionary
+def pr_comment_to_dict(comment: PRComment) -> Dict[str, Any]:
+    """
+    Convert a PRComment object to a dictionary.
 
+    Args:
+        comment (PRComment): The PRComment object to convert
+
+    Returns:
+        Dict[str, Any]: Dictionary representation of the comment
+    """
+    return {
+        "id": comment.id,
+        "pr_id": comment.pr_id,
+        "created_at": comment.created_at,
+        "author": comment.author,
+        "content": comment.content,
+        "pr_created_at": comment.pr_created_at
+    }
 
 class DatabaseManager:
     def __init__(self, connection_string: str):
@@ -755,12 +846,13 @@ class DatabaseManager:
             ("code_commits", "timestamp"),
             ("team_metrics", "week_starting"),
             ("pull_requests", "created_at"),
-            ("pr_comments", "created_at"),
+            ("pr_comments", "created_at")
         ]
 
         with self.engine.begin() as connection:
             for table, time_column in hypertables:
                 try:
+                    # Create the hypertable without enforcing foreign key relationships
                     connection.execute(
                         text(
                             f"""
@@ -768,7 +860,8 @@ class DatabaseManager:
                                 'sdlc_timeseries.{table}',
                                 '{time_column}',
                                 if_not_exists => TRUE,
-                                migrate_data => TRUE
+                                migrate_data => TRUE,
+                                create_default_indexes => TRUE
                             );
                             """
                         )

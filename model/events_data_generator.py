@@ -1448,15 +1448,24 @@ def generate_all_data() -> Dict[str, Any]:
         print("Generating team metrics...")
         team_metrics = generate_team_metrics(projects)
 
+        # Add the timeline adjustment step
+        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(
+            project_details,
+            design_events,
+            sprints,
+            jira_items,
+            sprint_jira_map
+        )
+
         # Combine all data
         all_data = {
             "projects": project_details,
             "design_events": design_events,
-            "jira_items": jira_items,
+            "jira_items": adjusted_jiras,
             "commits": commits,
             "cicd_events": cicd_events,
             "bugs": bugs,
-            "sprints": sprints,
+            "sprints": adjusted_sprints,
             "team_metrics": team_metrics,
             "pull_requests": pull_requests,
             "pr_comments": pr_comments,
@@ -1789,3 +1798,128 @@ def adjust_cicd_dates(
         adjusted_events.append(event)
 
     return sorted(adjusted_events, key=lambda x: x["timestamp"])
+
+
+def adjust_sprint_and_jira_timelines(projects, design_events, sprints, jira_items, sprint_jira_associations):
+    """
+    Adjust sprint start dates and JIRA dates to maintain proper temporal consistency:
+    1. Sprints cannot start until all design items for their project are complete
+    2. JIRA items must start after their associated sprint's start date
+
+    Args:
+        projects (list): List of project dictionaries
+        design_events (list): List of design event dictionaries
+        sprints (list): List of sprint dictionaries
+        jira_items (list): List of JIRA item dictionaries
+        sprint_jira_associations (dict): Dictionary mapping sprint IDs to lists of JIRA IDs
+
+    Returns:
+        tuple: (adjusted_sprints, adjusted_jiras)
+    """
+    from datetime import timedelta
+
+    # Get the latest design completion time for each project
+    project_design_completion = {}
+    for event in design_events:
+        project_id = event['event_id']
+        event_timestamp = event['timestamp']
+
+        if project_id not in project_design_completion:
+            project_design_completion[project_id] = event_timestamp
+        else:
+            project_design_completion[project_id] = max(
+                project_design_completion[project_id],
+                event_timestamp
+            )
+
+    # Create a reverse mapping of JIRA ID to sprint IDs
+    jira_to_sprints = {}
+    for sprint_id, jira_ids in sprint_jira_associations.items():
+        for jira_id in jira_ids:
+            if jira_id not in jira_to_sprints:
+                jira_to_sprints[jira_id] = []
+            jira_to_sprints[jira_id].append(sprint_id)
+
+    # Step 1: Adjust sprint start dates based on design completion
+    adjusted_sprints = []
+    sprint_start_dates = {}  # Keep track of sprint start dates for JIRA adjustment
+
+    for sprint in sorted(sprints, key=lambda x: x['start_date']):
+        project_id = sprint['event_id']
+        design_completion = project_design_completion.get(project_id)
+
+        if design_completion:
+            # Ensure sprint starts after design completion
+            new_start_date = max(sprint['start_date'], design_completion + timedelta(days=1))
+
+            # Adjust end date to maintain same duration
+            duration = sprint['end_date'] - sprint['start_date']
+            new_end_date = new_start_date + duration
+
+            adjusted_sprint = sprint.copy()
+            adjusted_sprint['start_date'] = new_start_date
+            adjusted_sprint['end_date'] = new_end_date
+
+            sprint_start_dates[sprint['id']] = new_start_date
+        else:
+            # If no design events found, keep original dates
+            adjusted_sprint = sprint.copy()
+            sprint_start_dates[sprint['id']] = sprint['start_date']
+
+        adjusted_sprints.append(adjusted_sprint)
+
+    # Step 2: Adjust JIRA dates based on sprint associations
+    adjusted_jiras = []
+
+    for jira in jira_items:
+        jira_id = jira['id']
+        associated_sprints = jira_to_sprints.get(jira_id, [])
+
+        if associated_sprints:
+            # Find the earliest associated sprint start date
+            earliest_sprint_start = min(
+                sprint_start_dates[sprint_id]
+                for sprint_id in associated_sprints
+            )
+
+            adjusted_jira = jira.copy()
+
+            # Ensure JIRA created date is not before sprint start
+            if jira['created_date'] < earliest_sprint_start:
+                adjusted_jira['created_date'] = earliest_sprint_start
+
+                # If completion date exists, maintain the same duration
+                if jira.get('completed_date'):
+                    original_duration = jira['completed_date'] - jira['created_date']
+                    adjusted_jira['completed_date'] = earliest_sprint_start + original_duration
+
+            adjusted_jiras.append(adjusted_jira)
+        else:
+            # If no sprint associations, keep original dates
+            adjusted_jiras.append(jira.copy())
+
+    # Perform final validation
+    validation_errors = []
+
+    # Validate sprint dates against design completion
+    for sprint in adjusted_sprints:
+        design_completion = project_design_completion.get(sprint['event_id'])
+        if design_completion and sprint['start_date'] < design_completion:
+            validation_errors.append(
+                f"Sprint {sprint['id']} still starts before design completion for project {sprint['event_id']}"
+            )
+
+    # Validate JIRA dates against sprint dates
+    for jira in adjusted_jiras:
+        associated_sprints = jira_to_sprints.get(jira['id'], [])
+        for sprint_id in associated_sprints:
+            sprint_start = sprint_start_dates[sprint_id]
+            if jira['created_date'] < sprint_start:
+                validation_errors.append(
+                    f"JIRA {jira['id']} still starts before its associated sprint {sprint_id}"
+                )
+
+    if validation_errors:
+        raise ValueError(f"Timeline adjustment failed validation:\n" + "\n".join(validation_errors))
+
+    return adjusted_sprints, adjusted_jiras
