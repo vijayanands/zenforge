@@ -1,5 +1,4 @@
 import streamlit as st
-import argparse
 
 from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
 from demo_code.ic.dashboard import show_ic_dashboard
@@ -67,46 +66,50 @@ def zenforge_dashboard():
         st.write(UNIMPLEMENTED_MESSAGE.format(persona))
 
 
-def create_end_to_end_timechart_for_project(project:str):
+def create_end_to_end_timechart_for_project(project: str):
     print(f"Displaying end to end view of project {project}")
-    """
-    This will be the pseudo code for this
-    
-    jira_list <= get list of jiras for project
-    Let us first find the events in the design phase
-    design_jiras <= filter for type=Design in jira_list
-    create a list of dictionaries that contain the following
-        jira_id
-        title
-        status
-        start_time
-        end_time
-        assigned_to
-        estimated_hours
-        actual_hours
-    
-    Now let us get the sprints related stats
-    sprint_list <= get the list of sprints for project
-    for each sprint in the project create a list of dictionary that contains the following
-        start_date
-        end_date
-        planned_story points
-        completed_story_points
-        burndown_efficiency
-        team_velocity
-        team satisfaction score
-        
-    
-    """
+    print(
+        "\n"
+        "    This will be the pseudo code for this\n"
+        "    \n"
+        "    jira_list <= get list of jiras for project\n"
+        "    Let us first find the events in the design phase\n"
+        "    design_jiras <= filter for type=Design in jira_list\n"
+        "    create a list of dictionaries that contain the following\n"
+        "        jira_id\n"
+        "        title\n"
+        "        status\n"
+        "        start_time\n"
+        "        end_time\n"
+        "        assigned_to\n"
+        "        estimated_hours\n"
+        "        actual_hours\n"
+        "    \n"
+        "    Now let us get the sprints related stats\n"
+        "    sprint_list <= get the list of sprints for project\n"
+        "    for each sprint in the project create a list of dictionary that contains the following\n"
+        "        start_date\n"
+        "        end_date\n"
+        "        planned_story points\n"
+        "        completed_story_points\n"
+        "        burndown_efficiency\n"
+        "        team_velocity\n"
+        "        team satisfaction score\n"
+        "        \n"
+        "    \n"
+        "    "
+    )
 
 
 if __name__ == "__main__":
     # Prompt the user to enter the value for --function instead of expecting it as an argument
-    function_input = input("Please enter the function to run ('load_data' or 'view_project'): ")
-    if function_input == 'load_data':
+    function_input = input(
+        "Please enter the function to run ('load_data' or 'view_project'): "
+    )
+    if function_input == "load_data":
         load_sample_data_into_timeseries_db()
-    elif function_input == 'view_project':
-        project = "PRJ-001"
+    elif function_input == "view_project":
+        project: str = "PRJ-001"
         create_end_to_end_timechart_for_project(project)
     else:
         print("Invalid option. Please choose 'load_data' or 'view_project'.")

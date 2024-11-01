@@ -1,24 +1,25 @@
 # sdlc_events.py
-from operator import and_
-from typing import List, Optional, Dict, Any
-from datetime import datetime
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Enum as SQLEnum
 import enum
+from datetime import datetime
+from operator import and_
+from typing import Any, Dict, List, Optional
 
+from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Enum
+from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import (
-    Boolean,
-    Column,
-    DateTime,
-    Enum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     PrimaryKeyConstraint,
     String,
+    Table,
     Text,
     UniqueConstraint,
-    Table,
-    ForeignKeyConstraint, and_, create_engine, text,
+    and_,
+    create_engine,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
@@ -47,11 +48,13 @@ sprint_jira_association = Table(
     schema="sdlc_timeseries",
 )
 
+
 class StageType(enum.Enum):
     START = "start"
     END = "end"
     BLOCKED = "blocked"
     RESUME = "resume"
+
 
 # Regular tables
 class Project(Base):
@@ -251,9 +254,12 @@ class TeamMetrics(Base):
     team_satisfaction = Column(Float)
     sprint_completion_rate = Column(Float)
 
+
 """
 Project Related CRUD
 """
+
+
 def create_project(project_data: Dict[str, Any]) -> Project:
     with db_manager.get_session() as session:
         project = Project(**project_data)
@@ -270,9 +276,7 @@ def get_project(project_id: str) -> Optional[Project]:
 def update_project(project_id: str, update_data: Dict[str, Any]) -> bool:
     with db_manager.get_session() as session:
         result = (
-            session.query(Project)
-            .filter(Project.id == project_id)
-            .update(update_data)
+            session.query(Project).filter(Project.id == project_id).update(update_data)
         )
         session.commit()
         return result > 0
@@ -289,6 +293,7 @@ def delete_project(project_id: str) -> bool:
 Design Related CRUD
 """
 
+
 def create_design_event(event_data: Dict[str, Any]) -> DesignEvent:
     if "stage" in event_data:
         event_data["stage"] = StageType(event_data["stage"])
@@ -299,16 +304,21 @@ def create_design_event(event_data: Dict[str, Any]) -> DesignEvent:
         return event
 
 
-def get_design_events(event_id: str, design_type: Optional[str] = None) -> List[DesignEvent]:
+def get_design_events(
+    event_id: str, design_type: Optional[str] = None
+) -> List[DesignEvent]:
     with db_manager.get_session() as session:
         query = session.query(DesignEvent).filter(DesignEvent.event_id == event_id)
         if design_type:
             query = query.filter(DesignEvent.design_type == design_type)
         return query.order_by(DesignEvent.timestamp).all()
 
+
 """
 JIRA Related CRUD
 """
+
+
 def create_jira_item(jira_data: Dict[str, Any]) -> JiraItem:
     with db_manager.get_session() as session:
         jira = JiraItem(**jira_data)
@@ -325,22 +335,25 @@ def get_jira_items(event_id: str, item_type: Optional[str] = None) -> List[JiraI
         return query.order_by(JiraItem.created_date).all()
 
 
-def update_jira_status(jira_id: str, new_status: str, completion_date: Optional[datetime] = None) -> bool:
+def update_jira_status(
+    jira_id: str, new_status: str, completion_date: Optional[datetime] = None
+) -> bool:
     with db_manager.get_session() as session:
         update_data = {"status": new_status}
         if completion_date:
             update_data["completed_date"] = completion_date
         result = (
-            session.query(JiraItem)
-            .filter(JiraItem.id == jira_id)
-            .update(update_data)
+            session.query(JiraItem).filter(JiraItem.id == jira_id).update(update_data)
         )
         session.commit()
         return result > 0
 
+
 """
 Commit Related CRUD
 """
+
+
 def create_commit(commit_data: Dict[str, Any]) -> CodeCommit:
     with db_manager.get_session() as session:
         try:
@@ -354,7 +367,11 @@ def create_commit(commit_data: Dict[str, Any]) -> CodeCommit:
             raise
 
 
-def get_commits(event_id: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[CodeCommit]:
+def get_commits(
+    event_id: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> List[CodeCommit]:
     with db_manager.get_session() as session:
         query = session.query(CodeCommit).filter(CodeCommit.event_id == event_id)
         if start_date:
@@ -363,9 +380,12 @@ def get_commits(event_id: str, start_date: Optional[datetime] = None, end_date: 
             query = query.filter(CodeCommit.timestamp <= end_date)
         return query.order_by(CodeCommit.timestamp).all()
 
+
 """
 CI/CD Related CRUD
 """
+
+
 def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
     with db_manager.get_session() as session:
         try:
@@ -408,7 +428,9 @@ def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
             raise
 
 
-def get_cicd_events(event_id: str, environment: Optional[str] = None, event_type: Optional[str] = None) -> List[CICDEvent]:
+def get_cicd_events(
+    event_id: str, environment: Optional[str] = None, event_type: Optional[str] = None
+) -> List[CICDEvent]:
     with db_manager.get_session() as session:
         query = session.query(CICDEvent).filter(CICDEvent.event_id == event_id)
         if environment:
@@ -417,9 +439,12 @@ def get_cicd_events(event_id: str, environment: Optional[str] = None, event_type
             query = query.filter(CICDEvent.event_type == event_type)
         return query.order_by(CICDEvent.timestamp).all()
 
+
 """
 Bug Related CRUD
 """
+
+
 def create_bug(bug_data: Dict[str, Any]) -> Bug:
     with db_manager.get_session() as session:
         bug = Bug(**bug_data)
@@ -428,7 +453,9 @@ def create_bug(bug_data: Dict[str, Any]) -> Bug:
         return bug
 
 
-def get_bugs(event_id: str, severity: Optional[str] = None, status: Optional[str] = None) -> List[Bug]:
+def get_bugs(
+    event_id: str, severity: Optional[str] = None, status: Optional[str] = None
+) -> List[Bug]:
     with db_manager.get_session() as session:
         query = session.query(Bug).filter(Bug.event_id == event_id)
         if severity:
@@ -438,7 +465,9 @@ def get_bugs(event_id: str, severity: Optional[str] = None, status: Optional[str
         return query.order_by(Bug.created_date).all()
 
 
-def update_bug_status(bug_id: str, new_status: str, resolution_date: Optional[datetime] = None) -> bool:
+def update_bug_status(
+    bug_id: str, new_status: str, resolution_date: Optional[datetime] = None
+) -> bool:
     with db_manager.get_session() as session:
         update_data = {"status": new_status}
         if resolution_date:
@@ -453,9 +482,12 @@ def update_bug_status(bug_id: str, new_status: str, resolution_date: Optional[da
         session.commit()
         return result > 0
 
+
 """
 Sprint Related CRUD
 """
+
+
 def create_sprint(sprint_data: Dict[str, Any]) -> Sprint:
     with db_manager.get_session() as session:
         # Remove jira_items from the data before creating Sprint
@@ -490,9 +522,12 @@ def create_sprint_jira_associations(sprint_id: str, jira_ids: List[str]) -> bool
             session.rollback()
             return False
 
+
 """
 Team Related CRUD
 """
+
+
 def create_team_metrics(metrics_data: Dict[str, Any]) -> TeamMetrics:
     with db_manager.get_session() as session:
         metrics = TeamMetrics(**metrics_data)
@@ -501,7 +536,11 @@ def create_team_metrics(metrics_data: Dict[str, Any]) -> TeamMetrics:
         return metrics
 
 
-def get_team_metrics(event_id: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[TeamMetrics]:
+def get_team_metrics(
+    event_id: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> List[TeamMetrics]:
     with db_manager.get_session() as session:
         query = session.query(TeamMetrics).filter(TeamMetrics.event_id == event_id)
         if start_date:
@@ -523,7 +562,9 @@ class PRStatus(enum.Enum):
     BLOCKED = "BLOCKED"
     MERGED = "MERGED"
 
+
 # Update the PR and PR Comment classes in sdlc_events.py
+
 
 class PullRequest(Base):
     __tablename__ = "pull_requests"
@@ -545,6 +586,7 @@ class PullRequest(Base):
     # Remove the foreign key constraint with commit
     # Instead track the relationship through regular columns
 
+
 class PRComment(Base):
     __tablename__ = "pr_comments"
     __table_args__ = {"schema": "sdlc_timeseries"}
@@ -555,6 +597,7 @@ class PRComment(Base):
     # Remove pr_created_at as it's not needed for the relationship
     author = Column(String, nullable=False)
     content = Column(Text, nullable=False)
+
 
 # Add CRUD functions for Pull Requests
 def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
@@ -568,10 +611,10 @@ def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
 
 
 def get_pull_requests(
-        project_id: str,
-        status: Optional[PRStatus] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+    project_id: str,
+    status: Optional[PRStatus] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
 ) -> List[PullRequest]:
     with db_manager.get_session() as session:
         query = session.query(PullRequest).filter(PullRequest.project_id == project_id)
@@ -585,10 +628,10 @@ def get_pull_requests(
 
 
 def update_pull_request_status(
-        pr_id: str,
-        created_at: datetime,
-        new_status: PRStatus,
-        merged_at: Optional[datetime] = None
+    pr_id: str,
+    created_at: datetime,
+    new_status: PRStatus,
+    merged_at: Optional[datetime] = None,
 ) -> bool:
     with db_manager.get_session() as session:
         update_data = {"status": new_status}
@@ -607,9 +650,7 @@ def update_pull_request_status(
 def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
     """Create a PR comment with validated data"""
     # Filter out any extra fields not in the model
-    valid_fields = {
-        'id', 'created_at', 'pr_id', 'author', 'content'
-    }
+    valid_fields = {"id", "created_at", "pr_id", "author", "content"}
     filtered_data = {k: v for k, v in comment_data.items() if k in valid_fields}
 
     with db_manager.get_session() as session:
@@ -620,10 +661,10 @@ def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
 
 
 def get_pr_comments(
-        pr_id: str,
-        pr_created_at: datetime,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+    pr_id: str,
+    pr_created_at: datetime,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
 ) -> List[PRComment]:
     with db_manager.get_session() as session:
         query = session.query(PRComment).filter(
@@ -634,6 +675,7 @@ def get_pr_comments(
         if end_date:
             query = query.filter(PRComment.created_at <= end_date)
         return query.order_by(PRComment.created_at).all()
+
 
 class DatabaseManager:
     def __init__(self, connection_string: str):
@@ -765,6 +807,7 @@ class DatabaseManager:
 
     def get_session(self):
         return self.Session()
+
 
 # Define your database connection details
 db_name = "zenforge_sample_data"

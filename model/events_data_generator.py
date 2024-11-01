@@ -1,17 +1,20 @@
 # events_data_generator.py
 import json
+import random
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Tuple
-import random
 from random import randint
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-from model.sdlc_events import StageType, db_manager
-from model.timeline_enforcer import enforce_design_sprint_timeline, adjust_sprint_dates, adjust_commit_dates, \
-    adjust_pr_dates, adjust_cicd_dates, adjust_bug_dates
-from model.timeline_validators import validate_all_timelines
+from model.sdlc_events import PRStatus, StageType, db_manager
+from model.validators import (
+    validate_all_timelines,
+    verify_jira_references,
+    verify_project_references,
+    verify_temporal_consistency,
+)
 
 
 class DataGenerator:
@@ -73,8 +76,9 @@ class DataGenerator:
             },
         }
 
+    @staticmethod
     def generate_project_details(
-        self, projects: Dict[str, Dict[str, Any]]
+        projects: Dict[str, Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """Generate detailed project information"""
         project_details = []
@@ -124,9 +128,8 @@ class DataGenerator:
         ]
         return np.random.choice(stakeholder_groups)
 
-    def get_completion_probability(
-        self, completion_state: str, event_type: str
-    ) -> float:
+    @staticmethod
+    def get_completion_probability(completion_state: str, event_type: str) -> float:
         """Get probability of completion based on project state and event type"""
         probabilities = {
             "design_only": {
@@ -189,9 +192,8 @@ class DataGenerator:
         )
         return np.random.random() < completion_prob
 
-    def get_design_event_status(
-        self, completion_state: str, phase: str
-    ) -> Dict[str, Any]:
+    @staticmethod
+    def get_design_event_status(completion_state: str) -> Dict[str, Any]:
         """Get design event status based on completion state"""
         if completion_state in [
             "design_only",
@@ -216,8 +218,8 @@ class DataGenerator:
                 "review_status": np.random.choice(["Approved", "In Review", "Pending"]),
             }
 
+    @staticmethod
     def generate_date_sequence(
-        self,
         start_date: datetime,
         num_events: int,
         min_days: int = 1,
@@ -232,12 +234,13 @@ class DataGenerator:
             dates.append(current_date)
         return dates
 
-    def generate_unique_id(self, prefix: str = "") -> str:
+    @staticmethod
+    def generate_unique_id(prefix: str = "") -> str:
         """Generate a unique identifier"""
         return f"{prefix}{uuid.uuid4().hex[:8]}"
 
+    @staticmethod
     def get_random_jira_ids(
-        self,
         project_id: str,
         available_jiras: List[str],
         min_count: int = 1,
@@ -248,14 +251,16 @@ class DataGenerator:
         count = min(randint(min_count, max_count), len(project_jiras))
         return random.sample(project_jiras, count) if project_jiras else []
 
+    @staticmethod
     def get_random_commit_ids(
-        self, available_commits: List[str], min_count: int = 1, max_count: int = 3
+        available_commits: List[str], min_count: int = 1, max_count: int = 3
     ) -> List[str]:
         """Get random commit IDs"""
         count = min(randint(min_count, max_count), len(available_commits))
         return random.sample(available_commits, count) if available_commits else []
 
-    def generate_commit_metrics(self) -> Tuple[int, int, int, float, float]:
+    @staticmethod
+    def generate_commit_metrics() -> Tuple[int, int, int, float, float]:
         """Generate metrics for a code commit"""
         files_changed = np.random.randint(1, 20)
         lines_added = np.random.randint(10, 500)
@@ -264,7 +269,8 @@ class DataGenerator:
         lint_score = np.random.uniform(80, 99)
         return files_changed, lines_added, lines_removed, code_coverage, lint_score
 
-    def get_jira_status(self, completion_state: str) -> str:
+    @staticmethod
+    def get_jira_status(completion_state: str) -> str:
         """Get Jira item status based on completion state"""
         if completion_state in ["design_and_sprint", "pre_release", "all_complete"]:
             return "Done"
@@ -275,7 +281,8 @@ class DataGenerator:
                 ["To Do", "In Progress", "Done", "Blocked"], p=[0.3, 0.3, 0.2, 0.2]
             )
 
-    def get_commit_status(self, completion_state: str) -> Dict[str, Any]:
+    @staticmethod
+    def get_commit_status(completion_state: str) -> Dict[str, Any]:
         """Get commit related statuses based on completion state"""
         if completion_state in ["pre_release", "all_complete"]:
             return {
@@ -296,8 +303,9 @@ class DataGenerator:
                 "review_time_minutes": np.random.randint(30, 120),
             }
 
+    @staticmethod
     def get_build_ids_by_project(
-        self, cicd_events: List[Dict[str, Any]]
+        cicd_events: List[Dict[str, Any]]
     ) -> Dict[str, List[str]]:
         """Get build IDs grouped by project"""
         build_ids = {}
@@ -308,7 +316,8 @@ class DataGenerator:
                 build_ids[cicd["event_id"]].append(cicd["build_id"])
         return build_ids
 
-    def generate_root_cause(self) -> str:
+    @staticmethod
+    def generate_root_cause() -> str:
         """Generate random root cause for bugs"""
         causes = [
             "Code logic error",
@@ -326,7 +335,8 @@ class DataGenerator:
         ]
         return np.random.choice(causes)
 
-    def get_cicd_status(self, completion_state: str) -> Dict[str, Any]:
+    @staticmethod
+    def get_cicd_status(completion_state: str) -> Dict[str, Any]:
         """Get CI/CD event status based on completion state"""
         if completion_state in ["pre_release", "all_complete"]:
             return {
@@ -356,8 +366,9 @@ class DataGenerator:
                 },
             }
 
+    @staticmethod
     def associate_jiras_with_sprints(
-        self, sprint_data: List[Dict[str, Any]], jira_data: List[Dict[str, Any]]
+        sprint_data: List[Dict[str, Any]], jira_data: List[Dict[str, Any]]
     ) -> Dict[str, List[str]]:
         """Create associations between sprints and jiras"""
         sprint_jira_map = {}
@@ -403,8 +414,9 @@ class DataGenerator:
 
         return sprint_jira_map
 
+    @staticmethod
     def associate_commits_with_cicd(
-        self, cicd_data: List[Dict[str, Any]], commit_data: List[Dict[str, Any]]
+        cicd_data: List[Dict[str, Any]], commit_data: List[Dict[str, Any]]
     ) -> Dict[str, List[str]]:
         """Create associations between CICD events and commits"""
         cicd_commit_map = {}
@@ -455,9 +467,8 @@ class DataGenerator:
             }
         return {}
 
-    def get_sequential_story_points(
-        self, num_items: int, total_points: int
-    ) -> List[int]:
+    @staticmethod
+    def get_sequential_story_points(num_items: int, total_points: int) -> List[int]:
         """Generate a sequence of story points that sum to total_points"""
         points = []
         remaining_points = total_points
@@ -476,8 +487,9 @@ class DataGenerator:
         points.append(remaining_points)
         return points
 
+    @staticmethod
     def calculate_project_progress(
-        self, completion_state: str, elapsed_days: int, total_days: int
+        completion_state: str, elapsed_days: int, total_days: int
     ) -> float:
         """Calculate project progress percentage based on state and time"""
         time_progress = min(1.0, elapsed_days / total_days)
@@ -567,9 +579,7 @@ def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str
         completion_state = details["completion_state"]
 
         for phase in design_phases:
-            phase_status = data_generator.get_design_event_status(
-                completion_state, phase
-            )
+            phase_status = data_generator.get_design_event_status(completion_state)
             jira_id = f"{proj_id}-{phase.upper()}-1"  # Matches the ID format from generate_design_related_jiras
 
             # Initial event (START)
@@ -667,7 +677,7 @@ def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str
     return design_events
 
 
-def get_design_event_status(completion_state: str, phase: str) -> Dict[str, Any]:
+def get_design_event_status(completion_state: str) -> Dict[str, Any]:
     """Helper function to get design event status based on completion state"""
     if completion_state in [
         "design_only",
@@ -891,8 +901,9 @@ def generate_commits(
 
 
 # Update generate_cicd_events function
-def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]) -> Tuple[
-    List[Dict[str, Any]], Dict[str, List[str]]]:
+def generate_cicd_events(
+    projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
     """Modified CICD event generation to ensure proper temporal relationships"""
     cicd_events = []
     cicd_commit_map = {}
@@ -901,12 +912,12 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict
     # Group commits by project and sort by timestamp
     project_commits = {}
     for commit in commits:
-        if commit['event_id'] not in project_commits:
-            project_commits[commit['event_id']] = []
-        project_commits[commit['event_id']].append(commit)
+        if commit["event_id"] not in project_commits:
+            project_commits[commit["event_id"]] = []
+        project_commits[commit["event_id"]].append(commit)
 
     for proj_id in project_commits:
-        project_commits[proj_id].sort(key=lambda x: x['timestamp'])
+        project_commits[proj_id].sort(key=lambda x: x["timestamp"])
 
     for proj_id, proj_commits in project_commits.items():
         completion_state = projects[proj_id]["completion_state"]
@@ -915,7 +926,7 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict
         for i, commit in enumerate(proj_commits):
             # Only create CICD events for some commits
             if randint(1, 100) <= 80:  # 80% chance of creating CICD events
-                commit_time = commit['timestamp']
+                commit_time = commit["timestamp"]
 
                 for env in environments:
                     cicd_status = data_generator.get_cicd_status(completion_state)
@@ -935,9 +946,10 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict
                         "reason": None,
                     }
                     cicd_events.append(build_event)
-                    cicd_commit_map[build_event_id] = [commit['id']]
+                    cicd_commit_map[build_event_id] = [commit["id"]]
 
-    return sorted(cicd_events, key=lambda x: x['timestamp']), cicd_commit_map
+    return sorted(cicd_events, key=lambda x: x["timestamp"]), cicd_commit_map
+
 
 def generate_bugs(
     projects: Dict[str, Dict[str, Any]],
@@ -1051,10 +1063,6 @@ def generate_sprints(
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
         sprint_start = details["start_date"] + timedelta(days=14)
-        project_completion = details["start_date"] + timedelta(
-            weeks=12
-        )  # Assuming 12 weeks project duration
-
         available_jiras = project_jiras.get(proj_id, [])
         unassigned_jiras = set(jira["id"] for jira in available_jiras)
 
@@ -1287,96 +1295,8 @@ def generate_team_metrics(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str,
     return team_metrics
 
 
-def verify_temporal_consistency(
-    commits: List[Dict[str, Any]],
-    cicd_events: List[Dict[str, Any]],
-    cicd_commit_map: Dict[str, List[str]],
-) -> List[str]:
-    """Verify temporal consistency between commits and CICD events"""
-    errors = []
-
-    # Create timestamp lookup for commits
-    commit_timestamps = {commit["id"]: commit["timestamp"] for commit in commits}
-
-    # Check each CICD event
-    for event in cicd_events:
-        associated_commits = cicd_commit_map.get(event["id"], [])
-        for commit_id in associated_commits:
-            if commit_id not in commit_timestamps:
-                errors.append(
-                    f"CICD event {event['id']} references non-existent commit {commit_id}"
-                )
-                continue
-
-            commit_time = commit_timestamps[commit_id]
-            if commit_time >= event["timestamp"]:
-                errors.append(
-                    f"Temporal inconsistency: Commit {commit_id} ({commit_time.isoformat()}) "
-                    f"is newer than CICD event {event['id']} ({event['timestamp'].isoformat()})"
-                )
-
-    return errors
-
-
-def verify_project_references(all_data: Dict[str, Any]) -> List[str]:
-    """Verify all project references are valid"""
-    errors = []
-
-    # Get set of valid project IDs
-    project_ids = {proj["id"] for proj in all_data["projects"]}
-
-    # Check commits
-    for commit in all_data["commits"]:
-        if commit["event_id"] not in project_ids:
-            errors.append(
-                f"Commit {commit['id']} references invalid project {commit['event_id']}"
-            )
-
-    # Check CICD events
-    for event in all_data["cicd_events"]:
-        if event["event_id"] not in project_ids:
-            errors.append(
-                f"CICD event {event['id']} references invalid project {event['event_id']}"
-            )
-
-    # Check sprints
-    for sprint in all_data["sprints"]:
-        if sprint["event_id"] not in project_ids:
-            errors.append(
-                f"Sprint {sprint['id']} references invalid project {sprint['event_id']}"
-            )
-
-    return errors
-
-
-def verify_jira_references(all_data: Dict[str, Any]) -> List[str]:
-    """Verify all Jira references are valid"""
-    errors = []
-
-    # Get set of valid Jira IDs
-    jira_ids = {jira["id"] for jira in all_data["jira_items"]}
-
-    # Check commits
-    for commit in all_data["commits"]:
-        if commit["jira_id"] not in jira_ids:
-            errors.append(
-                f"Commit {commit['id']} references invalid Jira {commit['jira_id']}"
-            )
-
-    # Check sprint associations
-    for sprint_id, sprint_jiras in all_data["relationships"][
-        "sprint_jira_associations"
-    ].items():
-        for jira_id in sprint_jiras:
-            if jira_id not in jira_ids:
-                errors.append(f"Sprint {sprint_id} references invalid Jira {jira_id}")
-
-    return errors
-
-
 def generate_pull_requests(
-        projects: List[Dict[str, Any]],
-        commits: List[Dict[str, Any]]
+    projects: List[Dict[str, Any]], commits: List[Dict[str, Any]]
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Generate pull requests and comments with proper commit grouping"""
     pull_requests = []
@@ -1419,8 +1339,7 @@ def generate_pull_requests(
                 merged_at = created_at + timedelta(days=randint(1, 3))
             else:
                 status = np.random.choice(
-                    ["OPEN", "BLOCKED", "MERGED"],
-                    p=[0.4, 0.3, 0.3]
+                    ["OPEN", "BLOCKED", "MERGED"], p=[0.4, 0.3, 0.3]
                 )
                 merged_at = (
                     created_at + timedelta(days=randint(1, 3))
@@ -1429,20 +1348,22 @@ def generate_pull_requests(
                 )
 
             # Create PR
-            pull_requests.append({
-                "id": pr_id,
-                "created_at": created_at,
-                "project_id": proj_id,
-                "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
-                "description": f"Implementing changes for {project['title']}",
-                "branch_from": commit["branch"],
-                "branch_to": "main",
-                "author": commit["author"],
-                "status": status,
-                "merged_at": merged_at,
-                "commit_id": commit["id"],
-                "commit_timestamp": commit["timestamp"]
-            })
+            pull_requests.append(
+                {
+                    "id": pr_id,
+                    "created_at": created_at,
+                    "project_id": proj_id,
+                    "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
+                    "description": f"Implementing changes for {project['title']}",
+                    "branch_from": commit["branch"],
+                    "branch_to": "main",
+                    "author": commit["author"],
+                    "status": status,
+                    "merged_at": merged_at,
+                    "commit_id": commit["id"],
+                    "commit_timestamp": commit["timestamp"],
+                }
+            )
 
             # Generate comments for the PR
             num_comments = randint(2, 8)
@@ -1458,7 +1379,7 @@ def generate_pull_requests(
                 "This might impact performance",
                 "Approved after addressing comments",
                 "Need to fix the failing tests",
-                "Should we add logging here?"
+                "Should we add logging here?",
             ]
 
             for _ in range(num_comments):
@@ -1467,18 +1388,24 @@ def generate_pull_requests(
                     break
 
                 template = np.random.choice(comment_templates)
-                content = template.format(num=randint(1, commit['files_changed'])) \
-                    if "{num}" in template else template
+                content = (
+                    template.format(num=randint(1, commit["files_changed"]))
+                    if "{num}" in template
+                    else template
+                )
 
-                pr_comments.append({
-                    "id": f"COM-{uuid.uuid4().hex[:8]}",
-                    "pr_id": pr_id,
-                    "created_at": comment_time,
-                    "author": f"reviewer{randint(1, 4)}@example.com",
-                    "content": content
-                })
+                pr_comments.append(
+                    {
+                        "id": f"COM-{uuid.uuid4().hex[:8]}",
+                        "pr_id": pr_id,
+                        "created_at": comment_time,
+                        "author": f"reviewer{randint(1, 4)}@example.com",
+                        "content": content,
+                    }
+                )
 
     return pull_requests, pr_comments
+
 
 def generate_all_data() -> Dict[str, Any]:
     """Generate all data for the application with comprehensive validation and timeline constraints"""
@@ -1542,7 +1469,9 @@ def generate_all_data() -> Dict[str, Any]:
         print("Verifying data consistency...")
 
         # Verify temporal consistency
-        temporal_errors = verify_temporal_consistency(commits, cicd_events, cicd_commit_map)
+        temporal_errors = verify_temporal_consistency(
+            commits, cicd_events, cicd_commit_map
+        )
         if temporal_errors:
             print("Temporal consistency errors:")
             for error in temporal_errors:
@@ -1586,67 +1515,6 @@ def generate_all_data() -> Dict[str, Any]:
     except Exception as e:
         print(f"Error generating data: {str(e)}")
         raise
-
-def validate_relationships(data: Dict[str, Any]) -> List[str]:
-    """Validate all relationships in the generated data"""
-    validation_errors = []
-
-    # Validate commits have valid Jira IDs
-    jira_ids = set(jira["id"] for jira in data["jira_items"])
-    for commit in data["commits"]:
-        if commit["jira_id"] not in jira_ids:
-            validation_errors.append(
-                f"Commit {commit['id']} has invalid jira_id {commit['jira_id']}"
-            )
-
-    # Validate bugs have valid Jira IDs and build IDs
-    build_ids = set()
-    for cicd in data["cicd_events"]:
-        if cicd["build_id"]:
-            build_ids.add(cicd["build_id"])
-
-    for bug in data["bugs"]:
-        if bug["jira_id"] not in jira_ids:
-            validation_errors.append(
-                f"Bug {bug['id']} has invalid jira_id {bug['jira_id']}"
-            )
-        if bug["build_id"] not in build_ids:
-            validation_errors.append(
-                f"Bug {bug['id']} has invalid build_id {bug['build_id']}"
-            )
-
-    # Validate sprint-jira associations
-    sprint_ids = set(sprint["id"] for sprint in data["sprints"])
-    for sprint_id, associated_jiras in data["relationships"][
-        "sprint_jira_associations"
-    ].items():
-        if sprint_id not in sprint_ids:
-            validation_errors.append(
-                f"Invalid sprint_id {sprint_id} in sprint-jira associations"
-            )
-        for jira_id in associated_jiras:
-            if jira_id not in jira_ids:
-                validation_errors.append(
-                    f"Invalid jira_id {jira_id} in sprint-jira associations"
-                )
-
-    # Validate CICD-commit associations
-    commit_ids = set(commit["id"] for commit in data["commits"])
-    cicd_ids = set(cicd["id"] for cicd in data["cicd_events"])
-    for cicd_id, associated_commits in data["relationships"][
-        "cicd_commit_associations"
-    ].items():
-        if cicd_id not in cicd_ids:
-            validation_errors.append(
-                f"Invalid cicd_id {cicd_id} in cicd-commit associations"
-            )
-        for commit_id in associated_commits:
-            if commit_id not in commit_ids:
-                validation_errors.append(
-                    f"Invalid commit_id {commit_id} in cicd-commit associations"
-                )
-
-    return validation_errors
 
 
 def get_sample_data() -> Dict[str, Any]:
@@ -1719,3 +1587,205 @@ def write_sample_data(filename: str = "sample_data.json") -> None:
 
 if __name__ == "__main__":
     write_sample_data()
+
+
+def enforce_design_sprint_timeline(
+    projects: Dict[str, Dict[str, Any]]
+) -> Dict[str, datetime]:
+    """Calculate and enforce design phase completion times for each project"""
+    design_completion_times = {}
+
+    for proj_id, details in projects.items():
+        # Set design phase to complete in first 2-3 weeks
+        design_duration = timedelta(days=randint(14, 21))
+        design_completion_times[proj_id] = details["start_date"] + design_duration
+
+    return design_completion_times
+
+
+def adjust_sprint_dates(
+    sprints: List[Dict[str, Any]],
+    jira_items: List[Dict[str, Any]],
+    design_completion_times: Dict[str, datetime],
+) -> List[Dict[str, Any]]:
+    """Adjust sprint dates based on Jira timelines and design completion"""
+    project_jiras = {}
+    for jira in jira_items:
+        if jira["event_id"] not in project_jiras:
+            project_jiras[jira["event_id"]] = []
+        project_jiras[jira["event_id"]].append(jira)
+
+    adjusted_sprints = []
+    for sprint in sprints:
+        proj_id = sprint["event_id"]
+        design_completion = design_completion_times.get(proj_id)
+
+        if design_completion:
+            # Ensure sprint starts after design completion
+            sprint_start = max(
+                design_completion + timedelta(days=1), sprint["start_date"]
+            )
+            sprint["start_date"] = sprint_start
+
+            # Adjust sprint end date based on Jira completions
+            sprint_jiras = [
+                j
+                for j in project_jiras.get(proj_id, [])
+                if j.get("sprint_id") == sprint["id"]
+            ]
+            if sprint_jiras:
+                latest_completion = max(
+                    j["completed_date"] for j in sprint_jiras if j.get("completed_date")
+                )
+                sprint["end_date"] = latest_completion
+
+        adjusted_sprints.append(sprint)
+
+    return adjusted_sprints
+
+
+def adjust_commit_dates(
+    commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Adjust commit dates to ensure they happen after Jira completion"""
+    jira_completion_times = {
+        j["id"]: j.get("completed_date") for j in jira_items if j.get("completed_date")
+    }
+
+    adjusted_commits = []
+    for commit in commits:
+        jira_completion = jira_completion_times.get(commit["jira_id"])
+        if jira_completion:
+            # Set commit timestamp to jira completion time plus random minutes
+            commit["timestamp"] = jira_completion + timedelta(minutes=randint(5, 60))
+        adjusted_commits.append(commit)
+
+    return adjusted_commits
+
+
+def adjust_pr_dates(
+    pull_requests: List[Dict[str, Any]], commits: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Adjust PR dates to ensure they start after commits"""
+    commit_times = {(c["id"], c["timestamp"]): c["timestamp"] for c in commits}
+
+    adjusted_prs = []
+    for pr in pull_requests:
+        commit_time = commit_times.get((pr["commit_id"], pr["commit_timestamp"]))
+        if commit_time:
+            # Set PR creation time to commit time plus random minutes
+            pr["created_at"] = commit_time + timedelta(minutes=randint(5, 30))
+            if pr["status"] == PRStatus.MERGED:
+                pr["merged_at"] = pr["created_at"] + timedelta(hours=randint(1, 24))
+        adjusted_prs.append(pr)
+
+    return adjusted_prs
+
+
+def enforce_timeline_constraints(all_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Enforce all timeline constraints on the data"""
+    # Get design completion times
+    design_completion_times = enforce_design_sprint_timeline(all_data["projects"])
+
+    # Adjust dates for all entities
+    all_data["sprints"] = adjust_sprint_dates(
+        all_data["sprints"], all_data["jira_items"], design_completion_times
+    )
+
+    all_data["commits"] = adjust_commit_dates(
+        all_data["commits"], all_data["jira_items"]
+    )
+
+    all_data["pull_requests"] = adjust_pr_dates(
+        all_data["pull_requests"], all_data["commits"]
+    )
+
+    all_data["cicd_events"] = adjust_cicd_dates(
+        all_data["cicd_events"],
+        all_data["pull_requests"],
+        all_data["relationships"]["cicd_commit_associations"],
+    )
+
+    all_data["bugs"] = adjust_bug_dates(all_data["bugs"], all_data["cicd_events"])
+
+    return all_data
+
+
+def adjust_bug_dates(
+    bugs: List[Dict[str, Any]], cicd_events: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Adjust P0 bug dates to ensure they happen after CI/CD completion"""
+    build_completion_times = {
+        event["build_id"]: event["timestamp"] for event in cicd_events
+    }
+
+    adjusted_bugs = []
+    for bug in bugs:
+        if bug["severity"] == "P0":
+            build_completion = build_completion_times.get(bug["build_id"])
+            if build_completion:
+                bug["created_date"] = build_completion + timedelta(hours=randint(1, 24))
+                if bug["status"] == "Fixed":
+                    bug["resolved_date"] = bug["created_date"] + timedelta(
+                        hours=randint(4, 72)
+                    )
+        adjusted_bugs.append(bug)
+
+    return adjusted_bugs
+
+
+def adjust_cicd_dates(
+    cicd_events: List[Dict[str, Any]],
+    pull_requests: List[Dict[str, Any]],
+    cicd_commit_map: Dict[str, List[str]],
+) -> List[Dict[str, Any]]:
+    """Adjust CI/CD event dates to ensure they start after PR completion and commits"""
+    # Create map of commit timestamps by commit ID
+    commit_times = {}
+    for pr in pull_requests:
+        if pr["commit_id"] and pr["commit_timestamp"]:
+            commit_times[pr["commit_id"]] = pr["commit_timestamp"]
+
+    # Create map of PR merge times by commit ID
+    pr_merge_times = {
+        pr["commit_id"]: pr["merged_at"]
+        for pr in pull_requests
+        if pr["status"] == "MERGED" and pr.get("merged_at")
+    }
+
+    adjusted_events = []
+    for event in cicd_events:
+        # Get associated commits from the mapping
+        associated_commits = cicd_commit_map.get(event["id"], [])
+
+        if associated_commits:
+            # Find latest commit time and PR merge time
+            latest_commit_time = max(
+                (
+                    commit_times.get(commit_id)
+                    for commit_id in associated_commits
+                    if commit_id in commit_times
+                ),
+                default=None,
+            )
+
+            merge_times = [
+                pr_merge_times.get(commit_id)
+                for commit_id in associated_commits
+                if commit_id in pr_merge_times
+            ]
+            latest_merge = max(merge_times) if merge_times else None
+
+            # CICD event must happen after both commit and PR merge
+            reference_time = (
+                max(filter(None, [latest_commit_time, latest_merge]))
+                if latest_commit_time or latest_merge
+                else None
+            )
+
+            if reference_time:
+                event["timestamp"] = reference_time + timedelta(minutes=randint(5, 30))
+
+        adjusted_events.append(event)
+
+    return sorted(adjusted_events, key=lambda x: x["timestamp"])

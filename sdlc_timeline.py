@@ -1,9 +1,10 @@
-import streamlit as st
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
 from plotly.subplots import make_subplots
 from sqlalchemy import create_engine
-import plotly.express as px
+
 
 # Database connection
 def get_database_connection():
@@ -15,6 +16,7 @@ def get_database_connection():
     connection_string = f"postgresql://{user}:{password}@{host}:{port}/{db_name}"
     return create_engine(connection_string)
 
+
 def get_project_list():
     engine = get_database_connection()
     query = """
@@ -23,6 +25,7 @@ def get_project_list():
     ORDER BY start_date DESC
     """
     return pd.read_sql_query(query, engine)
+
 
 def get_design_phase_data(project_id):
     engine = get_database_connection()
@@ -38,7 +41,8 @@ def get_design_phase_data(project_id):
     GROUP BY design_type
     ORDER BY start_time
     """
-    return pd.read_sql_query(query, engine, params={'project_id': project_id})
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
+
 
 def get_sprint_data(project_id):
     engine = get_database_connection()
@@ -58,7 +62,8 @@ def get_sprint_data(project_id):
     WHERE event_id = %(project_id)s
     ORDER BY start_date
     """
-    return pd.read_sql_query(query, engine, params={'project_id': project_id})
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
+
 
 def get_commit_data(project_id):
     engine = get_database_connection()
@@ -76,7 +81,8 @@ def get_commit_data(project_id):
     GROUP BY DATE(timestamp)
     ORDER BY commit_date
     """
-    return pd.read_sql_query(query, engine, params={'project_id': project_id})
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
+
 
 def get_pr_data(project_id):
     engine = get_database_connection()
@@ -91,7 +97,8 @@ def get_pr_data(project_id):
     GROUP BY DATE(created_at), status
     ORDER BY pr_date
     """
-    return pd.read_sql_query(query, engine, params={'project_id': project_id})
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
+
 
 def get_cicd_data(project_id):
     engine = get_database_connection()
@@ -108,7 +115,8 @@ def get_cicd_data(project_id):
     GROUP BY DATE(timestamp), environment, event_type, status
     ORDER BY deployment_date
     """
-    return pd.read_sql_query(query, engine, params={'project_id': project_id})
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
+
 
 def get_bug_data(project_id):
     engine = get_database_connection()
@@ -124,16 +132,33 @@ def get_bug_data(project_id):
     GROUP BY DATE(created_date), severity, status
     ORDER BY bug_date
     """
-    return pd.read_sql_query(query, engine, params={'project_id': project_id})
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
 
 
-def create_timeline_visualization(design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data):
+def create_timeline_visualization(
+    design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data
+):
     # Create figure with subplots
     fig = make_subplots(
-        rows=6, cols=1,
-        subplot_titles=("Design Phase", "Sprint Progress", "Commits", "Pull Requests", "CI/CD Events", "P0 Bugs"),
+        rows=6,
+        cols=1,
+        subplot_titles=(
+            "Design Phase",
+            "Sprint Progress",
+            "Commits",
+            "Pull Requests",
+            "CI/CD Events",
+            "P0 Bugs",
+        ),
         vertical_spacing=0.05,
-        row_heights=[0.2, 0.2, 0.15, 0.15, 0.15, 0.15]  # Changed from 'heights' to 'row_heights'
+        row_heights=[
+            0.2,
+            0.2,
+            0.15,
+            0.15,
+            0.15,
+            0.15,
+        ],  # Changed from 'heights' to 'row_heights'
     )
 
     # Design Phase Timeline
@@ -141,108 +166,107 @@ def create_timeline_visualization(design_data, sprint_data, commit_data, pr_data
         for idx, row in design_data.iterrows():
             fig.add_trace(
                 go.Bar(
-                    x=[row['start_time'], row['end_time']],
-                    y=[row['design_type'], row['design_type']],
-                    orientation='h',
-                    name=row['design_type'],
-                    showlegend=False
+                    x=[row["start_time"], row["end_time"]],
+                    y=[row["design_type"], row["design_type"]],
+                    orientation="h",
+                    name=row["design_type"],
+                    showlegend=False,
                 ),
-                row=1, col=1
+                row=1,
+                col=1,
             )
 
     # Sprint Progress
     if not sprint_data.empty:
         fig.add_trace(
             go.Scatter(
-                x=sprint_data['end_date'],
-                y=sprint_data['completed_story_points'],
-                mode='lines+markers',
-                name='Completed Story Points',
-                line=dict(color='green')
+                x=sprint_data["end_date"],
+                y=sprint_data["completed_story_points"],
+                mode="lines+markers",
+                name="Completed Story Points",
+                line=dict(color="green"),
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
         fig.add_trace(
             go.Scatter(
-                x=sprint_data['end_date'],
-                y=sprint_data['planned_story_points'],
-                mode='lines+markers',
-                name='Planned Story Points',
-                line=dict(color='blue')
+                x=sprint_data["end_date"],
+                y=sprint_data["planned_story_points"],
+                mode="lines+markers",
+                name="Planned Story Points",
+                line=dict(color="blue"),
             ),
-            row=2, col=1
+            row=2,
+            col=1,
         )
 
     # Commit Activity
     if not commit_data.empty:
         fig.add_trace(
             go.Bar(
-                x=commit_data['commit_date'],
-                y=commit_data['commit_count'],
-                name='Commits',
-                marker_color='purple'
+                x=commit_data["commit_date"],
+                y=commit_data["commit_count"],
+                name="Commits",
+                marker_color="purple",
             ),
-            row=3, col=1
+            row=3,
+            col=1,
         )
 
     # Pull Requests
     if not pr_data.empty:
-        status_colors = {
-            'OPEN': 'yellow',
-            'MERGED': 'green',
-            'BLOCKED': 'red'
-        }
-        for status in pr_data['status'].unique():
-            status_data = pr_data[pr_data['status'] == status]
+        status_colors = {"OPEN": "yellow", "MERGED": "green", "BLOCKED": "red"}
+        for status in pr_data["status"].unique():
+            status_data = pr_data[pr_data["status"] == status]
             fig.add_trace(
                 go.Scatter(
-                    x=status_data['pr_date'],
-                    y=status_data['pr_count'],
-                    mode='lines+markers',
-                    name=f'PRs - {status}',
-                    line=dict(color=status_colors.get(status, 'gray'))
+                    x=status_data["pr_date"],
+                    y=status_data["pr_count"],
+                    mode="lines+markers",
+                    name=f"PRs - {status}",
+                    line=dict(color=status_colors.get(status, "gray")),
                 ),
-                row=4, col=1
+                row=4,
+                col=1,
             )
 
     # CI/CD Events
     if not cicd_data.empty:
         env_colors = {
-            'dev': 'lightblue',
-            'staging': 'blue',
-            'qa': 'darkblue',
-            'production': 'navy'
+            "dev": "lightblue",
+            "staging": "blue",
+            "qa": "darkblue",
+            "production": "navy",
         }
-        for env in cicd_data['environment'].unique():
-            env_data = cicd_data[cicd_data['environment'] == env]
+        for env in cicd_data["environment"].unique():
+            env_data = cicd_data[cicd_data["environment"] == env]
             fig.add_trace(
                 go.Bar(
-                    x=env_data['deployment_date'],
-                    y=env_data['event_count'],
-                    name=f'CI/CD - {env}',
-                    marker_color=env_colors.get(env, 'blue')
+                    x=env_data["deployment_date"],
+                    y=env_data["event_count"],
+                    name=f"CI/CD - {env}",
+                    marker_color=env_colors.get(env, "blue"),
                 ),
-                row=5, col=1
+                row=5,
+                col=1,
             )
 
     # Bugs
     if not bug_data.empty:
-        status_colors = {
-            'Open': 'red',
-            'In Progress': 'orange',
-            'Fixed': 'green'
-        }
-        for status in bug_data['status'].unique():
-            status_data = bug_data[bug_data['status'] == status]
+        status_colors = {"Open": "red", "In Progress": "orange", "Fixed": "green"}
+        for status in bug_data["status"].unique():
+            status_data = bug_data[bug_data["status"] == status]
             fig.add_trace(
                 go.Scatter(
-                    x=status_data['bug_date'],
-                    y=status_data['bug_count'],
-                    mode='lines+markers',
-                    name=f'P0 Bugs - {status}',
-                    line=dict(color=status_colors.get(status, 'gray'))
+                    x=status_data["bug_date"],
+                    y=status_data["bug_count"],
+                    mode="lines+markers",
+                    name=f"P0 Bugs - {status}",
+                    line=dict(color=status_colors.get(status, "gray")),
                 ),
-                row=6, col=1
+                row=6,
+                col=1,
             )
 
     # Update layout
@@ -250,7 +274,7 @@ def create_timeline_visualization(design_data, sprint_data, commit_data, pr_data
         height=1200,
         showlegend=True,
         title_text="Software Development Lifecycle Timeline",
-        template="plotly_white"
+        template="plotly_white",
     )
 
     # Update y-axes labels
@@ -262,25 +286,24 @@ def create_timeline_visualization(design_data, sprint_data, commit_data, pr_data
     fig.update_yaxes(title_text="Bug Count", row=6, col=1)
 
     # Update x-axes labels
-    fig.update_xaxes(title_text="Date", row=6, col=1)  # Only show date label on bottom plot
+    fig.update_xaxes(
+        title_text="Date", row=6, col=1
+    )  # Only show date label on bottom plot
 
     # Update subplot spacing
     fig.update_layout(
         height=1200,
         showlegend=True,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=-0.2,
-            xanchor="center",
-            x=0.5
-        ),
-        margin=dict(t=100, b=100)  # Add more margin at top and bottom
+        legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+        margin=dict(t=100, b=100),  # Add more margin at top and bottom
     )
 
     return fig
 
-def create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data, project_info):
+
+def create_timeline_gantt(
+    design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data, project_info
+):
     """Create a Gantt chart showing the timeline of different phases"""
 
     def get_date_range(df, start_col, end_col):
@@ -296,72 +319,88 @@ def create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_d
     # Add Design Phase
     if not design_data.empty:
         for _, row in design_data.iterrows():
-            timeline_data.append({
-                'Task': f"Design: {row['design_type']}",
-                'Start': row['start_time'],
-                'Finish': row['end_time'],
-                'Phase': 'Design',
-                'Details': f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}"
-            })
+            timeline_data.append(
+                {
+                    "Task": f"Design: {row['design_type']}",
+                    "Start": row["start_time"],
+                    "Finish": row["end_time"],
+                    "Phase": "Design",
+                    "Details": f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}",
+                }
+            )
 
     # Add Sprints
     if not sprint_data.empty:
         for _, row in sprint_data.iterrows():
-            timeline_data.append({
-                'Task': f"Sprint: {row['id']}",
-                'Start': row['start_date'],
-                'Finish': row['end_date'],
-                'Phase': 'Sprint',
-                'Details': f"Completed: {row['completed_story_points']}/{row['planned_story_points']} points"
-            })
+            timeline_data.append(
+                {
+                    "Task": f"Sprint: {row['id']}",
+                    "Start": row["start_date"],
+                    "Finish": row["end_date"],
+                    "Phase": "Sprint",
+                    "Details": f"Completed: {row['completed_story_points']}/{row['planned_story_points']} points",
+                }
+            )
 
     # Add Development Phases (based on commit activity)
     if not commit_data.empty:
-        timeline_data.append({
-            'Task': 'Development',
-            'Start': commit_data['commit_date'].min(),
-            'Finish': commit_data['commit_date'].max(),
-            'Phase': 'Development',
-            'Details': f"Total Commits: {commit_data['commit_count'].sum()}"
-        })
+        timeline_data.append(
+            {
+                "Task": "Development",
+                "Start": commit_data["commit_date"].min(),
+                "Finish": commit_data["commit_date"].max(),
+                "Phase": "Development",
+                "Details": f"Total Commits: {commit_data['commit_count'].sum()}",
+            }
+        )
 
     # Add PR Phase
     if not pr_data.empty:
-        timeline_data.append({
-            'Task': 'Code Reviews',
-            'Start': pd.to_datetime(pr_data['pr_date'].min()),
-            'Finish': pd.to_datetime(pr_data['pr_date'].max()),
-            'Phase': 'Code Review',
-            'Details': f"Total PRs: {pr_data['pr_count'].sum()}"
-        })
+        timeline_data.append(
+            {
+                "Task": "Code Reviews",
+                "Start": pd.to_datetime(pr_data["pr_date"].min()),
+                "Finish": pd.to_datetime(pr_data["pr_date"].max()),
+                "Phase": "Code Review",
+                "Details": f"Total PRs: {pr_data['pr_count'].sum()}",
+            }
+        )
 
     # Add CI/CD Phase
     if not cicd_data.empty:
-        for env in cicd_data['environment'].unique():
-            env_data = cicd_data[cicd_data['environment'] == env]
-            timeline_data.append({
-                'Task': f"CI/CD: {env}",
-                'Start': env_data['deployment_date'].min(),
-                'Finish': env_data['deployment_date'].max(),
-                'Phase': 'CI/CD',
-                'Details': f"Environment: {env}\nEvents: {env_data['event_count'].sum()}"
-            })
+        for env in cicd_data["environment"].unique():
+            env_data = cicd_data[cicd_data["environment"] == env]
+            timeline_data.append(
+                {
+                    "Task": f"CI/CD: {env}",
+                    "Start": env_data["deployment_date"].min(),
+                    "Finish": env_data["deployment_date"].max(),
+                    "Phase": "CI/CD",
+                    "Details": f"Environment: {env}\nEvents: {env_data['event_count'].sum()}",
+                }
+            )
 
     # Create DataFrame
     df = pd.DataFrame(timeline_data)
 
     # Create Gantt chart
     colors = {
-        'Design': '#2E86C1',
-        'Sprint': '#28B463',
-        'Development': '#8E44AD',
-        'Code Review': '#D35400',
-        'CI/CD': '#1ABC9C'
+        "Design": "#2E86C1",
+        "Sprint": "#28B463",
+        "Development": "#8E44AD",
+        "Code Review": "#D35400",
+        "CI/CD": "#1ABC9C",
     }
 
-    fig = px.timeline(df, x_start="Start", x_end="Finish", y="Task", color="Phase",
-                      color_discrete_map=colors,
-                      hover_data=["Details"])
+    fig = px.timeline(
+        df,
+        x_start="Start",
+        x_end="Finish",
+        y="Task",
+        color="Phase",
+        color_discrete_map=colors,
+        hover_data=["Details"],
+    )
 
     # Update layout
     fig.update_layout(
@@ -372,53 +411,58 @@ def create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_d
             tickformat="%Y-%m-%d",
             tickangle=45,
         ),
-        yaxis=dict(
-            title="",
-            categoryorder="total ascending"
-        ),
+        yaxis=dict(title="", categoryorder="total ascending"),
         showlegend=True,
         legend_title="Phase",
-        hovermode="x unified"
+        hovermode="x unified",
     )
 
     return fig
 
 
-def create_metrics_dashboard(design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data):
+def create_metrics_dashboard(
+    design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data
+):
     """Create a dashboard of key metrics"""
 
     # Sprint Burndown
     if not sprint_data.empty:
         sprint_fig = go.Figure()
-        sprint_fig.add_trace(go.Scatter(
-            x=sprint_data['end_date'],
-            y=sprint_data['completed_story_points'],
-            name='Completed Points',
-            mode='lines+markers',
-            line=dict(color='green')
-        ))
-        sprint_fig.add_trace(go.Scatter(
-            x=sprint_data['end_date'],
-            y=sprint_data['planned_story_points'],
-            name='Planned Points',
-            mode='lines+markers',
-            line=dict(color='blue', dash='dash')
-        ))
+        sprint_fig.add_trace(
+            go.Scatter(
+                x=sprint_data["end_date"],
+                y=sprint_data["completed_story_points"],
+                name="Completed Points",
+                mode="lines+markers",
+                line=dict(color="green"),
+            )
+        )
+        sprint_fig.add_trace(
+            go.Scatter(
+                x=sprint_data["end_date"],
+                y=sprint_data["planned_story_points"],
+                name="Planned Points",
+                mode="lines+markers",
+                line=dict(color="blue", dash="dash"),
+            )
+        )
         sprint_fig.update_layout(
             title="Sprint Burndown",
             xaxis_title="Sprint End Date",
             yaxis_title="Story Points",
-            height=300
+            height=300,
         )
     else:
         sprint_fig = None
 
     # Development Activity
     if not commit_data.empty:
-        commit_fig = px.bar(commit_data,
-                            x='commit_date',
-                            y='commit_count',
-                            title="Daily Commit Activity")
+        commit_fig = px.bar(
+            commit_data,
+            x="commit_date",
+            y="commit_count",
+            title="Daily Commit Activity",
+        )
         commit_fig.update_layout(height=300)
     else:
         commit_fig = None
@@ -442,7 +486,7 @@ def create_metric_card(title, value, delta=None, help_text=None):
             {f'<p style="font-size: 0.8rem; margin: 0.5rem 0 0 0; color: #666;">{help_text}</p>' if help_text else ''}
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
@@ -450,7 +494,8 @@ def main():
     st.set_page_config(page_title="SDLC Timeline", layout="wide")
 
     # Custom CSS for better styling
-    st.markdown("""
+    st.markdown(
+        """
         <style>
         .stTabs [data-baseweb="tab-panel"] {
             padding-top: 1rem;
@@ -462,25 +507,32 @@ def main():
             gap: 8px;
         }
         </style>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     st.title("Software Development Lifecycle Timeline")
 
     try:
         projects_df = get_project_list()
-        project_options = ['None'] + projects_df['id'].tolist()
+        project_options = ["None"] + projects_df["id"].tolist()
 
         selected_project = st.selectbox(
             "Select Project",
             options=project_options,
-            format_func=lambda x: x if x == 'None' else f"{x} - {projects_df[projects_df['id'] == x]['title'].iloc[0]}"
+            format_func=lambda x: (
+                x
+                if x == "None"
+                else f"{x} - {projects_df[projects_df['id'] == x]['title'].iloc[0]}"
+            ),
         )
 
-        if selected_project and selected_project != 'None':
-            project_info = projects_df[projects_df['id'] == selected_project].iloc[0]
+        if selected_project and selected_project != "None":
+            project_info = projects_df[projects_df["id"] == selected_project].iloc[0]
 
             # Project Information Header
-            st.markdown(f"""
+            st.markdown(
+                f"""
                 <div style="
                     padding: 1.5rem;
                     border-radius: 0.5rem;
@@ -491,10 +543,12 @@ def main():
                     <h2 style="margin: 0;">{project_info['title']}</h2>
                     <p style="margin: 0.5rem 0;">Status: {project_info['status']} | Started: {project_info['start_date'].strftime('%Y-%m-%d')}</p>
                 </div>
-            """, unsafe_allow_html=True)
+            """,
+                unsafe_allow_html=True,
+            )
 
             # Fetch all data
-            with st.spinner('Loading project data...'):
+            with st.spinner("Loading project data..."):
                 design_data = get_design_phase_data(selected_project)
                 sprint_data = get_sprint_data(selected_project)
                 commit_data = get_commit_data(selected_project)
@@ -505,7 +559,13 @@ def main():
             # Timeline View
             st.subheader("Project Timeline")
             timeline_fig = create_timeline_gantt(
-                design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data, project_info
+                design_data,
+                sprint_data,
+                commit_data,
+                pr_data,
+                cicd_data,
+                bug_data,
+                project_info,
             )
             st.plotly_chart(timeline_fig, use_container_width=True)
 
@@ -515,19 +575,19 @@ def main():
             )
 
             # Detailed Metrics in Tabs with Cards
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "Design", "Sprint Progress", "Development", "CI/CD", "Quality"
-            ])
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(
+                ["Design", "Sprint Progress", "Development", "CI/CD", "Quality"]
+            )
 
             with tab1:
                 if not design_data.empty:
                     st.markdown("### Design Phase Metrics")
                     for _, row in design_data.iterrows():
-                        duration = (row['end_time'] - row['start_time']).days
+                        duration = (row["end_time"] - row["start_time"]).days
                         create_metric_card(
-                            row['design_type'],
+                            row["design_type"],
                             f"{duration} days",
-                            help_text=f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}"
+                            help_text=f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}",
                         )
                 else:
                     st.info("No design phase data available")
@@ -541,23 +601,24 @@ def main():
                         create_metric_card(
                             "Average Velocity",
                             f"{sprint_data['team_velocity'].mean():.1f}",
-                            help_text="Points completed per sprint"
+                            help_text="Points completed per sprint",
                         )
                     with col2:
                         completion_rate = (
-                                sprint_data['completed_stories'].sum() /
-                                sprint_data['planned_stories'].sum() * 100
+                            sprint_data["completed_stories"].sum()
+                            / sprint_data["planned_stories"].sum()
+                            * 100
                         )
                         create_metric_card(
                             "Completion Rate",
                             f"{completion_rate:.1f}%",
-                            help_text="Stories completed vs planned"
+                            help_text="Stories completed vs planned",
                         )
                     with col3:
                         create_metric_card(
                             "Total Story Points",
                             f"{sprint_data['completed_story_points'].sum()}",
-                            help_text="Completed across all sprints"
+                            help_text="Completed across all sprints",
                         )
                 else:
                     st.info("No sprint data available")
@@ -570,20 +631,20 @@ def main():
                     with col1:
                         create_metric_card(
                             "Total Commits",
-                            commit_data['commit_count'].sum(),
-                            help_text="Across all branches"
+                            commit_data["commit_count"].sum(),
+                            help_text="Across all branches",
                         )
                     with col2:
                         create_metric_card(
                             "Code Coverage",
                             f"{commit_data['avg_coverage'].mean():.1f}%",
-                            help_text="Average across all commits"
+                            help_text="Average across all commits",
                         )
                     with col3:
                         create_metric_card(
                             "Code Changes",
                             f"+{commit_data['total_lines_added'].sum()}/-{commit_data['total_lines_removed'].sum()}",
-                            help_text="Lines added/removed"
+                            help_text="Lines added/removed",
                         )
                 else:
                     st.info("No commit data available")
@@ -593,19 +654,20 @@ def main():
                     col1, col2 = st.columns(2)
                     with col1:
                         success_rate = (
-                                len(cicd_data[cicd_data['status'] == 'success']) /
-                                len(cicd_data) * 100
+                            len(cicd_data[cicd_data["status"] == "success"])
+                            / len(cicd_data)
+                            * 100
                         )
                         create_metric_card(
                             "Build Success Rate",
                             f"{success_rate:.1f}%",
-                            help_text="Successful builds percentage"
+                            help_text="Successful builds percentage",
                         )
                     with col2:
                         create_metric_card(
                             "Average Build Duration",
                             f"{cicd_data['avg_duration'].mean():.0f}s",
-                            help_text="Average build time in seconds"
+                            help_text="Average build time in seconds",
                         )
                 else:
                     st.info("No CI/CD data available")
@@ -616,16 +678,16 @@ def main():
                     with col1:
                         create_metric_card(
                             "Total P0 Bugs",
-                            bug_data['bug_count'].sum(),
-                            help_text="High priority bugs"
+                            bug_data["bug_count"].sum(),
+                            help_text="High priority bugs",
                         )
                     with col2:
-                        avg_resolution = bug_data['avg_resolution_time'].mean()
+                        avg_resolution = bug_data["avg_resolution_time"].mean()
                         if pd.notna(avg_resolution):
                             create_metric_card(
                                 "Average Resolution Time",
                                 f"{avg_resolution:.1f}h",
-                                help_text="Average time to fix P0 bugs"
+                                help_text="Average time to fix P0 bugs",
                             )
                 else:
                     st.info("No bug data available")

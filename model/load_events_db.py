@@ -1,10 +1,26 @@
 # load_events_db.py
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import get_sample_data, generate_pull_requests
-from model.sdlc_events import JiraItem, Sprint, create_project, create_design_event, create_jira_item, create_commit, \
-    create_cicd_event, create_bug, create_sprint, create_sprint_jira_associations, create_team_metrics, DatabaseManager, \
-    db_name, server_connection_string, connection_string, create_pull_request, create_pr_comment
+from model.events_data_generator import generate_pull_requests, get_sample_data
+from model.sdlc_events import (
+    DatabaseManager,
+    JiraItem,
+    Sprint,
+    connection_string,
+    create_bug,
+    create_cicd_event,
+    create_commit,
+    create_design_event,
+    create_jira_item,
+    create_pr_comment,
+    create_project,
+    create_pull_request,
+    create_sprint,
+    create_sprint_jira_associations,
+    create_team_metrics,
+    db_name,
+    server_connection_string,
+)
 
 # Create an engine for the server connection
 engine = create_engine(server_connection_string)
@@ -194,7 +210,9 @@ def load_data(db_manager):
 
         # loading commit and comments
         print("Generating and loading pull requests and comments...")
-        pull_requests, pr_comments = generate_pull_requests(all_data["projects"], all_data["commits"])
+        pull_requests, pr_comments = generate_pull_requests(
+            all_data["projects"], all_data["commits"]
+        )
         for pr in pull_requests:
             create_pull_request(pr)
         for comment in pr_comments:
@@ -249,4 +267,3 @@ def load_sample_data_into_timeseries_db():
     except Exception as e:
         print(f"Failed to load sample data: {e}")
         raise
-
