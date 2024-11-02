@@ -555,11 +555,12 @@ class PRStatus(enum.Enum):
     BLOCKED = "BLOCKED"
     MERGED = "MERGED"
 
+
 class PullRequest(Base):
     __tablename__ = "pull_requests"
     __table_args__ = (
         PrimaryKeyConstraint("id", "created_at"),
-        {"schema": "sdlc_timeseries"}
+        {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
@@ -581,7 +582,7 @@ class PRComment(Base):
     __table_args__ = (
         PrimaryKeyConstraint("id", "created_at"),
         # Remove the foreign key constraint but keep the columns for logical relationship
-        {"schema": "sdlc_timeseries"}
+        {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
@@ -610,9 +611,11 @@ def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
 
     with db_manager.get_session() as session:
         # Verify PR exists but handle relationship manually
-        pr = session.query(PullRequest).filter(
-            PullRequest.id == filtered_data["pr_id"]
-        ).first()
+        pr = (
+            session.query(PullRequest)
+            .filter(PullRequest.id == filtered_data["pr_id"])
+            .first()
+        )
 
         if not pr:
             raise ValueError(f"Pull request {filtered_data['pr_id']} not found")
@@ -627,9 +630,9 @@ def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
 
 
 def get_pr_comments(
-        pr_id: str,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+    pr_id: str,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
 ) -> List[PRComment]:
     """
     Get comments for a specific PR.
@@ -652,6 +655,7 @@ def get_pr_comments(
 
         return query.order_by(PRComment.created_at).all()
 
+
 # Add CRUD functions for Pull Requests
 # Update CRUD functions for Pull Requests and Comments
 def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
@@ -666,10 +670,10 @@ def create_pull_request(pr_data: Dict[str, Any]) -> PullRequest:
 
 
 def get_pull_requests(
-        project_id: str,
-        status: Optional[PRStatus] = None,
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None
+    project_id: str,
+    status: Optional[PRStatus] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
 ) -> List[PullRequest]:
     """Get pull requests with the updated schema"""
     with db_manager.get_session() as session:
@@ -684,24 +688,24 @@ def get_pull_requests(
 
 
 def update_pull_request_status(
-        pr_id: str,
-        created_at: datetime,
-        new_status: PRStatus,
-        merged_at: Optional[datetime] = None
+    pr_id: str,
+    created_at: datetime,
+    new_status: PRStatus,
+    merged_at: Optional[datetime] = None,
 ) -> bool:
     """Update pull request status with the updated schema"""
     with db_manager.get_session() as session:
         update_data = {"status": new_status}
         if merged_at:
             update_data["merged_at"] = merged_at
-        result = session.query(PullRequest).filter(
-            and_(
-                PullRequest.id == pr_id,
-                PullRequest.created_at == created_at
-            )
-        ).update(update_data)
+        result = (
+            session.query(PullRequest)
+            .filter(and_(PullRequest.id == pr_id, PullRequest.created_at == created_at))
+            .update(update_data)
+        )
         session.commit()
         return result > 0
+
 
 def update_pr_comment(comment_id: str, created_at: datetime, new_content: str) -> bool:
     """
@@ -716,12 +720,13 @@ def update_pr_comment(comment_id: str, created_at: datetime, new_content: str) -
         bool: True if the comment was updated, False otherwise
     """
     with db_manager.get_session() as session:
-        result = session.query(PRComment).filter(
-            and_(
-                PRComment.id == comment_id,
-                PRComment.created_at == created_at
+        result = (
+            session.query(PRComment)
+            .filter(
+                and_(PRComment.id == comment_id, PRComment.created_at == created_at)
             )
-        ).update({"content": new_content})
+            .update({"content": new_content})
+        )
         session.commit()
         return result > 0
 
@@ -738,12 +743,13 @@ def delete_pr_comment(comment_id: str, created_at: datetime) -> bool:
         bool: True if the comment was deleted, False otherwise
     """
     with db_manager.get_session() as session:
-        result = session.query(PRComment).filter(
-            and_(
-                PRComment.id == comment_id,
-                PRComment.created_at == created_at
+        result = (
+            session.query(PRComment)
+            .filter(
+                and_(PRComment.id == comment_id, PRComment.created_at == created_at)
             )
-        ).delete()
+            .delete()
+        )
         session.commit()
         return result > 0
 
@@ -765,8 +771,9 @@ def pr_comment_to_dict(comment: PRComment) -> Dict[str, Any]:
         "created_at": comment.created_at,
         "author": comment.author,
         "content": comment.content,
-        "pr_created_at": comment.pr_created_at
+        "pr_created_at": comment.pr_created_at,
     }
+
 
 class DatabaseManager:
     def __init__(self, connection_string: str):
@@ -846,7 +853,7 @@ class DatabaseManager:
             ("code_commits", "timestamp"),
             ("team_metrics", "week_starting"),
             ("pull_requests", "created_at"),
-            ("pr_comments", "created_at")
+            ("pr_comments", "created_at"),
         ]
 
         with self.engine.begin() as connection:

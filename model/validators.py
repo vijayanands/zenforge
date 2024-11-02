@@ -13,7 +13,9 @@ from model.sdlc_events import (
     PRStatus,
     PullRequest,
     Sprint,
+    sprint_jira_association,
 )
+
 
 def validate_pr_comment_consistency() -> List[str]:
     """
@@ -29,12 +31,16 @@ def validate_pr_comment_consistency() -> List[str]:
 
         # Check each comment's PR reference
         for comment in comments:
-            pr = session.query(PullRequest).filter(
-                and_(
-                    PullRequest.id == comment.pr_id,
-                    PullRequest.created_at == comment.pr_created_at
+            pr = (
+                session.query(PullRequest)
+                .filter(
+                    and_(
+                        PullRequest.id == comment.pr_id,
+                        PullRequest.created_at == comment.pr_created_at,
+                    )
                 )
-            ).first()
+                .first()
+            )
 
             if not pr:
                 errors.append(
@@ -43,6 +49,7 @@ def validate_pr_comment_consistency() -> List[str]:
                 )
 
     return errors
+
 
 def validate_design_sprint_timeline(session: Session) -> List[str]:
     """Validate that design phases complete before sprint timelines start"""
@@ -176,18 +183,6 @@ def validate_bug_build_timeline(session: Session) -> List[str]:
             )
 
     return errors
-
-
-def validate_all_timelines(session: Session) -> Dict[str, List[str]]:
-    """Run all timeline validations and return results"""
-    return {
-        "design_sprint": validate_design_sprint_timeline(session),
-        "sprint_jira": validate_sprint_jira_timeline(session),
-        "commit_jira": validate_commit_jira_timeline(session),
-        "pr_commit": validate_pr_commit_timeline(session),
-        "cicd_pr": validate_cicd_pr_timeline(session),
-        "bug_build": validate_bug_build_timeline(session),
-    }
 
 
 def verify_temporal_consistency(
@@ -337,3 +332,110 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
                 )
 
     return validation_errors
+
+
+def validate_jira_date_hierarchy(session: Session) -> List[str]:
+    """
+    Validate JIRA item date hierarchies:
+    1. Epics must start after their sprint start date
+    2. Stories must start after their parent epic start date
+    3. Tasks must start after their parent story start date
+
+    Args:
+        session: SQLAlchemy session
+
+    Returns:
+        List of validation error messages
+    """
+    errors = []
+
+    # Get all sprints for reference
+    sprints = {sprint.id: sprint for sprint in session.query(Sprint).all()}
+
+    # Get all JIRA items
+    jiras = session.query(JiraItem).all()
+
+    # Create maps for quick lookup
+    jira_map = {jira.id: jira for jira in jiras}
+
+    # Create sprint-jira map from the association table
+    sprint_jira_map = {}
+    for assoc in session.query(sprint_jira_association).all():
+        if assoc.sprint_id not in sprint_jira_map:
+            sprint_jira_map[assoc.sprint_id] = []
+        sprint_jira_map[assoc.sprint_id].append(assoc.jira_id)
+
+    # Validate each JIRA item
+    for jira in jiras:
+        if jira.type == "Epic":
+            # Find associated sprint(s)
+            for sprint_id, jira_ids in sprint_jira_map.items():
+                if jira.id in jira_ids:
+                    sprint = sprints.get(sprint_id)
+                    if sprint and jira.created_date < sprint.start_date:
+                        errors.append(
+                            f"Epic {jira.id} starts at {jira.created_date} before "
+                            f"its sprint {sprint_id} which starts at {sprint.start_date}"
+                        )
+
+        elif jira.type == "Story":
+            # Validate against parent epic
+            parent_epic = jira_map.get(jira.parent_id)
+            if parent_epic:
+                if jira.created_date < parent_epic.created_date:
+                    errors.append(
+                        f"Story {jira.id} starts at {jira.created_date} before "
+                        f"its parent epic {parent_epic.id} which starts at {parent_epic.created_date}"
+                    )
+
+                # Also check sprint dates for stories
+                for sprint_id, jira_ids in sprint_jira_map.items():
+                    if jira.id in jira_ids:
+                        sprint = sprints.get(sprint_id)
+                        if sprint and jira.created_date < sprint.start_date:
+                            errors.append(
+                                f"Story {jira.id} starts at {jira.created_date} before "
+                                f"its sprint {sprint_id} which starts at {sprint.start_date}"
+                            )
+
+        elif jira.type == "Task":
+            # Validate against parent story
+            parent_story = jira_map.get(jira.parent_id)
+            if parent_story:
+                if jira.created_date < parent_story.created_date:
+                    errors.append(
+                        f"Task {jira.id} starts at {jira.created_date} before "
+                        f"its parent story {parent_story.id} which starts at {parent_story.created_date}"
+                    )
+
+                # Also check sprint dates for tasks
+                for sprint_id, jira_ids in sprint_jira_map.items():
+                    if jira.id in jira_ids:
+                        sprint = sprints.get(sprint_id)
+                        if sprint and jira.created_date < sprint.start_date:
+                            errors.append(
+                                f"Task {jira.id} starts at {jira.created_date} before "
+                                f"its sprint {sprint_id} which starts at {sprint.start_date}"
+                            )
+
+        # Validate completion dates if they exist
+        if jira.completed_date and jira.completed_date < jira.created_date:
+            errors.append(
+                f"JIRA {jira.id} has completion date {jira.completed_date} "
+                f"before its start date {jira.created_date}"
+            )
+
+    return errors
+
+
+def validate_all_timelines(session: Session) -> Dict[str, List[str]]:
+    """Run all timeline validations and return results"""
+    return {
+        "design_sprint": validate_design_sprint_timeline(session),
+        "sprint_jira": validate_sprint_jira_timeline(session),
+        "commit_jira": validate_commit_jira_timeline(session),
+        "pr_commit": validate_pr_commit_timeline(session),
+        "cicd_pr": validate_cicd_pr_timeline(session),
+        "bug_build": validate_bug_build_timeline(session),
+        "jira_hierarchy": validate_jira_date_hierarchy(session),  # Add new validation
+    }

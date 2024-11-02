@@ -708,19 +708,25 @@ def get_design_event_status(completion_state: str) -> Dict[str, Any]:
 
 
 def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Generate Jira items for all projects, including design, epics, stories and tasks"""
+    """Generate Jira items for all projects with proper date hierarchies"""
     # First generate design-related Jiras
     all_jiras = generate_design_related_jiras(projects)
 
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
-        start_date = details["start_date"] + timedelta(days=13)
+        sprint_start = details["start_date"] + timedelta(days=13)
 
         # Generate Epics
         for epic_num in range(1, 6):
+            # Associate epic with a sprint
+            sprint_num = (epic_num - 1) // 2 + 1  # Distribute epics across sprints
+            sprint_start_date = sprint_start + timedelta(days=sprint_num * 14)
+
             status = data_generator.get_jira_status(completion_state)
+            # Epic starts after sprint start date
+            epic_start = sprint_start_date + timedelta(days=randint(1, 3))
             epic_completion = (
-                start_date + timedelta(days=epic_num + 25) if status == "Done" else None
+                epic_start + timedelta(days=epic_num + 25) if status == "Done" else None
             )
 
             epic_id = f"{proj_id}-E{epic_num}"
@@ -731,7 +737,7 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                 "type": "Epic",
                 "title": f"Epic {epic_num} for {details['title']}",
                 "status": status,
-                "created_date": start_date + timedelta(days=epic_num),
+                "created_date": epic_start,
                 "completed_date": epic_completion,
                 "priority": np.random.choice(["High", "Medium", "Low"]),
                 "story_points": np.random.randint(20, 40),
@@ -745,8 +751,10 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
             # Generate Stories for Epic
             for story_num in range(1, 6):
                 story_status = data_generator.get_jira_status(completion_state)
+                # Story starts after epic starts
+                story_start = epic_start + timedelta(days=randint(2, 4))
                 story_completion = (
-                    start_date + timedelta(days=epic_num + story_num + 20)
+                    story_start + timedelta(days=randint(5, 10))
                     if story_status == "Done"
                     else None
                 )
@@ -759,7 +767,7 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                     "type": "Story",
                     "title": f"Story {story_num} for Epic {epic_num}",
                     "status": story_status,
-                    "created_date": start_date + timedelta(days=epic_num + story_num),
+                    "created_date": story_start,
                     "completed_date": story_completion,
                     "priority": np.random.choice(["High", "Medium", "Low"]),
                     "story_points": np.random.randint(5, 13),
@@ -774,14 +782,15 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                 for task_num in range(1, 6):
                     task_status = data_generator.get_jira_status(completion_state)
                     estimated_hours = np.random.randint(4, 16)
+                    # Task starts after story starts
+                    task_start = story_start + timedelta(days=randint(1, 3))
                     actual_hours = (
                         int(estimated_hours * np.random.uniform(0.8, 1.3))
                         if task_status == "Done"
                         else None
                     )
                     task_completion = (
-                        start_date
-                        + timedelta(days=epic_num + story_num + task_num + 15)
+                        task_start + timedelta(days=randint(2, 5))
                         if task_status == "Done"
                         else None
                     )
@@ -793,8 +802,7 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                         "type": "Task",
                         "title": f"Task {task_num} for Story {story_num}",
                         "status": task_status,
-                        "created_date": start_date
-                        + timedelta(days=epic_num + story_num + task_num),
+                        "created_date": task_start,
                         "completed_date": task_completion,
                         "priority": np.random.choice(["High", "Medium", "Low"]),
                         "story_points": np.random.randint(1, 5),
@@ -805,26 +813,39 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
                     all_jiras.append(task_data)
 
                     # Update story and epic completion based on task status
-                    if task_status != "Done" and story_data["status"] == "Done":
-                        story_data["status"] = "In Progress"
-                        story_data["completed_date"] = None
-                    if task_status != "Done" and epic_data["status"] == "Done":
-                        epic_data["status"] = "In Progress"
-                        epic_data["completed_date"] = None
+                    if task_completion and story_data["status"] == "Done":
+                        story_data["completed_date"] = max(
+                            story_data["completed_date"] or task_completion,
+                            task_completion,
+                        )
+                    if task_completion and epic_data["status"] == "Done":
+                        epic_data["completed_date"] = max(
+                            epic_data["completed_date"] or task_completion,
+                            task_completion,
+                        )
 
     # For completed projects, ensure all non-design Jiras are marked as Done
     for jira in all_jiras:
         project_details = projects.get(jira["event_id"])
         if project_details and project_details["completion_state"] == "all_complete":
-            if jira["type"] != "Design":  # Don't modify design Jiras
+            if jira["type"] != "Design":
                 jira["status"] = "Done"
-                jira["completed_date"] = jira["created_date"] + timedelta(
-                    days=np.random.randint(5, 15)
-                )
-                if jira["type"] == "Task":
-                    jira["actual_hours"] = int(
-                        jira["estimated_hours"] * np.random.uniform(0.8, 1.3)
-                    )
+                if jira.get("completed_date") is None:
+                    if jira["type"] == "Epic":
+                        jira["completed_date"] = jira["created_date"] + timedelta(
+                            days=randint(15, 25)
+                        )
+                    elif jira["type"] == "Story":
+                        jira["completed_date"] = jira["created_date"] + timedelta(
+                            days=randint(7, 14)
+                        )
+                    else:  # Task
+                        jira["completed_date"] = jira["created_date"] + timedelta(
+                            days=randint(3, 7)
+                        )
+                        jira["actual_hours"] = int(
+                            jira["estimated_hours"] * np.random.uniform(0.8, 1.3)
+                        )
 
     return all_jiras
 
@@ -1450,11 +1471,7 @@ def generate_all_data() -> Dict[str, Any]:
 
         # Add the timeline adjustment step
         adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(
-            project_details,
-            design_events,
-            sprints,
-            jira_items,
-            sprint_jira_map
+            project_details, design_events, sprints, jira_items, sprint_jira_map
         )
 
         # Combine all data
@@ -1800,7 +1817,9 @@ def adjust_cicd_dates(
     return sorted(adjusted_events, key=lambda x: x["timestamp"])
 
 
-def adjust_sprint_and_jira_timelines(projects, design_events, sprints, jira_items, sprint_jira_associations):
+def adjust_sprint_and_jira_timelines(
+    projects, design_events, sprints, jira_items, sprint_jira_associations
+):
     """
     Adjust sprint start dates and JIRA dates to maintain proper temporal consistency:
     1. Sprints cannot start until all design items for their project are complete
@@ -1821,15 +1840,14 @@ def adjust_sprint_and_jira_timelines(projects, design_events, sprints, jira_item
     # Get the latest design completion time for each project
     project_design_completion = {}
     for event in design_events:
-        project_id = event['event_id']
-        event_timestamp = event['timestamp']
+        project_id = event["event_id"]
+        event_timestamp = event["timestamp"]
 
         if project_id not in project_design_completion:
             project_design_completion[project_id] = event_timestamp
         else:
             project_design_completion[project_id] = max(
-                project_design_completion[project_id],
-                event_timestamp
+                project_design_completion[project_id], event_timestamp
             )
 
     # Create a reverse mapping of JIRA ID to sprint IDs
@@ -1844,27 +1862,29 @@ def adjust_sprint_and_jira_timelines(projects, design_events, sprints, jira_item
     adjusted_sprints = []
     sprint_start_dates = {}  # Keep track of sprint start dates for JIRA adjustment
 
-    for sprint in sorted(sprints, key=lambda x: x['start_date']):
-        project_id = sprint['event_id']
+    for sprint in sorted(sprints, key=lambda x: x["start_date"]):
+        project_id = sprint["event_id"]
         design_completion = project_design_completion.get(project_id)
 
         if design_completion:
             # Ensure sprint starts after design completion
-            new_start_date = max(sprint['start_date'], design_completion + timedelta(days=1))
+            new_start_date = max(
+                sprint["start_date"], design_completion + timedelta(days=1)
+            )
 
             # Adjust end date to maintain same duration
-            duration = sprint['end_date'] - sprint['start_date']
+            duration = sprint["end_date"] - sprint["start_date"]
             new_end_date = new_start_date + duration
 
             adjusted_sprint = sprint.copy()
-            adjusted_sprint['start_date'] = new_start_date
-            adjusted_sprint['end_date'] = new_end_date
+            adjusted_sprint["start_date"] = new_start_date
+            adjusted_sprint["end_date"] = new_end_date
 
-            sprint_start_dates[sprint['id']] = new_start_date
+            sprint_start_dates[sprint["id"]] = new_start_date
         else:
             # If no design events found, keep original dates
             adjusted_sprint = sprint.copy()
-            sprint_start_dates[sprint['id']] = sprint['start_date']
+            sprint_start_dates[sprint["id"]] = sprint["start_date"]
 
         adjusted_sprints.append(adjusted_sprint)
 
@@ -1872,26 +1892,27 @@ def adjust_sprint_and_jira_timelines(projects, design_events, sprints, jira_item
     adjusted_jiras = []
 
     for jira in jira_items:
-        jira_id = jira['id']
+        jira_id = jira["id"]
         associated_sprints = jira_to_sprints.get(jira_id, [])
 
         if associated_sprints:
             # Find the earliest associated sprint start date
             earliest_sprint_start = min(
-                sprint_start_dates[sprint_id]
-                for sprint_id in associated_sprints
+                sprint_start_dates[sprint_id] for sprint_id in associated_sprints
             )
 
             adjusted_jira = jira.copy()
 
             # Ensure JIRA created date is not before sprint start
-            if jira['created_date'] < earliest_sprint_start:
-                adjusted_jira['created_date'] = earliest_sprint_start
+            if jira["created_date"] < earliest_sprint_start:
+                adjusted_jira["created_date"] = earliest_sprint_start
 
                 # If completion date exists, maintain the same duration
-                if jira.get('completed_date'):
-                    original_duration = jira['completed_date'] - jira['created_date']
-                    adjusted_jira['completed_date'] = earliest_sprint_start + original_duration
+                if jira.get("completed_date"):
+                    original_duration = jira["completed_date"] - jira["created_date"]
+                    adjusted_jira["completed_date"] = (
+                        earliest_sprint_start + original_duration
+                    )
 
             adjusted_jiras.append(adjusted_jira)
         else:
@@ -1903,23 +1924,25 @@ def adjust_sprint_and_jira_timelines(projects, design_events, sprints, jira_item
 
     # Validate sprint dates against design completion
     for sprint in adjusted_sprints:
-        design_completion = project_design_completion.get(sprint['event_id'])
-        if design_completion and sprint['start_date'] < design_completion:
+        design_completion = project_design_completion.get(sprint["event_id"])
+        if design_completion and sprint["start_date"] < design_completion:
             validation_errors.append(
                 f"Sprint {sprint['id']} still starts before design completion for project {sprint['event_id']}"
             )
 
     # Validate JIRA dates against sprint dates
     for jira in adjusted_jiras:
-        associated_sprints = jira_to_sprints.get(jira['id'], [])
+        associated_sprints = jira_to_sprints.get(jira["id"], [])
         for sprint_id in associated_sprints:
             sprint_start = sprint_start_dates[sprint_id]
-            if jira['created_date'] < sprint_start:
+            if jira["created_date"] < sprint_start:
                 validation_errors.append(
                     f"JIRA {jira['id']} still starts before its associated sprint {sprint_id}"
                 )
 
     if validation_errors:
-        raise ValueError(f"Timeline adjustment failed validation:\n" + "\n".join(validation_errors))
+        raise ValueError(
+            f"Timeline adjustment failed validation:\n" + "\n".join(validation_errors)
+        )
 
     return adjusted_sprints, adjusted_jiras
