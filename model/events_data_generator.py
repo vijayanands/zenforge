@@ -14,6 +14,7 @@ from model.validators import (
     verify_jira_references,
     verify_project_references,
     verify_temporal_consistency,
+    validate_commit_jira_completion_dates,
 )
 
 
@@ -850,18 +851,58 @@ def generate_jira_items(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, A
     return all_jiras
 
 
+def adjust_commit_dates(
+    commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Adjust commit dates to ensure they happen after their associated Jira item's completion date.
+    If a Jira isn't completed, the commit won't be generated.
+
+    Args:
+        commits (List[Dict[str, Any]]): List of commit dictionaries
+        jira_items (List[Dict[str, Any]]): List of Jira item dictionaries
+
+    Returns:
+        List[Dict[str, Any]]: List of adjusted commits with proper timestamps
+    """
+    # Create a map of Jira completion times
+    jira_completion_times = {
+        j["id"]: j.get("completed_date")
+        for j in jira_items
+        if j.get("completed_date") is not None
+    }
+
+    # Filter and adjust commits
+    adjusted_commits = []
+    for commit in commits:
+        jira_completion = jira_completion_times.get(commit["jira_id"])
+
+        if jira_completion:
+            # Set commit timestamp to jira completion time plus random minutes (5-60)
+            adjusted_commit = commit.copy()
+            adjusted_commit["timestamp"] = jira_completion + timedelta(
+                minutes=randint(5, 60)
+            )
+            adjusted_commits.append(adjusted_commit)
+
+    # Sort adjusted commits by timestamp
+    return sorted(adjusted_commits, key=lambda x: x["timestamp"])
+
+
 def generate_commits(
     projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
     """Generate code commits with proper timestamps and Jira associations"""
     commits = []
 
-    # Create a map of available Jira IDs per project
+    # Create a map of available completed Jira IDs per project
     project_jiras = {}
     for jira in jira_items:
         if jira["event_id"] not in project_jiras:
             project_jiras[jira["event_id"]] = []
-        project_jiras[jira["event_id"]].append(jira["id"])
+        # Only include completed Jiras
+        if jira.get("completed_date"):
+            project_jiras[jira["event_id"]].append(jira)
 
     for proj_id, details in projects.items():
         completion_state = details["completion_state"]
@@ -870,55 +911,53 @@ def generate_commits(
         if not available_jiras:
             continue
 
+        # Adjust number of commits based on project state
         num_commits = (
             200
             if completion_state in ["pre_release", "all_complete"]
             else np.random.randint(50, 150)
         )
-        start_date = details["start_date"] + timedelta(
-            days=20
-        )  # Start commits after design phase
 
         for i in range(num_commits):
-            # Calculate commit date - ensure proper chronological order
-            commit_date = start_date + timedelta(days=i // 4)  # Up to 4 commits per day
+            # Randomly select a completed Jira
+            selected_jira = random.choice(available_jiras)
+            jira_completion_date = selected_jira["completed_date"]
 
-            # Assign a random Jira ID from the project
-            associated_jira = random.choice(available_jiras)
+            # Calculate commit date - ensure it's after Jira completion
+            commit_date = jira_completion_date + timedelta(minutes=randint(5, 60))
 
             commit_metrics = data_generator.get_commit_status(completion_state)
             files_changed, lines_added, lines_removed, _, _ = (
                 data_generator.generate_commit_metrics()
             )
 
-            commit = {
-                "id": f"commit_{uuid.uuid4().hex[:8]}",
-                "event_id": proj_id,
-                "timestamp": commit_date,
-                "repository": f"{proj_id.lower()}-repo",
-                "branch": f"feature/sprint-{i // 40 + 1}",
-                "author": f"dev{i % 5 + 1}@example.com",
-                "commit_hash": uuid.uuid4().hex[:8],
-                "files_changed": files_changed,
-                "lines_added": lines_added,
-                "lines_removed": lines_removed,
-                "code_coverage": commit_metrics["code_coverage"],
-                "lint_score": commit_metrics["lint_score"],
-                "commit_type": np.random.choice(
-                    ["feature", "bugfix", "refactor", "docs", "test"],
-                    p=[0.4, 0.3, 0.15, 0.1, 0.05],
-                ),
-                "review_time_minutes": commit_metrics["review_time_minutes"],
-                "comments_count": np.random.randint(0, 10),
-                "approved_by": f"reviewer{np.random.randint(1, 4)}@example.com",
-                "jira_id": associated_jira,
-            }
-
-            commits.append(commit)
+            commits.append(
+                {
+                    "id": f"commit_{uuid.uuid4().hex[:8]}",
+                    "event_id": proj_id,
+                    "timestamp": commit_date,
+                    "repository": f"{proj_id.lower()}-repo",
+                    "branch": f"feature/sprint-{i // 40 + 1}",
+                    "author": f"dev{i % 5 + 1}@example.com",
+                    "commit_hash": uuid.uuid4().hex[:8],
+                    "files_changed": files_changed,
+                    "lines_added": lines_added,
+                    "lines_removed": lines_removed,
+                    "code_coverage": commit_metrics["code_coverage"],
+                    "lint_score": commit_metrics["lint_score"],
+                    "commit_type": np.random.choice(
+                        ["feature", "bugfix", "refactor", "docs", "test"],
+                        p=[0.4, 0.3, 0.15, 0.1, 0.05],
+                    ),
+                    "review_time_minutes": commit_metrics["review_time_minutes"],
+                    "comments_count": np.random.randint(0, 10),
+                    "approved_by": f"reviewer{np.random.randint(1, 4)}@example.com",
+                    "jira_id": selected_jira["id"],
+                }
+            )
 
     # Sort all commits by timestamp
-    commits.sort(key=lambda x: x["timestamp"])
-    return commits
+    return sorted(commits, key=lambda x: x["timestamp"])
 
 
 # Update generate_cicd_events function
@@ -1448,9 +1487,18 @@ def generate_all_data() -> Dict[str, Any]:
         sprints, sprint_jira_map = generate_sprints(projects, jira_items)
         sprints = adjust_sprint_dates(sprints, jira_items, design_completion_times)
 
+        print("Adjusting sprint and Jira timelines...")
+        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(
+            project_details,
+            design_events,
+            sprints,
+            jira_items,
+            sprint_jira_map,  # Added missing parameter
+        )
+
         print("Generating and adjusting commits...")
-        commits = generate_commits(projects, jira_items)
-        commits = adjust_commit_dates(commits, jira_items)
+        commits = generate_commits(projects, adjusted_jiras)  # Use adjusted Jiras
+        commits = adjust_commit_dates(commits, adjusted_jiras)
 
         print("Generating and adjusting pull requests...")
         pull_requests, pr_comments = generate_pull_requests(project_details, commits)
@@ -1463,16 +1511,13 @@ def generate_all_data() -> Dict[str, Any]:
         cicd_events = adjust_cicd_dates(cicd_events, pull_requests, cicd_commit_map)
 
         print("Generating and adjusting bugs...")
-        bugs = generate_bugs(projects, jira_items, cicd_events)
+        bugs = generate_bugs(
+            projects, adjusted_jiras, cicd_events
+        )  # Use adjusted Jiras
         bugs = adjust_bug_dates(bugs, cicd_events)
 
         print("Generating team metrics...")
         team_metrics = generate_team_metrics(projects)
-
-        # Add the timeline adjustment step
-        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(
-            project_details, design_events, sprints, jira_items, sprint_jira_map
-        )
 
         # Combine all data
         all_data = {
@@ -1494,9 +1539,9 @@ def generate_all_data() -> Dict[str, Any]:
 
         print("Verifying data consistency...")
 
-        # Verify temporal consistency
+        # Verify temporal consistency with enhanced Jira validation
         temporal_errors = verify_temporal_consistency(
-            commits, cicd_events, cicd_commit_map
+            commits, cicd_events, cicd_commit_map, adjusted_jiras
         )
         if temporal_errors:
             print("Temporal consistency errors:")
@@ -1517,7 +1562,7 @@ def generate_all_data() -> Dict[str, Any]:
             for error in jira_errors:
                 print(f"  - {error}")
 
-        # Verify timeline constraints
+        # Verify timeline constraints with new commit-Jira validation
         with db_manager.get_session() as session:
             timeline_validation = validate_all_timelines(session)
             timeline_errors = []
@@ -1530,8 +1575,24 @@ def generate_all_data() -> Dict[str, Any]:
                 for error in timeline_errors:
                     print(f"  - {error}")
 
+        # Special validation for commit-Jira completion dates
+        commit_jira_errors = validate_commit_jira_completion_dates(
+            {"commits": commits, "jira_items": adjusted_jiras}
+        )
+        if commit_jira_errors:
+            print("Commit-Jira completion date errors:")
+            for error in commit_jira_errors:
+                print(f"  - {error}")
+
         # Combine all errors
-        all_errors = temporal_errors + project_errors + jira_errors + timeline_errors
+        all_errors = (
+            temporal_errors
+            + project_errors
+            + jira_errors
+            + timeline_errors
+            + commit_jira_errors
+        )
+
         if all_errors:
             raise ValueError(f"Found {len(all_errors)} data consistency errors")
 
@@ -1818,8 +1879,12 @@ def adjust_cicd_dates(
 
 
 def adjust_sprint_and_jira_timelines(
-    projects, design_events, sprints, jira_items, sprint_jira_associations
-):
+    projects: List[Dict[str, Any]],
+    design_events: List[Dict[str, Any]],
+    sprints: List[Dict[str, Any]],
+    jira_items: List[Dict[str, Any]],
+    sprint_jira_associations: Dict[str, List[str]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Adjust sprint start dates and JIRA dates to maintain proper temporal consistency:
     1. Sprints cannot start until all design items for their project are complete
@@ -1840,7 +1905,7 @@ def adjust_sprint_and_jira_timelines(
     # Get the latest design completion time for each project
     project_design_completion = {}
     for event in design_events:
-        project_id = event["event_id"]
+        project_id = event["event_id"]  # Using event_id for design events
         event_timestamp = event["timestamp"]
 
         if project_id not in project_design_completion:

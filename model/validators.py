@@ -1,4 +1,3 @@
-from datetime import datetime
 from typing import Any, Dict, List
 
 from sqlalchemy import and_
@@ -109,6 +108,43 @@ def validate_sprint_jira_timeline(session: Session) -> List[str]:
     return errors
 
 
+def validate_commit_jira_completion_dates(data: Dict[str, Any]) -> List[str]:
+    """
+    Validate that all commit timestamps are after their associated Jira completion dates.
+
+    Args:
+        data (Dict[str, Any]): Dictionary containing 'commits' and 'jira_items' lists
+
+    Returns:
+        List[str]: List of validation error messages
+    """
+    errors = []
+
+    # Create a map of Jira completion dates
+    jira_completion_dates = {
+        jira["id"]: jira.get("completed_date") for jira in data["jira_items"]
+    }
+
+    # Check each commit
+    for commit in data["commits"]:
+        jira_id = commit["jira_id"]
+        commit_timestamp = commit["timestamp"]
+        jira_completion_date = jira_completion_dates.get(jira_id)
+
+        # Validate the temporal relationship
+        if jira_completion_date is None:
+            errors.append(
+                f"Commit {commit['id']} references Jira {jira_id} which has no completion date"
+            )
+        elif commit_timestamp <= jira_completion_date:
+            errors.append(
+                f"Commit {commit['id']} timestamp ({commit_timestamp}) is not after "
+                f"its associated Jira {jira_id} completion date ({jira_completion_date})"
+            )
+
+    return errors
+
+
 def validate_commit_jira_timeline(session: Session) -> List[str]:
     """Validate that commits only happen after or at Jira completion"""
     errors = []
@@ -189,14 +225,33 @@ def verify_temporal_consistency(
     commits: List[Dict[str, Any]],
     cicd_events: List[Dict[str, Any]],
     cicd_commit_map: Dict[str, List[str]],
+    jira_items: List[Dict[str, Any]],  # Added jira_items parameter
 ) -> List[str]:
-    """Verify temporal consistency between commits and CICD events"""
+    """Verify temporal consistency between commits, CICD events, and Jira items"""
     errors = []
 
     # Create timestamp lookup for commits
     commit_timestamps = {commit["id"]: commit["timestamp"] for commit in commits}
 
-    # Check each CICD event
+    # Create completion date lookup for Jiras
+    jira_completion_dates = {
+        jira["id"]: jira.get("completed_date") for jira in jira_items
+    }
+
+    # Check commit-Jira temporal relationship
+    for commit in commits:
+        jira_completion_date = jira_completion_dates.get(commit["jira_id"])
+        if jira_completion_date is None:
+            errors.append(
+                f"Commit {commit['id']} references Jira {commit['jira_id']} which has no completion date"
+            )
+        elif commit["timestamp"] <= jira_completion_date:
+            errors.append(
+                f"Commit {commit['id']} timestamp ({commit['timestamp']}) is not after "
+                f"its Jira {commit['jira_id']} completion date ({jira_completion_date})"
+            )
+
+    # Check CICD-commit temporal relationships
     for event in cicd_events:
         associated_commits = cicd_commit_map.get(event["id"], [])
         for commit_id in associated_commits:
@@ -434,8 +489,14 @@ def validate_all_timelines(session: Session) -> Dict[str, List[str]]:
         "design_sprint": validate_design_sprint_timeline(session),
         "sprint_jira": validate_sprint_jira_timeline(session),
         "commit_jira": validate_commit_jira_timeline(session),
+        "commit_jira_completion": validate_commit_jira_completion_dates(
+            {
+                "commits": session.query(CodeCommit).all(),
+                "jira_items": session.query(JiraItem).all(),
+            }
+        ),  # Added new validation
         "pr_commit": validate_pr_commit_timeline(session),
         "cicd_pr": validate_cicd_pr_timeline(session),
         "bug_build": validate_bug_build_timeline(session),
-        "jira_hierarchy": validate_jira_date_hierarchy(session),  # Add new validation
+        "jira_hierarchy": validate_jira_date_hierarchy(session),
     }
