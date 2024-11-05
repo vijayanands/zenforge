@@ -1,4 +1,5 @@
 import enum
+import json
 from datetime import datetime
 from operator import and_
 from typing import Any, Dict, List, Optional
@@ -372,17 +373,32 @@ def get_commits(
 """
 CI/CD Related CRUD
 """
+
+
 def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
-    """Create a CICD event without commit associations"""
+    """Create a CICD event with better error handling and logging"""
     with db_manager.get_session() as session:
         try:
+            # Convert numpy string to regular string if needed
+            if hasattr(event_data.get('status'), 'item'):
+                event_data['status'] = event_data['status'].item()
+            if hasattr(event_data.get('branch'), 'item'):
+                event_data['branch'] = event_data['branch'].item()
+
+            # Convert metrics to JSON string if it isn't already
+            if isinstance(event_data.get('metrics'), dict):
+                event_data['metrics'] = json.dumps(event_data['metrics'])
+
+            # Create the event
             event = CICDEvent(**event_data)
             session.add(event)
             session.commit()
+            print(f"Successfully created CICD event {event.id}")
             return event
         except Exception as e:
             session.rollback()
-            print(f"Error creating CICD event: {e}")
+            print(f"Error creating CICD event {event_data.get('id')}: {str(e)}")
+            print(f"Event data: {json.dumps(event_data, default=str)}")
             raise
 
 def get_cicd_events(

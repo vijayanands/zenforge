@@ -1,7 +1,11 @@
 # load_events_db.py
+import json
+import random
+from typing import Dict, Any
+
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import generate_pull_requests, get_sample_data
+from model.events_data_generator import generate_pull_requests, get_sample_data, generate_cicd_events, adjust_cicd_dates
 from model.sdlc_events import (
     DatabaseManager,
     JiraItem,
@@ -19,7 +23,7 @@ from model.sdlc_events import (
     create_sprint_jira_associations,
     create_team_metrics,
     db_name,
-    server_connection_string,
+    server_connection_string, PullRequest, PRStatus, CICDEvent,
 )
 
 # Create an engine for the server connection
@@ -53,215 +57,220 @@ def initialize_db_manager():
         print(f"Error creating schemas: {e}")
     return db_manager
 
-
-def load_data(db_manager):
+def load_data(db_manager, all_data: Dict[str, Any]):
     """Load data into the database handling all relationships and dependencies"""
     try:
-        # Get the sample data
-        all_data = get_sample_data()
-
-        # First load projects (no dependencies)
+        # Store original project data for reference
+        print("\nPhase 1: Loading base entities...")
         print("Loading projects...")
+        base_project_data = {}
         for project in all_data["projects"]:
-            create_project(project)
+            # Store the full project data including completion_state
+            base_project_data[project["id"]] = project.copy()
+
+            # Create project record with database fields only
+            db_project = {
+                "id": project["id"],
+                "title": project["title"],
+                "description": project["description"],
+                "start_date": project["start_date"],
+                "status": project["status"],
+                "complexity": project["complexity"],
+                "team_size": project["team_size"],
+                "estimated_duration_weeks": project.get("estimated_duration_weeks"),
+                "budget_allocated": project.get("budget_allocated"),
+                "priority": project.get("priority")
+            }
+            create_project(db_project)
+
+        print(f"Stored {len(base_project_data)} projects with completion states")
 
         # Group Jira items by type for ordered loading
-        print("Grouping Jira items by type...")
-        design_jiras = []
-        epics = []
-        stories = []
-        tasks = []
+        print("\nPhase 2: Loading Jira hierarchy...")
+        jira_types = ["Design", "Epic", "Story", "Task"]
+        for jira_type in jira_types:
+            print(f"Loading {jira_type} items...")
+            type_jiras = [j for j in all_data["jira_items"] if j["type"] == jira_type]
+            for jira in type_jiras:
+                create_jira_item(jira)
 
-        for jira in all_data["jira_items"]:
-            if jira["type"] == "Design":
-                design_jiras.append(jira)
-            elif jira["type"] == "Epic":
-                epics.append(jira)
-            elif jira["type"] == "Story":
-                stories.append(jira)
-            elif jira["type"] == "Task":
-                tasks.append(jira)
-
-        # Load Jiras in hierarchical order
-        print("Loading design Jiras...")
-        for jira in design_jiras:
-            create_jira_item(jira)
-
-        print("Loading epics...")
-        for jira in epics:
-            create_jira_item(jira)
-
-        print("Loading stories...")
-        for jira in stories:
-            # Verify parent epic exists
-            with db_manager.get_session() as session:
-                epic_exists = (
-                    session.query(JiraItem)
-                    .filter(JiraItem.id == jira["parent_id"])
-                    .first()
-                    is not None
-                )
-
-                if not epic_exists:
-                    print(
-                        f"Warning: Parent epic {jira['parent_id']} not found for story {jira['id']}"
-                    )
-                    continue
-
-            create_jira_item(jira)
-
-        print("Loading tasks...")
-        for jira in tasks:
-            # Verify parent story exists
-            with db_manager.get_session() as session:
-                story_exists = (
-                    session.query(JiraItem)
-                    .filter(JiraItem.id == jira["parent_id"])
-                    .first()
-                    is not None
-                )
-
-                if not story_exists:
-                    print(
-                        f"Warning: Parent story {jira['parent_id']} not found for task {jira['id']}"
-                    )
-                    continue
-
-            create_jira_item(jira)
-
-        # Now load design events (depends on design Jiras)
-        print("Loading design events...")
+        print("\nPhase 3: Loading design events...")
         for design_event in all_data["design_events"]:
-            # Verify referenced Jira exists
-            with db_manager.get_session() as session:
-                jira_exists = (
-                    session.query(JiraItem)
-                    .filter(JiraItem.id == design_event["jira"])
-                    .first()
-                    is not None
-                )
-
-                if not jira_exists:
-                    print(
-                        f"Warning: Jira {design_event['jira']} not found for design event {design_event['id']}"
-                    )
-                    continue
-
             create_design_event(design_event)
 
-        # Load sprints
-        print("Loading sprints...")
+        print("\nPhase 4: Loading sprints and associations...")
         for sprint in all_data["sprints"]:
             create_sprint(sprint)
 
-        # Create sprint-jira associations
-        print("Creating sprint-jira associations...")
-        for sprint_id, jira_ids in all_data["relationships"][
-            "sprint_jira_associations"
-        ].items():
-            # Verify sprint exists
-            with db_manager.get_session() as session:
-                sprint_exists = (
-                    session.query(Sprint).filter(Sprint.id == sprint_id).first()
-                    is not None
-                )
+        for sprint_id, jira_ids in all_data["relationships"]["sprint_jira_associations"].items():
+            create_sprint_jira_associations(sprint_id, jira_ids)
 
-                if not sprint_exists:
-                    print(f"Warning: Sprint {sprint_id} not found for associations")
-                    continue
-
-                # Verify all referenced Jiras exist
-                valid_jira_ids = []
-                for jira_id in jira_ids:
-                    jira_exists = (
-                        session.query(JiraItem).filter(JiraItem.id == jira_id).first()
-                        is not None
-                    )
-
-                    if jira_exists:
-                        valid_jira_ids.append(jira_id)
-                    else:
-                        print(
-                            f"Warning: Jira {jira_id} not found for sprint {sprint_id}"
-                        )
-
-                if valid_jira_ids:
-                    create_sprint_jira_associations(sprint_id, valid_jira_ids)
-
-        # Load remaining entities that depend on Jiras
-        print("Loading commits...")
+        print("\nPhase 5: Loading commits...")
         for commit in all_data["commits"]:
-            # Verify Jira exists
-            with db_manager.get_session() as session:
-                jira_exists = (
-                    session.query(JiraItem)
-                    .filter(JiraItem.id == commit["jira_id"])
-                    .first()
-                    is not None
-                )
-
-                if not jira_exists:
-                    print(
-                        f"Warning: Jira {commit['jira_id']} not found for commit {commit['id']}"
-                    )
-                    continue
-
             create_commit(commit)
 
-        # loading commit and comments
-        print("Generating and loading pull requests and comments...")
-        pull_requests, pr_comments = generate_pull_requests(
-            all_data["projects"], all_data["commits"]
-        )
-        for pr in pull_requests:
+        print("\nPhase 6: Loading pull requests...")
+        pr_count = 0
+        merged_count = 0
+        for pr in all_data["pull_requests"]:
             create_pull_request(pr)
-        for comment in pr_comments:
+            pr_count += 1
+            if isinstance(pr["status"], str) and pr["status"] == "MERGED" or \
+                    isinstance(pr["status"], PRStatus) and pr["status"] == PRStatus.MERGED:
+                merged_count += 1
+        print(f"Loaded {pr_count} pull requests ({merged_count} merged)")
+
+        print("Loading PR comments...")
+        comment_count = 0
+        for comment in all_data["pr_comments"]:
             create_pr_comment(comment)
+            comment_count += 1
+        print(f"Loaded {comment_count} PR comments")
 
-        print("Loading CICD events...")
-        for cicd_event in all_data["cicd_events"]:
-            create_cicd_event(cicd_event)
+        print("\nPhase 7: Loading CICD events...")
+        with db_manager.get_session() as session:
+            merged_prs = session.query(PullRequest).filter(
+                PullRequest.status == PRStatus.MERGED,
+                PullRequest.merged_at.isnot(None)
+            ).all()
 
-        print("Loading bugs...")
-        for bug in all_data["bugs"]:
-            # Verify Jira and build exist
-            with db_manager.get_session() as session:
-                jira_exists = (
-                    session.query(JiraItem)
-                    .filter(JiraItem.id == bug["jira_id"])
-                    .first()
-                    is not None
-                )
+            print(f"Found {len(merged_prs)} merged PRs in database")
+            if len(merged_prs) > 0:
+                print("Sample merged PR from DB:", {
+                    "id": merged_prs[0].id,
+                    "status": merged_prs[0].status,
+                    "merged_at": merged_prs[0].merged_at,
+                    "project_id": merged_prs[0].project_id
+                })
 
-                if not jira_exists:
-                    print(
-                        f"Warning: Jira {bug['jira_id']} not found for bug {bug['id']}"
-                    )
+            # Convert PR objects to dictionaries
+            pr_dicts = [{
+                "id": pr.id,
+                "created_at": pr.created_at,
+                "merged_at": pr.merged_at,
+                "project_id": pr.project_id,
+                "branch_to": pr.branch_to,
+                "status": pr.status
+            } for pr in merged_prs]
+
+            print("Generating CICD events...")
+            cicd_events = generate_cicd_events(base_project_data, pr_dicts)
+            print(f"Generated {len(cicd_events)} CICD events")
+
+            print("Loading CICD events...")
+            cicd_count = 0
+            for event in cicd_events:
+                try:
+                    # Skip events with PR references that don't exist
+                    if event.get('pr_id') and event.get('pr_created_at'):
+                        if not verify_pr_exists(session, event['pr_id'], event['pr_created_at']):
+                            print(f"Skipping CICD event {event['id']} - PR {event['pr_id']} not found")
+                            continue
+
+                    create_cicd_event(event)
+                    cicd_count += 1
+                    if cicd_count % 100 == 0:
+                        print(f"Loaded {cicd_count} CICD events...")
+                except Exception as e:
+                    print(f"Error loading CICD event: {str(e)}")
+                    print(f"Event data: {json.dumps(event, default=str)}")
                     continue
+            print(f"Successfully loaded {cicd_count} CICD events")
 
-            create_bug(bug)
+            # Verify CICD events were actually loaded
+            actual_count = session.query(CICDEvent).count()
+            print(f"Actual CICD events in database: {actual_count}")
+
+            print("\nPhase 8: Loading remaining entities...")
+            # Get actual CICD builds from database
+            available_builds = session.query(CICDEvent.build_id, CICDEvent.event_id).all()
+
+            if available_builds:
+                print(f"Found {len(available_builds)} CICD builds in database")
+
+                # Create lookup of build IDs by project
+                project_builds = {}
+                for build_id, event_id in available_builds:
+                    if event_id not in project_builds:
+                        project_builds[event_id] = []
+                    project_builds[event_id].append(build_id)
+
+                print("Available builds by project:", {
+                    proj_id: len(builds)
+                    for proj_id, builds in project_builds.items()
+                })
+
+                # Process bugs with valid build IDs
+                print("Loading bugs with valid build references...")
+                bug_count = 0
+                for bug in all_data["bugs"]:
+                    project_id = bug["event_id"]
+
+                    # Check if project has builds
+                    if project_id not in project_builds or not project_builds[project_id]:
+                        print(f"Skipping bug {bug['id']} - no builds available for project {project_id}")
+                        continue
+
+                    # Convert list to array before selecting random item
+                    build_list = list(project_builds[project_id])
+                    valid_build_id = random.choice(build_list)
+
+                    # Update bug with valid build ID
+                    modified_bug = bug.copy()
+                    modified_bug["build_id"] = valid_build_id
+
+                    try:
+                        # Verify Jira exists first
+                        jira_exists = (
+                            session.query(JiraItem)
+                            .filter(JiraItem.id == modified_bug["jira_id"])
+                            .first()
+                            is not None
+                        )
+
+                        if not jira_exists:
+                            print(f"Skipping bug {modified_bug['id']} - Jira {modified_bug['jira_id']} not found")
+                            continue
+
+                        create_bug(modified_bug)
+                        bug_count += 1
+
+                        if bug_count % 10 == 0:
+                            print(f"Loaded {bug_count} bugs...")
+
+                    except Exception as e:
+                        print(f"Error creating bug {modified_bug['id']}: {str(e)}")
+                        continue
+
+                print(f"Successfully loaded {bug_count} bugs")
+            else:
+                print("No CICD builds found in database. Skipping bug loading.")
 
         print("Loading team metrics...")
-        for team_metric in all_data["team_metrics"]:
-            create_team_metrics(team_metric)
+        for metric in all_data["team_metrics"]:
+            create_team_metrics(metric)
 
-        print("Data loading completed successfully")
+        print("\nData loading completed successfully")
 
     except Exception as e:
         print(f"Error loading data: {e}")
         raise
 
-
 def load_sample_data_into_timeseries_db():
+    """Load sample data into the timeseries database"""
     try:
-        # Call the function to create the database if it does not exist
+        # Create database if it doesn't exist
         create_database_if_not_exists()
 
-        # Initialize the DatabaseManager using the new function
+        # Initialize the DatabaseManager
         db_manager = initialize_db_manager()
 
+        # Get sample data once
+        print("Getting sample data...")
+        sample_data = get_sample_data()
+
         # Load the data
-        load_data(db_manager)
+        load_data(db_manager, sample_data)
         print("Data has been loaded into the sdlc_timeseries schema.")
 
     except Exception as e:
