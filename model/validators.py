@@ -1,10 +1,8 @@
 from typing import Any, Dict, List
 
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from model.sdlc_events import (
-    Bug,
     CICDEvent,
     CodeCommit,
     DesignEvent,
@@ -12,7 +10,7 @@ from model.sdlc_events import (
     PRStatus,
     PullRequest,
     Sprint,
-    sprint_jira_association,
+    sprint_jira_association, Bug,
 )
 
 
@@ -176,86 +174,6 @@ def validate_bug_build_timeline(session: Session) -> List[str]:
     return errors
 
 
-def verify_temporal_consistency(commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> List[str]:
-    """Verify temporal consistency between commits and Jira items"""
-    errors = []
-
-    # Create completion date lookup for Jiras
-    jira_completion_dates = {
-        jira["id"]: jira.get("completed_date") for jira in jira_items
-    }
-
-    # Check commit-Jira temporal relationship
-    for commit in commits:
-        jira_completion_date = jira_completion_dates.get(commit["jira_id"])
-        if jira_completion_date is None:
-            errors.append(
-                f"Commit {commit['id']} references Jira {commit['jira_id']} which has no completion date"
-            )
-        elif commit["timestamp"] <= jira_completion_date:
-            errors.append(
-                f"Commit {commit['id']} timestamp ({commit['timestamp']}) is not after "
-                f"its Jira {commit['jira_id']} completion date ({jira_completion_date})"
-            )
-
-    return errors
-
-
-def verify_project_references(all_data: Dict[str, Any]) -> List[str]:
-    """Verify all project references are valid"""
-    errors = []
-
-    # Get set of valid project IDs
-    project_ids = {proj["id"] for proj in all_data["projects"]}
-
-    # Check commits
-    for commit in all_data["commits"]:
-        if commit["event_id"] not in project_ids:
-            errors.append(
-                f"Commit {commit['id']} references invalid project {commit['event_id']}"
-            )
-
-    # Check CICD events
-    for event in all_data["cicd_events"]:
-        if event["event_id"] not in project_ids:
-            errors.append(
-                f"CICD event {event['id']} references invalid project {event['event_id']}"
-            )
-
-    # Check sprints
-    for sprint in all_data["sprints"]:
-        if sprint["event_id"] not in project_ids:
-            errors.append(
-                f"Sprint {sprint['id']} references invalid project {sprint['event_id']}"
-            )
-
-    return errors
-
-
-def verify_jira_references(all_data: Dict[str, Any]) -> List[str]:
-    """Verify all Jira references are valid"""
-    errors = []
-
-    # Get set of valid Jira IDs
-    jira_ids = {jira["id"] for jira in all_data["jira_items"]}
-
-    # Check commits
-    for commit in all_data["commits"]:
-        if commit["jira_id"] not in jira_ids:
-            errors.append(
-                f"Commit {commit['id']} references invalid Jira {commit['jira_id']}"
-            )
-
-    # Check sprint associations
-    for sprint_id, sprint_jiras in all_data["relationships"][
-        "sprint_jira_associations"
-    ].items():
-        for jira_id in sprint_jiras:
-            if jira_id not in jira_ids:
-                errors.append(f"Sprint {sprint_id} references invalid Jira {jira_id}")
-
-    return errors
-
 def validate_relationships(data: Dict[str, Any]) -> List[str]:
     """Validate all relationships in the generated data"""
     validation_errors = []
@@ -410,3 +328,5 @@ def validate_all_timelines(session: Session) -> Dict[str, List[str]]:
         "bug_build": validate_bug_build_timeline(session),
         "jira_hierarchy": validate_jira_date_hierarchy(session),
     }
+
+

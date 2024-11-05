@@ -4,7 +4,7 @@ from datetime import datetime
 from operator import and_
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Boolean, Column, DateTime, and_
 from sqlalchemy import Enum
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import (
@@ -373,12 +373,22 @@ def get_commits(
 """
 CI/CD Related CRUD
 """
-
-
 def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
-    """Create a CICD event with better error handling and logging"""
+    """Create a CICD event with better error handling and PR verification"""
     with db_manager.get_session() as session:
         try:
+            # Verify PR exists if PR reference is provided
+            if event_data.get('pr_id') and event_data.get('pr_created_at'):
+                pr_exists = verify_pr_exists(
+                    session,
+                    event_data['pr_id'],
+                    event_data['pr_created_at']
+                )
+                if not pr_exists:
+                    print(f"Warning: Removing PR reference for CICD event {event_data['id']} - PR {event_data['pr_id']} not found")
+                    event_data['pr_id'] = None
+                    event_data['pr_created_at'] = None
+
             # Convert numpy string to regular string if needed
             if hasattr(event_data.get('status'), 'item'):
                 event_data['status'] = event_data['status'].item()
@@ -395,9 +405,10 @@ def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
             session.commit()
             print(f"Successfully created CICD event {event.id}")
             return event
+
         except Exception as e:
             session.rollback()
-            print(f"Error creating CICD event {event_data.get('id')}: {str(e)}")
+            print(f"Error loading CICD event: {str(e)}")
             print(f"Event data: {json.dumps(event_data, default=str)}")
             raise
 
@@ -899,3 +910,104 @@ def bulk_insert(model_class: Any, items: List[Dict[str, Any]]) -> bool:
             session.rollback()
             print(f"Bulk insert failed: {str(e)}")
             return False
+
+
+def verify_temporal_consistency(commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> List[str]:
+    """Verify temporal consistency between commits and Jira items"""
+    errors = []
+
+    # Create completion date lookup for Jiras
+    jira_completion_dates = {
+        jira["id"]: jira.get("completed_date") for jira in jira_items
+    }
+
+    # Check commit-Jira temporal relationship
+    for commit in commits:
+        jira_completion_date = jira_completion_dates.get(commit["jira_id"])
+        if jira_completion_date is None:
+            errors.append(
+                f"Commit {commit['id']} references Jira {commit['jira_id']} which has no completion date"
+            )
+        elif commit["timestamp"] <= jira_completion_date:
+            errors.append(
+                f"Commit {commit['id']} timestamp ({commit['timestamp']}) is not after "
+                f"its Jira {commit['jira_id']} completion date ({jira_completion_date})"
+            )
+
+    return errors
+
+
+def verify_project_references(all_data: Dict[str, Any]) -> List[str]:
+    """Verify all project references are valid"""
+    errors = []
+
+    # Get set of valid project IDs
+    project_ids = {proj["id"] for proj in all_data["projects"]}
+
+    # Check commits
+    for commit in all_data["commits"]:
+        if commit["event_id"] not in project_ids:
+            errors.append(
+                f"Commit {commit['id']} references invalid project {commit['event_id']}"
+            )
+
+    # Check CICD events
+    for event in all_data["cicd_events"]:
+        if event["event_id"] not in project_ids:
+            errors.append(
+                f"CICD event {event['id']} references invalid project {event['event_id']}"
+            )
+
+    # Check sprints
+    for sprint in all_data["sprints"]:
+        if sprint["event_id"] not in project_ids:
+            errors.append(
+                f"Sprint {sprint['id']} references invalid project {sprint['event_id']}"
+            )
+
+    return errors
+
+
+def verify_jira_references(all_data: Dict[str, Any]) -> List[str]:
+    """Verify all Jira references are valid"""
+    errors = []
+
+    # Get set of valid Jira IDs
+    jira_ids = {jira["id"] for jira in all_data["jira_items"]}
+
+    # Check commits
+    for commit in all_data["commits"]:
+        if commit["jira_id"] not in jira_ids:
+            errors.append(
+                f"Commit {commit['id']} references invalid Jira {commit['jira_id']}"
+            )
+
+    # Check sprint associations
+    for sprint_id, sprint_jiras in all_data["relationships"][
+        "sprint_jira_associations"
+    ].items():
+        for jira_id in sprint_jiras:
+            if jira_id not in jira_ids:
+                errors.append(f"Sprint {sprint_id} references invalid Jira {jira_id}")
+
+    return errors
+
+
+def verify_pr_exists(session, pr_id: str, pr_created_at: datetime) -> bool:
+    """
+    Verify that a pull request exists in the database.
+
+    Args:
+        session: SQLAlchemy session
+        pr_id: Pull request ID
+        pr_created_at: Pull request creation timestamp
+
+    Returns:
+        bool: True if the PR exists, False otherwise
+    """
+    return session.query(PullRequest).filter(
+        and_(
+            PullRequest.id == pr_id,
+            PullRequest.created_at == pr_created_at
+        )
+    ).first() is not None

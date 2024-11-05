@@ -9,12 +9,10 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from sqlalchemy import text
 
-from model.sdlc_events import PRStatus, StageType, db_manager
+from model.sdlc_events import PRStatus, StageType, db_manager, verify_temporal_consistency, verify_project_references, \
+    verify_jira_references
 from model.validators import (
     validate_all_timelines,
-    verify_jira_references,
-    verify_project_references,
-    verify_temporal_consistency,
     validate_commit_jira_completion_dates,
 )
 
@@ -1509,21 +1507,13 @@ def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[st
         f"Generated {len(pull_requests)} pull requests, {sum(1 for pr in pull_requests if pr['status'] == 'MERGED')} merged")
     return pull_requests, pr_comments
 
-
-def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: List[Dict[str, Any]]) -> List[
-    Dict[str, Any]]:
+def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Generate CICD events with proper PR relationships and tag-based builds"""
     cicd_events = []
     environments = ["dev", "staging", "qa", "uat", "production"]
 
     print("Generating CICD events...")
     print(f"Input: {len(pull_requests)} pull requests")
-
-    # Debug project data
-    print("Project completion states:", {
-        pid: data.get("completion_state", "unknown")
-        for pid, data in projects.items()
-    })
 
     # Filter for merged PRs
     merged_prs = [
@@ -1534,8 +1524,6 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
     ]
 
     print(f"Found {len(merged_prs)} merged PRs")
-    if len(merged_prs) > 0:
-        print("Sample merged PR:", merged_prs[0])
 
     # Group by project
     project_prs = {}
@@ -1554,25 +1542,28 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
             continue
 
         project_data = projects[proj_id]
-        completion_state = project_data.get("completion_state", "mixed")  # Default to mixed if not found
+        completion_state = project_data.get("completion_state", "mixed")
         print(f"Processing project {proj_id} ({completion_state}) with {len(proj_prs)} PRs")
 
-        # Sort PRs by merge time
+        # Sort PRs by merge time to maintain temporal consistency
         proj_prs.sort(key=lambda x: x["merged_at"])
 
-        # Rest of the event generation code remains the same
+        # Generate CICD events for each PR
         for pr in proj_prs:
+            # Start builds 5-30 minutes after PR merge
             base_time = pr["merged_at"] + timedelta(minutes=randint(5, 30))
 
+            # Generate CI/CD events for each environment
             for env in environments:
                 cicd_status = data_generator.get_cicd_status(completion_state)
                 build_id = f"build_{uuid.uuid4().hex[:8]}"
 
+                # Create CICD event with explicit PR association
                 cicd_events.append({
                     "id": f"cicd_{uuid.uuid4().hex[:8]}",
                     "event_id": proj_id,
-                    "pr_id": pr["id"],
-                    "pr_created_at": pr["created_at"],
+                    "pr_id": pr["id"],  # Link to the PR
+                    "pr_created_at": pr["created_at"],  # Include PR creation time
                     "timestamp": base_time,
                     "environment": env,
                     "event_type": "build",
@@ -1585,12 +1576,15 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
                     "tag": None
                 })
 
+                # Add 30-60 minutes between environments
                 base_time += timedelta(minutes=randint(30, 60))
 
+            # Generate release builds for main branch PRs
             if pr["branch_to"] == "main":
                 tag = f"v1.{randint(0, 9)}.{randint(0, 9)}"
                 tag_time = pr["merged_at"] + timedelta(minutes=randint(30, 120))
 
+                # Create release builds only for staging and production
                 for env in ['staging', 'production']:
                     cicd_status = data_generator.get_cicd_status(completion_state)
                     build_id = f"build_{uuid.uuid4().hex[:8]}"
@@ -1598,8 +1592,8 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
                     cicd_events.append({
                         "id": f"cicd_{uuid.uuid4().hex[:8]}",
                         "event_id": proj_id,
-                        "pr_id": None,
-                        "pr_created_at": None,
+                        "pr_id": pr["id"],  # Link release builds to the PR too
+                        "pr_created_at": pr["created_at"],
                         "timestamp": tag_time,
                         "environment": env,
                         "event_type": "build",
@@ -1608,13 +1602,14 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
                         "duration_seconds": randint(180, 900),
                         "metrics": cicd_status["metrics"],
                         "reason": "tag-based-build",
-                        "branch": pr["branch_to"],
+                        "branch": "main",
                         "tag": tag
                     })
 
                     tag_time += timedelta(minutes=randint(30, 60))
 
     print(f"Generated {len(cicd_events)} total CICD events")
+    # Sort all events by timestamp
     return sorted(cicd_events, key=lambda x: x["timestamp"])
 
 def generate_all_data() -> Dict[str, Any]:

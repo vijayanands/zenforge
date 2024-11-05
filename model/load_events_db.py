@@ -1,7 +1,7 @@
 # load_events_db.py
 import json
 import random
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from sqlalchemy import create_engine, text
 
@@ -23,7 +23,7 @@ from model.sdlc_events import (
     create_sprint_jira_associations,
     create_team_metrics,
     db_name,
-    server_connection_string, PullRequest, PRStatus, CICDEvent,
+    server_connection_string, PullRequest, PRStatus, CICDEvent, verify_pr_exists,
 )
 
 # Create an engine for the server connection
@@ -56,6 +56,50 @@ def initialize_db_manager():
     except Exception as e:
         print(f"Error creating schemas: {e}")
     return db_manager
+
+
+def load_cicd_events(db_manager, cicd_events: List[Dict[str, Any]]) -> int:
+    """
+    Load CICD events with proper PR verification and error handling.
+
+    Args:
+        db_manager: Database manager instance
+        cicd_events: List of CICD event dictionaries
+
+    Returns:
+        int: Number of successfully loaded events
+    """
+    success_count = 0
+
+    with db_manager.get_session() as session:
+        for event in cicd_events:
+            try:
+                # Verify PR exists if PR reference is provided
+                if event.get('pr_id') and event.get('pr_created_at'):
+                    pr_exists = verify_pr_exists(
+                        session,
+                        event['pr_id'],
+                        event['pr_created_at']
+                    )
+                    if not pr_exists:
+                        print(
+                            f"Warning: Removing PR reference for CICD event {event['id']} - PR {event['pr_id']} not found")
+                        event['pr_id'] = None
+                        event['pr_created_at'] = None
+
+                # Create CICD event
+                create_cicd_event(event)
+                success_count += 1
+
+                if success_count % 100 == 0:
+                    print(f"Loaded {success_count} CICD events...")
+
+            except Exception as e:
+                print(f"Error loading CICD event {event.get('id')}: {str(e)}")
+                continue
+
+    return success_count
+
 
 def load_data(db_manager, all_data: Dict[str, Any]):
     """Load data into the database handling all relationships and dependencies"""
@@ -129,21 +173,16 @@ def load_data(db_manager, all_data: Dict[str, Any]):
 
         print("\nPhase 7: Loading CICD events...")
         with db_manager.get_session() as session:
+            # Get actual PR data for CICD event generation
+            print("Retrieving merged PRs from database...")
             merged_prs = session.query(PullRequest).filter(
                 PullRequest.status == PRStatus.MERGED,
                 PullRequest.merged_at.isnot(None)
             ).all()
 
             print(f"Found {len(merged_prs)} merged PRs in database")
-            if len(merged_prs) > 0:
-                print("Sample merged PR from DB:", {
-                    "id": merged_prs[0].id,
-                    "status": merged_prs[0].status,
-                    "merged_at": merged_prs[0].merged_at,
-                    "project_id": merged_prs[0].project_id
-                })
 
-            # Convert PR objects to dictionaries
+            # Convert PR objects to dictionaries for CICD generation
             pr_dicts = [{
                 "id": pr.id,
                 "created_at": pr.created_at,
@@ -158,31 +197,17 @@ def load_data(db_manager, all_data: Dict[str, Any]):
             print(f"Generated {len(cicd_events)} CICD events")
 
             print("Loading CICD events...")
-            cicd_count = 0
-            for event in cicd_events:
-                try:
-                    # Skip events with PR references that don't exist
-                    if event.get('pr_id') and event.get('pr_created_at'):
-                        if not verify_pr_exists(session, event['pr_id'], event['pr_created_at']):
-                            print(f"Skipping CICD event {event['id']} - PR {event['pr_id']} not found")
-                            continue
+            success_count = load_cicd_events(db_manager, cicd_events)
+            print(f"Successfully loaded {success_count} CICD events")
 
-                    create_cicd_event(event)
-                    cicd_count += 1
-                    if cicd_count % 100 == 0:
-                        print(f"Loaded {cicd_count} CICD events...")
-                except Exception as e:
-                    print(f"Error loading CICD event: {str(e)}")
-                    print(f"Event data: {json.dumps(event, default=str)}")
-                    continue
-            print(f"Successfully loaded {cicd_count} CICD events")
-
-            # Verify CICD events were actually loaded
+            # Verify final count
             actual_count = session.query(CICDEvent).count()
             print(f"Actual CICD events in database: {actual_count}")
 
-            print("\nPhase 8: Loading remaining entities...")
-            # Get actual CICD builds from database
+        print("\nPhase 8: Loading remaining entities...")
+        print("Loading bugs...")
+        # Get actual CICD builds from database for bug associations
+        with db_manager.get_session() as session:
             available_builds = session.query(CICDEvent.build_id, CICDEvent.event_id).all()
 
             if available_builds:
@@ -195,52 +220,29 @@ def load_data(db_manager, all_data: Dict[str, Any]):
                         project_builds[event_id] = []
                     project_builds[event_id].append(build_id)
 
-                print("Available builds by project:", {
-                    proj_id: len(builds)
-                    for proj_id, builds in project_builds.items()
-                })
-
-                # Process bugs with valid build IDs
                 print("Loading bugs with valid build references...")
                 bug_count = 0
                 for bug in all_data["bugs"]:
                     project_id = bug["event_id"]
+                    if project_id in project_builds and project_builds[project_id]:
+                        # Assign a valid build ID from the project's builds
+                        modified_bug = bug.copy()
+                        modified_bug["build_id"] = random.choice(project_builds[project_id])
 
-                    # Check if project has builds
-                    if project_id not in project_builds or not project_builds[project_id]:
-                        print(f"Skipping bug {bug['id']} - no builds available for project {project_id}")
-                        continue
+                        # Verify Jira exists
+                        jira_exists = session.query(JiraItem).filter(
+                            JiraItem.id == modified_bug["jira_id"]
+                        ).first() is not None
 
-                    # Convert list to array before selecting random item
-                    build_list = list(project_builds[project_id])
-                    valid_build_id = random.choice(build_list)
-
-                    # Update bug with valid build ID
-                    modified_bug = bug.copy()
-                    modified_bug["build_id"] = valid_build_id
-
-                    try:
-                        # Verify Jira exists first
-                        jira_exists = (
-                            session.query(JiraItem)
-                            .filter(JiraItem.id == modified_bug["jira_id"])
-                            .first()
-                            is not None
-                        )
-
-                        if not jira_exists:
+                        if jira_exists:
+                            create_bug(modified_bug)
+                            bug_count += 1
+                            if bug_count % 10 == 0:
+                                print(f"Loaded {bug_count} bugs...")
+                        else:
                             print(f"Skipping bug {modified_bug['id']} - Jira {modified_bug['jira_id']} not found")
-                            continue
-
-                        create_bug(modified_bug)
-                        bug_count += 1
-
-                        if bug_count % 10 == 0:
-                            print(f"Loaded {bug_count} bugs...")
-
-                    except Exception as e:
-                        print(f"Error creating bug {modified_bug['id']}: {str(e)}")
-                        continue
+                    else:
+                        print(f"Skipping bug for project {project_id} - no builds available")
 
                 print(f"Successfully loaded {bug_count} bugs")
             else:
