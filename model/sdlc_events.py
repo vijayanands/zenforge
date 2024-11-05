@@ -156,7 +156,9 @@ class CICDEvent(Base):
     duration_seconds = Column(Integer)
     metrics = Column(JSONB)
     reason = Column(String, nullable=True)
-
+    # New fields
+    branch = Column(String, nullable=False)  # Branch is required
+    tag = Column(String, nullable=True)      # Tag is optional
 
 class Bug(Base):
     __tablename__ = "bugs"

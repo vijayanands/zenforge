@@ -960,9 +960,8 @@ def generate_commits(
     return sorted(commits, key=lambda x: x["timestamp"])
 
 
-# Update generate_cicd_events function
 def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Modified CICD event generation without commit associations"""
+    """Modified CICD event generation with branch and tag fields"""
     cicd_events = []
     environments = ["dev", "staging", "qa", "uat", "production"]
 
@@ -988,6 +987,12 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict
                 for env in environments:
                     cicd_status = data_generator.get_cicd_status(completion_state)
 
+                    # Determine tag based on environment and status
+                    tag = None
+                    if env in ["production", "staging"] and cicd_status["status"] == "success":
+                        # Create version tag for successful prod/staging deployments
+                        tag = f"v1.{randint(0, 9)}.{randint(0, 9)}"
+
                     # Create build event after commit
                     build_event = {
                         "id": f"cicd_{uuid.uuid4().hex[:8]}",
@@ -1000,6 +1005,8 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict
                         "duration_seconds": randint(180, 900),
                         "metrics": cicd_status["metrics"],
                         "reason": None,
+                        "branch": commit["branch"],  # Use the commit's branch
+                        "tag": tag  # Add optional tag
                     }
                     cicd_events.append(build_event)
 

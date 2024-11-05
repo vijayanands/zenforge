@@ -16,40 +16,6 @@ from model.sdlc_events import (
 )
 
 
-def validate_pr_comment_consistency() -> List[str]:
-    """
-    Validate PR comment relationships even without foreign key constraints.
-
-    Returns:
-        List[str]: List of validation errors found
-    """
-    errors = []
-    with db_manager.get_session() as session:
-        # Get all comments
-        comments = session.query(PRComment).all()
-
-        # Check each comment's PR reference
-        for comment in comments:
-            pr = (
-                session.query(PullRequest)
-                .filter(
-                    and_(
-                        PullRequest.id == comment.pr_id,
-                        PullRequest.created_at == comment.pr_created_at,
-                    )
-                )
-                .first()
-            )
-
-            if not pr:
-                errors.append(
-                    f"Comment {comment.id} references non-existent PR "
-                    f"{comment.pr_id} (created_at: {comment.pr_created_at})"
-                )
-
-    return errors
-
-
 def validate_design_sprint_timeline(session: Session) -> List[str]:
     """Validate that design phases complete before sprint timelines start"""
     errors = []
