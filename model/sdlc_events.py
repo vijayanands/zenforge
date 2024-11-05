@@ -26,18 +26,6 @@ from sqlalchemy.orm import relationship, sessionmaker
 
 # Junction tables
 Base = declarative_base()
-cicd_commit_association = Table(
-    "cicd_commit_association",
-    Base.metadata,
-    Column("cicd_id", String, ForeignKey("sdlc_timeseries.cicd_events.id")),
-    Column("commit_id", String),
-    Column("commit_timestamp", DateTime),
-    ForeignKeyConstraint(
-        ["commit_id", "commit_timestamp"],
-        ["sdlc_timeseries.code_commits.id", "sdlc_timeseries.code_commits.timestamp"],
-    ),
-    schema="sdlc_timeseries",
-)
 
 sprint_jira_association = Table(
     "sprint_jira_association",
@@ -168,16 +156,6 @@ class CICDEvent(Base):
     duration_seconds = Column(Integer)
     metrics = Column(JSONB)
     reason = Column(String, nullable=True)
-
-    commits = relationship(
-        "CodeCommit",
-        secondary=cicd_commit_association,
-        primaryjoin=(id == cicd_commit_association.c.cicd_id),
-        secondaryjoin=and_(
-            CodeCommit.id == cicd_commit_association.c.commit_id,
-            CodeCommit.timestamp == cicd_commit_association.c.commit_timestamp,
-        ),
-    )
 
 
 class Bug(Base):
@@ -383,49 +361,18 @@ def get_commits(
 """
 CI/CD Related CRUD
 """
-
-
 def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
+    """Create a CICD event without commit associations"""
     with db_manager.get_session() as session:
         try:
-            # Get commit associations from the data
-            commit_pairs = event_data.pop("commit_pairs", [])
-
-            # Create CICD event first
             event = CICDEvent(**event_data)
             session.add(event)
-            session.flush()  # Flush to get the event ID
-
-            # Associate commits if provided
-            if commit_pairs:
-                for commit_id, timestamp in commit_pairs:
-                    commit = (
-                        session.query(CodeCommit)
-                        .filter(
-                            and_(
-                                CodeCommit.id == commit_id,
-                                CodeCommit.timestamp == timestamp,
-                                CodeCommit.timestamp < event.timestamp,
-                            )
-                        )
-                        .first()
-                    )
-
-                    if commit:
-                        event.commits.append(commit)
-                    else:
-                        print(
-                            f"Warning: Commit {commit_id} at {timestamp} not found or is newer than CICD event"
-                        )
-
             session.commit()
             return event
-
         except Exception as e:
             session.rollback()
             print(f"Error creating CICD event: {e}")
             raise
-
 
 def get_cicd_events(
     event_id: str, environment: Optional[str] = None, event_type: Optional[str] = None
@@ -809,32 +756,26 @@ class DatabaseManager:
                         """
                         CREATE INDEX IF NOT EXISTS idx_cicd_events_timestamp 
                         ON sdlc_timeseries.cicd_events (timestamp);
-                        
+
                         CREATE INDEX IF NOT EXISTS idx_bugs_created_date 
                         ON sdlc_timeseries.bugs (created_date);
-                        
+
                         CREATE INDEX IF NOT EXISTS idx_jira_items_created_date 
                         ON sdlc_timeseries.jira_items (created_date);
-                        
+
                         CREATE INDEX IF NOT EXISTS idx_sprints_start_date 
                         ON sdlc_timeseries.sprints (start_date);
                         """
                     )
                 )
 
-                # Create indexes for association tables
+                # Create indexes for sprint_jira_association only
                 connection.execute(
                     text(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_cicd_commit_assoc_cicd 
-                        ON sdlc_timeseries.cicd_commit_association (cicd_id);
-                        
-                        CREATE INDEX IF NOT EXISTS idx_cicd_commit_assoc_commit 
-                        ON sdlc_timeseries.cicd_commit_association (commit_id, commit_timestamp);
-                        
                         CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_sprint 
                         ON sdlc_timeseries.sprint_jira_association (sprint_id);
-                        
+
                         CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_jira 
                         ON sdlc_timeseries.sprint_jira_association (jira_id);
                         """

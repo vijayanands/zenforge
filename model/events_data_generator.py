@@ -961,12 +961,9 @@ def generate_commits(
 
 
 # Update generate_cicd_events function
-def generate_cicd_events(
-    projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]
-) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
-    """Modified CICD event generation to ensure proper temporal relationships"""
+def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Modified CICD event generation without commit associations"""
     cicd_events = []
-    cicd_commit_map = {}
     environments = ["dev", "staging", "qa", "uat", "production"]
 
     # Group commits by project and sort by timestamp
@@ -992,9 +989,8 @@ def generate_cicd_events(
                     cicd_status = data_generator.get_cicd_status(completion_state)
 
                     # Create build event after commit
-                    build_event_id = f"cicd_{uuid.uuid4().hex[:8]}"
                     build_event = {
-                        "id": build_event_id,
+                        "id": f"cicd_{uuid.uuid4().hex[:8]}",
                         "event_id": proj_id,
                         "timestamp": commit_time + timedelta(minutes=randint(5, 30)),
                         "environment": env,
@@ -1006,10 +1002,8 @@ def generate_cicd_events(
                         "reason": None,
                     }
                     cicd_events.append(build_event)
-                    cicd_commit_map[build_event_id] = [commit["id"]]
 
-    return sorted(cicd_events, key=lambda x: x["timestamp"]), cicd_commit_map
-
+    return sorted(cicd_events, key=lambda x: x["timestamp"])
 
 def generate_bugs(
     projects: Dict[str, Dict[str, Any]],
@@ -1488,13 +1482,8 @@ def generate_all_data() -> Dict[str, Any]:
         sprints = adjust_sprint_dates(sprints, jira_items, design_completion_times)
 
         print("Adjusting sprint and Jira timelines...")
-        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(
-            project_details,
-            design_events,
-            sprints,
-            jira_items,
-            sprint_jira_map,  # Added missing parameter
-        )
+        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(design_events, sprints, jira_items,
+                                                                            sprint_jira_map)
 
         print("Generating and adjusting commits...")
         commits = generate_commits(projects, adjusted_jiras)  # Use adjusted Jiras
@@ -1505,10 +1494,10 @@ def generate_all_data() -> Dict[str, Any]:
         pull_requests = adjust_pr_dates(pull_requests, commits)
 
         print("Generating CICD events...")
-        cicd_events, cicd_commit_map = generate_cicd_events(projects, commits)
+        cicd_events = generate_cicd_events(projects, commits)
 
         print("Adjusting CICD event dates...")
-        cicd_events = adjust_cicd_dates(cicd_events, pull_requests, cicd_commit_map)
+        cicd_events = adjust_cicd_dates(cicd_events, pull_requests)
 
         print("Generating and adjusting bugs...")
         bugs = generate_bugs(
@@ -1533,16 +1522,13 @@ def generate_all_data() -> Dict[str, Any]:
             "pr_comments": pr_comments,
             "relationships": {
                 "sprint_jira_associations": sprint_jira_map,
-                "cicd_commit_associations": cicd_commit_map,
             },
         }
 
         print("Verifying data consistency...")
 
         # Verify temporal consistency with enhanced Jira validation
-        temporal_errors = verify_temporal_consistency(
-            commits, cicd_events, cicd_commit_map, adjusted_jiras
-        )
+        temporal_errors = verify_temporal_consistency(commits, adjusted_jiras)
         if temporal_errors:
             print("Temporal consistency errors:")
             for error in temporal_errors:
@@ -1603,7 +1589,6 @@ def generate_all_data() -> Dict[str, Any]:
         print(f"Error generating data: {str(e)}")
         raise
 
-
 def get_sample_data() -> Dict[str, Any]:
     """Get sample data with validation"""
     try:
@@ -1632,16 +1617,11 @@ def get_sample_data() -> Dict[str, Any]:
 
         # Verify relationships structure
         required_relationships = {
-            "sprint_jira_associations",
-            "cicd_commit_associations",
+            "sprint_jira_associations",  # Removed cicd_commit_associations
         }
-        missing_relationships = required_relationships - set(
-            all_data["relationships"].keys()
-        )
+        missing_relationships = required_relationships - set(all_data["relationships"].keys())
         if missing_relationships:
-            raise ValueError(
-                f"Missing required relationship maps: {missing_relationships}"
-            )
+            raise ValueError(f"Missing required relationship maps: {missing_relationships}")
 
         # Verify data types
         type_checks = {
@@ -1662,7 +1642,6 @@ def get_sample_data() -> Dict[str, Any]:
     except Exception as e:
         print(f"Error in get_sample_data: {str(e)}")
         raise
-
 
 def write_sample_data(filename: str = "sample_data.json") -> None:
     """Write sample data to a JSON file"""
@@ -1820,71 +1799,39 @@ def adjust_bug_dates(
 
     return adjusted_bugs
 
-
 def adjust_cicd_dates(
     cicd_events: List[Dict[str, Any]],
     pull_requests: List[Dict[str, Any]],
-    cicd_commit_map: Dict[str, List[str]],
 ) -> List[Dict[str, Any]]:
-    """Adjust CI/CD event dates to ensure they start after PR completion and commits"""
-    # Create map of commit timestamps by commit ID
-    commit_times = {}
+    """Adjust CI/CD event dates to ensure they start after PR completion"""
+    # Create map of PR merge times by project
+    project_pr_merge_times = {}
     for pr in pull_requests:
-        if pr["commit_id"] and pr["commit_timestamp"]:
-            commit_times[pr["commit_id"]] = pr["commit_timestamp"]
-
-    # Create map of PR merge times by commit ID
-    pr_merge_times = {
-        pr["commit_id"]: pr["merged_at"]
-        for pr in pull_requests
-        if pr["status"] == "MERGED" and pr.get("merged_at")
-    }
+        if pr["status"] == "MERGED" and pr.get("merged_at"):
+            if pr["project_id"] not in project_pr_merge_times:
+                project_pr_merge_times[pr["project_id"]] = []
+            project_pr_merge_times[pr["project_id"]].append(pr["merged_at"])
 
     adjusted_events = []
     for event in cicd_events:
-        # Get associated commits from the mapping
-        associated_commits = cicd_commit_map.get(event["id"], [])
+        project_id = event["event_id"]
+        pr_merge_times = project_pr_merge_times.get(project_id, [])
 
-        if associated_commits:
-            # Find latest commit time and PR merge time
-            latest_commit_time = max(
-                (
-                    commit_times.get(commit_id)
-                    for commit_id in associated_commits
-                    if commit_id in commit_times
-                ),
-                default=None,
-            )
-
-            merge_times = [
-                pr_merge_times.get(commit_id)
-                for commit_id in associated_commits
-                if commit_id in pr_merge_times
-            ]
-            latest_merge = max(merge_times) if merge_times else None
-
-            # CICD event must happen after both commit and PR merge
-            reference_time = (
-                max(filter(None, [latest_commit_time, latest_merge]))
-                if latest_commit_time or latest_merge
-                else None
-            )
-
-            if reference_time:
-                event["timestamp"] = reference_time + timedelta(minutes=randint(5, 30))
+        if pr_merge_times:
+            # Find the closest PR merge time before this event
+            valid_merge_times = [t for t in pr_merge_times if t < event["timestamp"]]
+            if valid_merge_times:
+                latest_merge = max(valid_merge_times)
+                # Add a small delay after the PR merge
+                event["timestamp"] = latest_merge + timedelta(minutes=randint(5, 30))
 
         adjusted_events.append(event)
 
     return sorted(adjusted_events, key=lambda x: x["timestamp"])
 
-
-def adjust_sprint_and_jira_timelines(
-    projects: List[Dict[str, Any]],
-    design_events: List[Dict[str, Any]],
-    sprints: List[Dict[str, Any]],
-    jira_items: List[Dict[str, Any]],
-    sprint_jira_associations: Dict[str, List[str]],
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+def adjust_sprint_and_jira_timelines(design_events: List[Dict[str, Any]], sprints: List[Dict[str, Any]],
+                                     jira_items: List[Dict[str, Any]],
+                                     sprint_jira_associations: Dict[str, List[str]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Adjust sprint start dates and JIRA dates to maintain proper temporal consistency:
     1. Sprints cannot start until all design items for their project are complete

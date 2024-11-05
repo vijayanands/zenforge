@@ -179,28 +179,19 @@ def validate_cicd_pr_timeline(session: Session) -> List[str]:
     errors = []
 
     cicd_events = session.query(CICDEvent).order_by(CICDEvent.timestamp).all()
-    for event in cicd_events:
-        # Find associated commits and their PRs
-        for commit in event.commits:
-            prs = (
-                session.query(PullRequest)
-                .filter(
-                    and_(
-                        PullRequest.commit_id == commit.id,
-                        PullRequest.commit_timestamp == commit.timestamp,
-                    )
-                )
-                .all()
-            )
+    prs = session.query(PullRequest).all()
 
-            for pr in prs:
-                if pr.status != PRStatus.MERGED or event.timestamp < pr.merged_at:
-                    errors.append(
-                        f"CICD event {event.id} at {event.timestamp} started before PR {pr.id} was merged at {pr.merged_at}"
-                    )
+    for event in cicd_events:
+        for pr in prs:
+            if (event.event_id == pr.project_id and
+                pr.status == PRStatus.MERGED and
+                event.timestamp < pr.merged_at):
+                errors.append(
+                    f"CICD event {event.id} at {event.timestamp} started before "
+                    f"PR {pr.id} was merged at {pr.merged_at}"
+                )
 
     return errors
-
 
 def validate_bug_build_timeline(session: Session) -> List[str]:
     """Validate that P0 bugs and releases only happen after CI/CD build completion"""
@@ -221,17 +212,9 @@ def validate_bug_build_timeline(session: Session) -> List[str]:
     return errors
 
 
-def verify_temporal_consistency(
-    commits: List[Dict[str, Any]],
-    cicd_events: List[Dict[str, Any]],
-    cicd_commit_map: Dict[str, List[str]],
-    jira_items: List[Dict[str, Any]],  # Added jira_items parameter
-) -> List[str]:
-    """Verify temporal consistency between commits, CICD events, and Jira items"""
+def verify_temporal_consistency(commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> List[str]:
+    """Verify temporal consistency between commits and Jira items"""
     errors = []
-
-    # Create timestamp lookup for commits
-    commit_timestamps = {commit["id"]: commit["timestamp"] for commit in commits}
 
     # Create completion date lookup for Jiras
     jira_completion_dates = {
@@ -250,23 +233,6 @@ def verify_temporal_consistency(
                 f"Commit {commit['id']} timestamp ({commit['timestamp']}) is not after "
                 f"its Jira {commit['jira_id']} completion date ({jira_completion_date})"
             )
-
-    # Check CICD-commit temporal relationships
-    for event in cicd_events:
-        associated_commits = cicd_commit_map.get(event["id"], [])
-        for commit_id in associated_commits:
-            if commit_id not in commit_timestamps:
-                errors.append(
-                    f"CICD event {event['id']} references non-existent commit {commit_id}"
-                )
-                continue
-
-            commit_time = commit_timestamps[commit_id]
-            if commit_time >= event["timestamp"]:
-                errors.append(
-                    f"Temporal inconsistency: Commit {commit_id} ({commit_time.isoformat()}) "
-                    f"is newer than CICD event {event['id']} ({event['timestamp'].isoformat()})"
-                )
 
     return errors
 
@@ -326,7 +292,6 @@ def verify_jira_references(all_data: Dict[str, Any]) -> List[str]:
 
     return errors
 
-
 def validate_relationships(data: Dict[str, Any]) -> List[str]:
     """Validate all relationships in the generated data"""
     validation_errors = []
@@ -357,9 +322,7 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
 
     # Validate sprint-jira associations
     sprint_ids = set(sprint["id"] for sprint in data["sprints"])
-    for sprint_id, associated_jiras in data["relationships"][
-        "sprint_jira_associations"
-    ].items():
+    for sprint_id, associated_jiras in data["relationships"]["sprint_jira_associations"].items():
         if sprint_id not in sprint_ids:
             validation_errors.append(
                 f"Invalid sprint_id {sprint_id} in sprint-jira associations"
@@ -370,24 +333,7 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
                     f"Invalid jira_id {jira_id} in sprint-jira associations"
                 )
 
-    # Validate CICD-commit associations
-    commit_ids = set(commit["id"] for commit in data["commits"])
-    cicd_ids = set(cicd["id"] for cicd in data["cicd_events"])
-    for cicd_id, associated_commits in data["relationships"][
-        "cicd_commit_associations"
-    ].items():
-        if cicd_id not in cicd_ids:
-            validation_errors.append(
-                f"Invalid cicd_id {cicd_id} in cicd-commit associations"
-            )
-        for commit_id in associated_commits:
-            if commit_id not in commit_ids:
-                validation_errors.append(
-                    f"Invalid commit_id {commit_id} in cicd-commit associations"
-                )
-
     return validation_errors
-
 
 def validate_jira_date_hierarchy(session: Session) -> List[str]:
     """
