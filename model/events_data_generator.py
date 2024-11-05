@@ -9,8 +9,14 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from sqlalchemy import text
 
-from model.sdlc_events import PRStatus, StageType, db_manager, verify_temporal_consistency, verify_project_references, \
-    verify_jira_references
+from model.sdlc_events import (
+    PRStatus,
+    StageType,
+    db_manager,
+    verify_temporal_consistency,
+    verify_project_references,
+    verify_jira_references,
+)
 from model.validators import (
     validate_all_timelines,
     validate_commit_jira_completion_dates,
@@ -961,12 +967,16 @@ def generate_commits(
 
 def fetch_valid_prs(session):
     """Fetch all valid PRs from the database with their creation and merge times"""
-    result = session.execute(text("""
+    result = session.execute(
+        text(
+            """
         SELECT id, created_at, merged_at, project_id, branch_to, status
         FROM sdlc_timeseries.pull_requests
         WHERE status = 'MERGED' AND merged_at IS NOT NULL
         ORDER BY merged_at
-    """))
+    """
+        )
+    )
 
     valid_prs = {}
     for row in result:
@@ -974,9 +984,10 @@ def fetch_valid_prs(session):
             "created_at": row.created_at,
             "merged_at": row.merged_at,
             "project_id": row.project_id,
-            "branch_to": row.branch_to
+            "branch_to": row.branch_to,
         }
     return valid_prs
+
 
 def adjust_cicd_dates(cicd_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Adjust CI/CD event dates to ensure they start after PR completion"""
@@ -996,7 +1007,9 @@ def adjust_cicd_dates(cicd_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]
                         # Adjust the timestamp to be after PR merge
                         event = event.copy()
                         event["timestamp"] = minimum_build_time + timedelta(
-                            minutes=randint(0, 25)  # Add random additional delay up to 25 minutes
+                            minutes=randint(
+                                0, 25
+                            )  # Add random additional delay up to 25 minutes
                         )
                         # Ensure we use the exact PR created_at from the database
                         event["pr_created_at"] = pr_info["created_at"]
@@ -1008,9 +1021,9 @@ def adjust_cicd_dates(cicd_events: List[Dict[str, Any]]) -> List[Dict[str, Any]]
 
 
 def generate_bugs(
-        projects: Dict[str, Dict[str, Any]],
-        jira_items: List[Dict[str, Any]],
-        cicd_events: List[Dict[str, Any]],
+    projects: Dict[str, Dict[str, Any]],
+    jira_items: List[Dict[str, Any]],
+    cicd_events: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     """Generate bugs for all projects with proper CICD build references"""
     bugs = []
@@ -1030,10 +1043,9 @@ def generate_bugs(
         if event["event_id"] not in project_builds:
             project_builds[event["event_id"]] = []
         if event.get("build_id"):  # Only store valid build IDs
-            project_builds[event["event_id"]].append({
-                "id": event["build_id"],
-                "timestamp": event["timestamp"]
-            })
+            project_builds[event["event_id"]].append(
+                {"id": event["build_id"], "timestamp": event["timestamp"]}
+            )
 
     print(f"Found builds for projects: {list(project_builds.keys())}")
 
@@ -1048,10 +1060,14 @@ def generate_bugs(
         available_builds = project_builds.get(proj_id, [])
 
         if not available_jiras or not available_builds:
-            print(f"Skipping bug generation for project {proj_id} - missing Jiras or builds")
+            print(
+                f"Skipping bug generation for project {proj_id} - missing Jiras or builds"
+            )
             continue
 
-        print(f"Generating bugs for project {proj_id} with {len(available_builds)} builds")
+        print(
+            f"Generating bugs for project {proj_id} with {len(available_builds)} builds"
+        )
 
         bug_start = details["start_date"] + timedelta(days=30)
         num_bugs = np.random.randint(5, 15)
@@ -1070,12 +1086,13 @@ def generate_bugs(
 
             # Find a build that happened before bug_date
             valid_builds = [
-                build for build in available_builds
-                if build["timestamp"] <= bug_date
+                build for build in available_builds if build["timestamp"] <= bug_date
             ]
 
             if not valid_builds:
-                print(f"Skipping bug for project {proj_id} - no builds before {bug_date}")
+                print(
+                    f"Skipping bug for project {proj_id} - no builds before {bug_date}"
+                )
                 continue
 
             # Select the most recent build before the bug date
@@ -1084,47 +1101,50 @@ def generate_bugs(
             # Associate with a random Jira
             associated_jira = random.choice(available_jiras)
 
-            bugs.append({
-                "id": f"{proj_id}-BUG-{i + 1}",
-                "event_id": proj_id,
-                "jira_id": associated_jira,
-                "build_id": selected_build["id"],
-                "bug_type": np.random.choice(bug_types),
-                "impact_area": np.random.choice(impact_areas),
-                "severity": "P0",
-                "title": f"Critical bug in {details['title']}",
-                "status": status,
-                "created_date": bug_date,
-                "resolved_date": (
-                    bug_date + timedelta(hours=resolution_time)
-                    if status == "Fixed"
-                    else None
-                ),
-                "resolution_time_hours": (
-                    resolution_time if status == "Fixed" else None
-                ),
-                "assigned_to": f"dev{np.random.randint(1, 6)}@example.com",
-                "environment_found": np.random.choice(
-                    ["Production", "Staging", "QA"]
-                ),
-                "number_of_customers_affected": (
-                    np.random.randint(1, 1000) if np.random.random() > 0.5 else 0
-                ),
-                "root_cause": data_generator.generate_root_cause(),
-                "fix_version": f"{proj_id.lower()}-v1.{np.random.randint(0, 9)}.{np.random.randint(0, 9)}",
-                "regression_test_status": (
-                    "Passed" if status == "Fixed" else "In Progress"
-                ),
-                "customer_communication_needed": np.random.choice([True, False]),
-                "postmortem_link": (
-                    f"https://wiki.example.com/postmortem/{proj_id}-BUG-{i + 1}"
-                    if status == "Fixed"
-                    else None
-                ),
-            })
+            bugs.append(
+                {
+                    "id": f"{proj_id}-BUG-{i + 1}",
+                    "event_id": proj_id,
+                    "jira_id": associated_jira,
+                    "build_id": selected_build["id"],
+                    "bug_type": np.random.choice(bug_types),
+                    "impact_area": np.random.choice(impact_areas),
+                    "severity": "P0",
+                    "title": f"Critical bug in {details['title']}",
+                    "status": status,
+                    "created_date": bug_date,
+                    "resolved_date": (
+                        bug_date + timedelta(hours=resolution_time)
+                        if status == "Fixed"
+                        else None
+                    ),
+                    "resolution_time_hours": (
+                        resolution_time if status == "Fixed" else None
+                    ),
+                    "assigned_to": f"dev{np.random.randint(1, 6)}@example.com",
+                    "environment_found": np.random.choice(
+                        ["Production", "Staging", "QA"]
+                    ),
+                    "number_of_customers_affected": (
+                        np.random.randint(1, 1000) if np.random.random() > 0.5 else 0
+                    ),
+                    "root_cause": data_generator.generate_root_cause(),
+                    "fix_version": f"{proj_id.lower()}-v1.{np.random.randint(0, 9)}.{np.random.randint(0, 9)}",
+                    "regression_test_status": (
+                        "Passed" if status == "Fixed" else "In Progress"
+                    ),
+                    "customer_communication_needed": np.random.choice([True, False]),
+                    "postmortem_link": (
+                        f"https://wiki.example.com/postmortem/{proj_id}-BUG-{i + 1}"
+                        if status == "Fixed"
+                        else None
+                    ),
+                }
+            )
 
     print(f"Generated {len(bugs)} bugs")
     return bugs
+
 
 def generate_sprints(
     projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]
@@ -1375,8 +1395,9 @@ def generate_team_metrics(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str,
     return team_metrics
 
 
-def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[str, Any]]) -> Tuple[
-    List[Dict[str, Any]], List[Dict[str, Any]]]:
+def generate_pull_requests(
+    projects: List[Dict[str, Any]], commits: List[Dict[str, Any]]
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Generate pull requests and comments with higher percentage of merged PRs"""
     pull_requests = []
     pr_comments = []
@@ -1386,7 +1407,7 @@ def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[st
         "main": 0.6,  # Increased to 60% to main
         "develop": 0.2,  # 20% to develop
         "staging": 0.1,  # 10% to staging
-        "test": 0.1  # 10% to test
+        "test": 0.1,  # 10% to test
     }
 
     # Create a map of projects for easier lookup
@@ -1420,7 +1441,7 @@ def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[st
             "design_and_sprint": 0.7,
             "mixed_all": 0.6,
             "mixed": 0.5,
-            "design_only": 0.4
+            "design_only": 0.4,
         }.get(completion_state, 0.5)
 
         # Create PRs for eligible commits
@@ -1432,21 +1453,27 @@ def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[st
 
                 # Select target branch based on weights
                 branch_to = np.random.choice(
-                    list(target_branches.keys()),
-                    p=list(target_branches.values())
+                    list(target_branches.keys()), p=list(target_branches.values())
                 )
 
                 # Determine PR status with higher merge rate
                 if branch_to == "main":
                     status = np.random.choice(
                         ["MERGED", "BLOCKED", "OPEN"],
-                        p=[merge_probability, (1 - merge_probability) / 2, (1 - merge_probability) / 2]
+                        p=[
+                            merge_probability,
+                            (1 - merge_probability) / 2,
+                            (1 - merge_probability) / 2,
+                        ],
                     )
                 else:
                     status = np.random.choice(
                         ["MERGED", "BLOCKED", "OPEN"],
-                        p=[merge_probability * 0.8, (1 - merge_probability * 0.8) / 2,
-                           (1 - merge_probability * 0.8) / 2]
+                        p=[
+                            merge_probability * 0.8,
+                            (1 - merge_probability * 0.8) / 2,
+                            (1 - merge_probability * 0.8) / 2,
+                        ],
                     )
 
                 merged_at = None
@@ -1454,20 +1481,22 @@ def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[st
                     merged_at = created_at + timedelta(days=randint(1, 3))
 
                 # Create PR
-                pull_requests.append({
-                    "id": pr_id,
-                    "created_at": created_at,
-                    "project_id": proj_id,
-                    "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
-                    "description": f"Implementing changes for {project['title']}",
-                    "branch_from": commit["branch"],
-                    "branch_to": branch_to,
-                    "author": commit["author"],
-                    "status": status,
-                    "merged_at": merged_at,
-                    "commit_id": commit["id"],
-                    "commit_timestamp": commit["timestamp"]
-                })
+                pull_requests.append(
+                    {
+                        "id": pr_id,
+                        "created_at": created_at,
+                        "project_id": proj_id,
+                        "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
+                        "description": f"Implementing changes for {project['title']}",
+                        "branch_from": commit["branch"],
+                        "branch_to": branch_to,
+                        "author": commit["author"],
+                        "status": status,
+                        "merged_at": merged_at,
+                        "commit_id": commit["id"],
+                        "commit_timestamp": commit["timestamp"],
+                    }
+                )
 
                 # Generate comments for the PR
                 num_comments = randint(2, 8)
@@ -1479,35 +1508,46 @@ def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[st
                     if merged_at and comment_time > merged_at:
                         break
 
-                    template = np.random.choice([
-                        "Please review the changes in file_{num}",
-                        "I've addressed the previous comments",
-                        "LGTM 👍",
-                        "Can you add more tests?",
-                        "Consider refactoring this part",
-                        "The changes look good, but needs documentation",
-                        "This might impact performance",
-                        "Approved after addressing comments",
-                        "Need to fix the failing tests",
-                        "Should we add logging here?"
-                    ])
+                    template = np.random.choice(
+                        [
+                            "Please review the changes in file_{num}",
+                            "I've addressed the previous comments",
+                            "LGTM 👍",
+                            "Can you add more tests?",
+                            "Consider refactoring this part",
+                            "The changes look good, but needs documentation",
+                            "This might impact performance",
+                            "Approved after addressing comments",
+                            "Need to fix the failing tests",
+                            "Should we add logging here?",
+                        ]
+                    )
 
-                    content = template.format(
-                        num=randint(1, commit["files_changed"])) if "{num}" in template else template
+                    content = (
+                        template.format(num=randint(1, commit["files_changed"]))
+                        if "{num}" in template
+                        else template
+                    )
 
-                    pr_comments.append({
-                        "id": f"COM-{uuid.uuid4().hex[:8]}",
-                        "pr_id": pr_id,
-                        "created_at": comment_time,
-                        "author": f"reviewer{randint(1, 4)}@example.com",
-                        "content": content
-                    })
+                    pr_comments.append(
+                        {
+                            "id": f"COM-{uuid.uuid4().hex[:8]}",
+                            "pr_id": pr_id,
+                            "created_at": comment_time,
+                            "author": f"reviewer{randint(1, 4)}@example.com",
+                            "content": content,
+                        }
+                    )
 
     print(
-        f"Generated {len(pull_requests)} pull requests, {sum(1 for pr in pull_requests if pr['status'] == 'MERGED')} merged")
+        f"Generated {len(pull_requests)} pull requests, {sum(1 for pr in pull_requests if pr['status'] == 'MERGED')} merged"
+    )
     return pull_requests, pr_comments
 
-def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+def generate_cicd_events(
+    projects: Dict[str, Dict[str, Any]], pull_requests: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
     """Generate CICD events with proper PR relationships and tag-based builds"""
     cicd_events = []
     environments = ["dev", "staging", "qa", "uat", "production"]
@@ -1517,10 +1557,13 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
 
     # Filter for merged PRs
     merged_prs = [
-        pr for pr in pull_requests
-        if ((isinstance(pr["status"], str) and pr["status"] == "MERGED") or
-            (isinstance(pr["status"], PRStatus) and pr["status"] == PRStatus.MERGED)) and
-           pr.get("merged_at")
+        pr
+        for pr in pull_requests
+        if (
+            (isinstance(pr["status"], str) and pr["status"] == "MERGED")
+            or (isinstance(pr["status"], PRStatus) and pr["status"] == PRStatus.MERGED)
+        )
+        and pr.get("merged_at")
     ]
 
     print(f"Found {len(merged_prs)} merged PRs")
@@ -1543,7 +1586,9 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
 
         project_data = projects[proj_id]
         completion_state = project_data.get("completion_state", "mixed")
-        print(f"Processing project {proj_id} ({completion_state}) with {len(proj_prs)} PRs")
+        print(
+            f"Processing project {proj_id} ({completion_state}) with {len(proj_prs)} PRs"
+        )
 
         # Sort PRs by merge time to maintain temporal consistency
         proj_prs.sort(key=lambda x: x["merged_at"])
@@ -1559,22 +1604,24 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
                 build_id = f"build_{uuid.uuid4().hex[:8]}"
 
                 # Create CICD event with explicit PR association
-                cicd_events.append({
-                    "id": f"cicd_{uuid.uuid4().hex[:8]}",
-                    "event_id": proj_id,
-                    "pr_id": pr["id"],  # Link to the PR
-                    "pr_created_at": pr["created_at"],  # Include PR creation time
-                    "timestamp": base_time,
-                    "environment": env,
-                    "event_type": "build",
-                    "build_id": build_id,
-                    "status": cicd_status["status"],
-                    "duration_seconds": randint(180, 900),
-                    "metrics": cicd_status["metrics"],
-                    "reason": "post-merge-build",
-                    "branch": pr["branch_to"],
-                    "tag": None
-                })
+                cicd_events.append(
+                    {
+                        "id": f"cicd_{uuid.uuid4().hex[:8]}",
+                        "event_id": proj_id,
+                        "pr_id": pr["id"],  # Link to the PR
+                        "pr_created_at": pr["created_at"],  # Include PR creation time
+                        "timestamp": base_time,
+                        "environment": env,
+                        "event_type": "build",
+                        "build_id": build_id,
+                        "status": cicd_status["status"],
+                        "duration_seconds": randint(180, 900),
+                        "metrics": cicd_status["metrics"],
+                        "reason": "post-merge-build",
+                        "branch": pr["branch_to"],
+                        "tag": None,
+                    }
+                )
 
                 # Add 30-60 minutes between environments
                 base_time += timedelta(minutes=randint(30, 60))
@@ -1585,32 +1632,35 @@ def generate_cicd_events(projects: Dict[str, Dict[str, Any]], pull_requests: Lis
                 tag_time = pr["merged_at"] + timedelta(minutes=randint(30, 120))
 
                 # Create release builds only for staging and production
-                for env in ['staging', 'production']:
+                for env in ["staging", "production"]:
                     cicd_status = data_generator.get_cicd_status(completion_state)
                     build_id = f"build_{uuid.uuid4().hex[:8]}"
 
-                    cicd_events.append({
-                        "id": f"cicd_{uuid.uuid4().hex[:8]}",
-                        "event_id": proj_id,
-                        "pr_id": pr["id"],  # Link release builds to the PR too
-                        "pr_created_at": pr["created_at"],
-                        "timestamp": tag_time,
-                        "environment": env,
-                        "event_type": "build",
-                        "build_id": build_id,
-                        "status": cicd_status["status"],
-                        "duration_seconds": randint(180, 900),
-                        "metrics": cicd_status["metrics"],
-                        "reason": "tag-based-build",
-                        "branch": "main",
-                        "tag": tag
-                    })
+                    cicd_events.append(
+                        {
+                            "id": f"cicd_{uuid.uuid4().hex[:8]}",
+                            "event_id": proj_id,
+                            "pr_id": pr["id"],  # Link release builds to the PR too
+                            "pr_created_at": pr["created_at"],
+                            "timestamp": tag_time,
+                            "environment": env,
+                            "event_type": "build",
+                            "build_id": build_id,
+                            "status": cicd_status["status"],
+                            "duration_seconds": randint(180, 900),
+                            "metrics": cicd_status["metrics"],
+                            "reason": "tag-based-build",
+                            "branch": "main",
+                            "tag": tag,
+                        }
+                    )
 
                     tag_time += timedelta(minutes=randint(30, 60))
 
     print(f"Generated {len(cicd_events)} total CICD events")
     # Sort all events by timestamp
     return sorted(cicd_events, key=lambda x: x["timestamp"])
+
 
 def generate_all_data() -> Dict[str, Any]:
     """Generate all data for the application with comprehensive validation and timeline constraints"""
@@ -1646,7 +1696,9 @@ def generate_all_data() -> Dict[str, Any]:
         pull_requests = adjust_pr_dates(pull_requests, commits)
 
         print("Generating CICD events...")
-        cicd_events = generate_cicd_events(projects, pull_requests)  # Updated to include pull_requests
+        cicd_events = generate_cicd_events(
+            projects, pull_requests
+        )  # Updated to include pull_requests
 
         print("Adjusting CICD event dates...")
         cicd_events = adjust_cicd_dates(cicd_events)
@@ -1740,6 +1792,7 @@ def generate_all_data() -> Dict[str, Any]:
         print(f"Error generating data: {str(e)}")
         raise
 
+
 def get_sample_data() -> Dict[str, Any]:
     """Get sample data with validation"""
     try:
@@ -1770,9 +1823,13 @@ def get_sample_data() -> Dict[str, Any]:
         required_relationships = {
             "sprint_jira_associations",  # Removed cicd_commit_associations
         }
-        missing_relationships = required_relationships - set(all_data["relationships"].keys())
+        missing_relationships = required_relationships - set(
+            all_data["relationships"].keys()
+        )
         if missing_relationships:
-            raise ValueError(f"Missing required relationship maps: {missing_relationships}")
+            raise ValueError(
+                f"Missing required relationship maps: {missing_relationships}"
+            )
 
         # Verify data types
         type_checks = {
@@ -1793,17 +1850,6 @@ def get_sample_data() -> Dict[str, Any]:
     except Exception as e:
         print(f"Error in get_sample_data: {str(e)}")
         raise
-
-def write_sample_data(filename: str = "sample_data.json") -> None:
-    """Write sample data to a JSON file"""
-    data = get_sample_data()
-    with open(filename, "w") as f:
-        json.dump(data, f, indent=2, default=str)
-    print(f"Sample data written to {filename}")
-
-
-if __name__ == "__main__":
-    write_sample_data()
 
 
 def enforce_design_sprint_timeline(
@@ -1859,25 +1905,6 @@ def adjust_sprint_dates(
         adjusted_sprints.append(sprint)
 
     return adjusted_sprints
-
-
-def adjust_commit_dates(
-    commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    """Adjust commit dates to ensure they happen after Jira completion"""
-    jira_completion_times = {
-        j["id"]: j.get("completed_date") for j in jira_items if j.get("completed_date")
-    }
-
-    adjusted_commits = []
-    for commit in commits:
-        jira_completion = jira_completion_times.get(commit["jira_id"])
-        if jira_completion:
-            # Set commit timestamp to jira completion time plus random minutes
-            commit["timestamp"] = jira_completion + timedelta(minutes=randint(5, 60))
-        adjusted_commits.append(commit)
-
-    return adjusted_commits
 
 
 def adjust_pr_dates(
@@ -1946,16 +1973,19 @@ def adjust_bug_dates(
 
     return adjusted_bugs
 
-def adjust_sprint_and_jira_timelines(design_events: List[Dict[str, Any]], sprints: List[Dict[str, Any]],
-                                     jira_items: List[Dict[str, Any]],
-                                     sprint_jira_associations: Dict[str, List[str]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+
+def adjust_sprint_and_jira_timelines(
+    design_events: List[Dict[str, Any]],
+    sprints: List[Dict[str, Any]],
+    jira_items: List[Dict[str, Any]],
+    sprint_jira_associations: Dict[str, List[str]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """
     Adjust sprint start dates and JIRA dates to maintain proper temporal consistency:
     1. Sprints cannot start until all design items for their project are complete
     2. JIRA items must start after their associated sprint's start date
 
     Args:
-        projects (list): List of project dictionaries
         design_events (list): List of design event dictionaries
         sprints (list): List of sprint dictionaries
         jira_items (list): List of JIRA item dictionaries

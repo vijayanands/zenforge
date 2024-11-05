@@ -5,25 +5,32 @@ from typing import Dict, Any, List
 
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import generate_pull_requests, get_sample_data, generate_cicd_events, adjust_cicd_dates
+from model.events_data_generator import (
+    generate_pull_requests,
+    get_sample_data,
+    generate_cicd_events,
+    adjust_cicd_dates,
+)
 from model.sdlc_events import (
     DatabaseManager,
     JiraItem,
-    Sprint,
     connection_string,
     create_bug,
     create_cicd_event,
     create_commit,
     create_design_event,
     create_jira_item,
-    create_pr_comment,
     create_project,
     create_pull_request,
     create_sprint,
     create_sprint_jira_associations,
     create_team_metrics,
     db_name,
-    server_connection_string, PullRequest, PRStatus, CICDEvent, verify_pr_exists,
+    server_connection_string,
+    PullRequest,
+    PRStatus,
+    CICDEvent,
+    verify_pr_exists,
 )
 
 # Create an engine for the server connection
@@ -75,17 +82,16 @@ def load_cicd_events(db_manager, cicd_events: List[Dict[str, Any]]) -> int:
         for event in cicd_events:
             try:
                 # Verify PR exists if PR reference is provided
-                if event.get('pr_id') and event.get('pr_created_at'):
+                if event.get("pr_id") and event.get("pr_created_at"):
                     pr_exists = verify_pr_exists(
-                        session,
-                        event['pr_id'],
-                        event['pr_created_at']
+                        session, event["pr_id"], event["pr_created_at"]
                     )
                     if not pr_exists:
                         print(
-                            f"Warning: Removing PR reference for CICD event {event['id']} - PR {event['pr_id']} not found")
-                        event['pr_id'] = None
-                        event['pr_created_at'] = None
+                            f"Warning: Removing PR reference for CICD event {event['id']} - PR {event['pr_id']} not found"
+                        )
+                        event["pr_id"] = None
+                        event["pr_created_at"] = None
 
                 # Create CICD event
                 create_cicd_event(event)
@@ -123,7 +129,7 @@ def load_data(db_manager, all_data: Dict[str, Any]):
                 "team_size": project["team_size"],
                 "estimated_duration_weeks": project.get("estimated_duration_weeks"),
                 "budget_allocated": project.get("budget_allocated"),
-                "priority": project.get("priority")
+                "priority": project.get("priority"),
             }
             create_project(db_project)
 
@@ -146,7 +152,9 @@ def load_data(db_manager, all_data: Dict[str, Any]):
         for sprint in all_data["sprints"]:
             create_sprint(sprint)
 
-        for sprint_id, jira_ids in all_data["relationships"]["sprint_jira_associations"].items():
+        for sprint_id, jira_ids in all_data["relationships"][
+            "sprint_jira_associations"
+        ].items():
             create_sprint_jira_associations(sprint_id, jira_ids)
 
         print("\nPhase 5: Loading commits...")
@@ -159,38 +167,42 @@ def load_data(db_manager, all_data: Dict[str, Any]):
         for pr in all_data["pull_requests"]:
             create_pull_request(pr)
             pr_count += 1
-            if isinstance(pr["status"], str) and pr["status"] == "MERGED" or \
-                    isinstance(pr["status"], PRStatus) and pr["status"] == PRStatus.MERGED:
+            if (
+                isinstance(pr["status"], str)
+                and pr["status"] == "MERGED"
+                or isinstance(pr["status"], PRStatus)
+                and pr["status"] == PRStatus.MERGED
+            ):
                 merged_count += 1
         print(f"Loaded {pr_count} pull requests ({merged_count} merged)")
-
-        print("Loading PR comments...")
-        comment_count = 0
-        for comment in all_data["pr_comments"]:
-            create_pr_comment(comment)
-            comment_count += 1
-        print(f"Loaded {comment_count} PR comments")
 
         print("\nPhase 7: Loading CICD events...")
         with db_manager.get_session() as session:
             # Get actual PR data for CICD event generation
             print("Retrieving merged PRs from database...")
-            merged_prs = session.query(PullRequest).filter(
-                PullRequest.status == PRStatus.MERGED,
-                PullRequest.merged_at.isnot(None)
-            ).all()
+            merged_prs = (
+                session.query(PullRequest)
+                .filter(
+                    PullRequest.status == PRStatus.MERGED,
+                    PullRequest.merged_at.isnot(None),
+                )
+                .all()
+            )
 
             print(f"Found {len(merged_prs)} merged PRs in database")
 
             # Convert PR objects to dictionaries for CICD generation
-            pr_dicts = [{
-                "id": pr.id,
-                "created_at": pr.created_at,
-                "merged_at": pr.merged_at,
-                "project_id": pr.project_id,
-                "branch_to": pr.branch_to,
-                "status": pr.status
-            } for pr in merged_prs]
+            pr_dicts = [
+                {
+                    "id": pr.id,
+                    "created_at": pr.created_at,
+                    "merged_at": pr.merged_at,
+                    "project_id": pr.project_id,
+                    "branch_to": pr.branch_to,
+                    "status": pr.status,
+                }
+                for pr in merged_prs
+            ]
 
             print("Generating CICD events...")
             cicd_events = generate_cicd_events(base_project_data, pr_dicts)
@@ -208,7 +220,9 @@ def load_data(db_manager, all_data: Dict[str, Any]):
         print("Loading bugs...")
         # Get actual CICD builds from database for bug associations
         with db_manager.get_session() as session:
-            available_builds = session.query(CICDEvent.build_id, CICDEvent.event_id).all()
+            available_builds = session.query(
+                CICDEvent.build_id, CICDEvent.event_id
+            ).all()
 
             if available_builds:
                 print(f"Found {len(available_builds)} CICD builds in database")
@@ -227,12 +241,17 @@ def load_data(db_manager, all_data: Dict[str, Any]):
                     if project_id in project_builds and project_builds[project_id]:
                         # Assign a valid build ID from the project's builds
                         modified_bug = bug.copy()
-                        modified_bug["build_id"] = random.choice(project_builds[project_id])
+                        modified_bug["build_id"] = random.choice(
+                            project_builds[project_id]
+                        )
 
                         # Verify Jira exists
-                        jira_exists = session.query(JiraItem).filter(
-                            JiraItem.id == modified_bug["jira_id"]
-                        ).first() is not None
+                        jira_exists = (
+                            session.query(JiraItem)
+                            .filter(JiraItem.id == modified_bug["jira_id"])
+                            .first()
+                            is not None
+                        )
 
                         if jira_exists:
                             create_bug(modified_bug)
@@ -240,9 +259,13 @@ def load_data(db_manager, all_data: Dict[str, Any]):
                             if bug_count % 10 == 0:
                                 print(f"Loaded {bug_count} bugs...")
                         else:
-                            print(f"Skipping bug {modified_bug['id']} - Jira {modified_bug['jira_id']} not found")
+                            print(
+                                f"Skipping bug {modified_bug['id']} - Jira {modified_bug['jira_id']} not found"
+                            )
                     else:
-                        print(f"Skipping bug for project {project_id} - no builds available")
+                        print(
+                            f"Skipping bug for project {project_id} - no builds available"
+                        )
 
                 print(f"Successfully loaded {bug_count} bugs")
             else:
@@ -257,6 +280,7 @@ def load_data(db_manager, all_data: Dict[str, Any]):
     except Exception as e:
         print(f"Error loading data: {e}")
         raise
+
 
 def load_sample_data_into_timeseries_db():
     """Load sample data into the timeseries database"""

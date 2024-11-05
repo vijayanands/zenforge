@@ -2,9 +2,9 @@ import enum
 import json
 from datetime import datetime
 from operator import and_
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Type
 
-from sqlalchemy import Boolean, Column, DateTime, and_
+from sqlalchemy import Boolean, Column, DateTime
 from sqlalchemy import Enum
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import (
@@ -142,9 +142,9 @@ class CodeCommit(Base):
         String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False
     )
 
+
 class CICDEvent(Base):
     __tablename__ = "cicd_events"
-    __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)
     event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
@@ -163,10 +163,13 @@ class CICDEvent(Base):
 
     __table_args__ = (
         ForeignKeyConstraint(
-            ['pr_id', 'pr_created_at'],
-            ['sdlc_timeseries.pull_requests.id', 'sdlc_timeseries.pull_requests.created_at']
+            ["pr_id", "pr_created_at"],
+            [
+                "sdlc_timeseries.pull_requests.id",
+                "sdlc_timeseries.pull_requests.created_at",
+            ],
         ),
-        {"schema": "sdlc_timeseries"}
+        {"schema": "sdlc_timeseries"},
     )
 
 
@@ -295,7 +298,7 @@ def create_design_event(event_data: Dict[str, Any]) -> DesignEvent:
 
 def get_design_events(
     event_id: str, design_type: Optional[str] = None
-) -> List[DesignEvent]:
+) -> list[Type[DesignEvent]]:
     with db_manager.get_session() as session:
         query = session.query(DesignEvent).filter(DesignEvent.event_id == event_id)
         if design_type:
@@ -316,7 +319,9 @@ def create_jira_item(jira_data: Dict[str, Any]) -> JiraItem:
         return jira
 
 
-def get_jira_items(event_id: str, item_type: Optional[str] = None) -> List[JiraItem]:
+def get_jira_items(
+    event_id: str, item_type: Optional[str] = None
+) -> list[Type[JiraItem]]:
     with db_manager.get_session() as session:
         query = session.query(JiraItem).filter(JiraItem.event_id == event_id)
         if item_type:
@@ -360,7 +365,7 @@ def get_commits(
     event_id: str,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-) -> List[CodeCommit]:
+) -> list[Type[CodeCommit]]:
     with db_manager.get_session() as session:
         query = session.query(CodeCommit).filter(CodeCommit.event_id == event_id)
         if start_date:
@@ -373,31 +378,33 @@ def get_commits(
 """
 CI/CD Related CRUD
 """
+
+
 def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
     """Create a CICD event with better error handling and PR verification"""
     with db_manager.get_session() as session:
         try:
             # Verify PR exists if PR reference is provided
-            if event_data.get('pr_id') and event_data.get('pr_created_at'):
+            if event_data.get("pr_id") and event_data.get("pr_created_at"):
                 pr_exists = verify_pr_exists(
-                    session,
-                    event_data['pr_id'],
-                    event_data['pr_created_at']
+                    session, event_data["pr_id"], event_data["pr_created_at"]
                 )
                 if not pr_exists:
-                    print(f"Warning: Removing PR reference for CICD event {event_data['id']} - PR {event_data['pr_id']} not found")
-                    event_data['pr_id'] = None
-                    event_data['pr_created_at'] = None
+                    print(
+                        f"Warning: Removing PR reference for CICD event {event_data['id']} - PR {event_data['pr_id']} not found"
+                    )
+                    event_data["pr_id"] = None
+                    event_data["pr_created_at"] = None
 
             # Convert numpy string to regular string if needed
-            if hasattr(event_data.get('status'), 'item'):
-                event_data['status'] = event_data['status'].item()
-            if hasattr(event_data.get('branch'), 'item'):
-                event_data['branch'] = event_data['branch'].item()
+            if hasattr(event_data.get("status"), "item"):
+                event_data["status"] = event_data["status"].item()
+            if hasattr(event_data.get("branch"), "item"):
+                event_data["branch"] = event_data["branch"].item()
 
             # Convert metrics to JSON string if it isn't already
-            if isinstance(event_data.get('metrics'), dict):
-                event_data['metrics'] = json.dumps(event_data['metrics'])
+            if isinstance(event_data.get("metrics"), dict):
+                event_data["metrics"] = json.dumps(event_data["metrics"])
 
             # Create the event
             event = CICDEvent(**event_data)
@@ -412,9 +419,10 @@ def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
             print(f"Event data: {json.dumps(event_data, default=str)}")
             raise
 
+
 def get_cicd_events(
     event_id: str, environment: Optional[str] = None, event_type: Optional[str] = None
-) -> List[CICDEvent]:
+) -> list[Type[CICDEvent]]:
     with db_manager.get_session() as session:
         query = session.query(CICDEvent).filter(CICDEvent.event_id == event_id)
         if environment:
@@ -439,7 +447,7 @@ def create_bug(bug_data: Dict[str, Any]) -> Bug:
 
 def get_bugs(
     event_id: str, severity: Optional[str] = None, status: Optional[str] = None
-) -> List[Bug]:
+) -> list[Type[Bug]]:
     with db_manager.get_session() as session:
         query = session.query(Bug).filter(Bug.event_id == event_id)
         if severity:
@@ -482,7 +490,7 @@ def create_sprint(sprint_data: Dict[str, Any]) -> Sprint:
         return sprint
 
 
-def get_sprints(event_id: str, status: Optional[str] = None) -> List[Sprint]:
+def get_sprints(event_id: str, status: Optional[str] = None) -> list[Type[Sprint]]:
     with db_manager.get_session() as session:
         query = session.query(Sprint).filter(Sprint.event_id == event_id)
         if status:
@@ -524,7 +532,7 @@ def get_team_metrics(
     event_id: str,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-) -> List[TeamMetrics]:
+) -> list[Type[TeamMetrics]]:
     with db_manager.get_session() as session:
         query = session.query(TeamMetrics).filter(TeamMetrics.event_id == event_id)
         if start_date:
@@ -539,6 +547,7 @@ class PRStatus(enum.Enum):
     OPEN = "OPEN"
     BLOCKED = "BLOCKED"
     MERGED = "MERGED"
+
 
 class PullRequest(Base):
     __tablename__ = "pull_requests"
@@ -560,84 +569,6 @@ class PullRequest(Base):
     commit_id = Column(String)
     commit_timestamp = Column(DateTime)
 
-class PRComment(Base):
-    __tablename__ = "pr_comments"
-    __table_args__ = (
-        PrimaryKeyConstraint("id", "created_at"),
-        # Remove the foreign key constraint but keep the columns for logical relationship
-        {"schema": "sdlc_timeseries"},
-    )
-
-    id = Column(String)
-    created_at = Column(DateTime, nullable=False)
-    pr_id = Column(String, nullable=False)
-    pr_created_at = Column(DateTime, nullable=False)  # Keep for data consistency
-    author = Column(String, nullable=False)
-    content = Column(Text, nullable=False)
-
-
-def create_pr_comment(comment_data: Dict[str, Any]) -> PRComment:
-    """
-    Create a new PR comment with validation of PR existence.
-
-    Args:
-        comment_data (Dict[str, Any]): Dictionary containing comment data
-
-    Returns:
-        PRComment: Created comment object
-
-    Raises:
-        ValueError: If the referenced PR doesn't exist
-    """
-    valid_fields = {"id", "pr_id", "created_at", "author", "content"}
-    filtered_data = {k: v for k, v in comment_data.items() if k in valid_fields}
-
-    with db_manager.get_session() as session:
-        # Verify PR exists but handle relationship manually
-        pr = (
-            session.query(PullRequest)
-            .filter(PullRequest.id == filtered_data["pr_id"])
-            .first()
-        )
-
-        if not pr:
-            raise ValueError(f"Pull request {filtered_data['pr_id']} not found")
-
-        # Add PR created_at to maintain relationship
-        filtered_data["pr_created_at"] = pr.created_at
-
-        comment = PRComment(**filtered_data)
-        session.add(comment)
-        session.commit()
-        return comment
-
-
-def get_pr_comments(
-    pr_id: str,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-) -> List[PRComment]:
-    """
-    Get comments for a specific PR.
-
-    Args:
-        pr_id (str): Pull request ID
-        start_date (Optional[datetime]): Start date filter
-        end_date (Optional[datetime]): End date filter
-
-    Returns:
-        List[PRComment]: List of matching comments
-    """
-    with db_manager.get_session() as session:
-        query = session.query(PRComment).filter(PRComment.pr_id == pr_id)
-
-        if start_date:
-            query = query.filter(PRComment.created_at >= start_date)
-        if end_date:
-            query = query.filter(PRComment.created_at <= end_date)
-
-        return query.order_by(PRComment.created_at).all()
-
 
 # Add CRUD functions for Pull Requests
 # Update CRUD functions for Pull Requests and Comments
@@ -657,7 +588,7 @@ def get_pull_requests(
     status: Optional[PRStatus] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
-) -> List[PullRequest]:
+) -> list[Type[PullRequest]]:
     """Get pull requests with the updated schema"""
     with db_manager.get_session() as session:
         query = session.query(PullRequest).filter(PullRequest.project_id == project_id)
@@ -688,74 +619,6 @@ def update_pull_request_status(
         )
         session.commit()
         return result > 0
-
-
-def update_pr_comment(comment_id: str, created_at: datetime, new_content: str) -> bool:
-    """
-    Update a PR comment's content.
-
-    Args:
-        comment_id (str): ID of the comment to update
-        created_at (datetime): Creation timestamp of the comment
-        new_content (str): New content for the comment
-
-    Returns:
-        bool: True if the comment was updated, False otherwise
-    """
-    with db_manager.get_session() as session:
-        result = (
-            session.query(PRComment)
-            .filter(
-                and_(PRComment.id == comment_id, PRComment.created_at == created_at)
-            )
-            .update({"content": new_content})
-        )
-        session.commit()
-        return result > 0
-
-
-def delete_pr_comment(comment_id: str, created_at: datetime) -> bool:
-    """
-    Delete a PR comment.
-
-    Args:
-        comment_id (str): ID of the comment to delete
-        created_at (datetime): Creation timestamp of the comment
-
-    Returns:
-        bool: True if the comment was deleted, False otherwise
-    """
-    with db_manager.get_session() as session:
-        result = (
-            session.query(PRComment)
-            .filter(
-                and_(PRComment.id == comment_id, PRComment.created_at == created_at)
-            )
-            .delete()
-        )
-        session.commit()
-        return result > 0
-
-
-# Helper function to convert PRComment object to dictionary
-def pr_comment_to_dict(comment: PRComment) -> Dict[str, Any]:
-    """
-    Convert a PRComment object to a dictionary.
-
-    Args:
-        comment (PRComment): The PRComment object to convert
-
-    Returns:
-        Dict[str, Any]: Dictionary representation of the comment
-    """
-    return {
-        "id": comment.id,
-        "pr_id": comment.pr_id,
-        "created_at": comment.created_at,
-        "author": comment.author,
-        "content": comment.content,
-        "pr_created_at": comment.pr_created_at,
-    }
 
 
 class DatabaseManager:
@@ -912,7 +775,9 @@ def bulk_insert(model_class: Any, items: List[Dict[str, Any]]) -> bool:
             return False
 
 
-def verify_temporal_consistency(commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]) -> List[str]:
+def verify_temporal_consistency(
+    commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]
+) -> List[str]:
     """Verify temporal consistency between commits and Jira items"""
     errors = []
 
@@ -1005,9 +870,9 @@ def verify_pr_exists(session, pr_id: str, pr_created_at: datetime) -> bool:
     Returns:
         bool: True if the PR exists, False otherwise
     """
-    return session.query(PullRequest).filter(
-        and_(
-            PullRequest.id == pr_id,
-            PullRequest.created_at == pr_created_at
-        )
-    ).first() is not None
+    return (
+        session.query(PullRequest)
+        .filter(and_(PullRequest.id == pr_id, PullRequest.created_at == pr_created_at))
+        .first()
+        is not None
+    )

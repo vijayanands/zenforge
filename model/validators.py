@@ -10,7 +10,8 @@ from model.sdlc_events import (
     PRStatus,
     PullRequest,
     Sprint,
-    sprint_jira_association, Bug,
+    sprint_jira_association,
+    Bug,
 )
 
 
@@ -155,6 +156,7 @@ def validate_cicd_pr_timeline(session: Session) -> List[str]:
 
     return errors
 
+
 def validate_bug_build_timeline(session: Session) -> List[str]:
     """Validate that P0 bugs and releases only happen after CI/CD build completion"""
     errors = []
@@ -204,7 +206,9 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
 
     # Validate sprint-jira associations
     sprint_ids = set(sprint["id"] for sprint in data["sprints"])
-    for sprint_id, associated_jiras in data["relationships"]["sprint_jira_associations"].items():
+    for sprint_id, associated_jiras in data["relationships"][
+        "sprint_jira_associations"
+    ].items():
         if sprint_id not in sprint_ids:
             validation_errors.append(
                 f"Invalid sprint_id {sprint_id} in sprint-jira associations"
@@ -216,6 +220,7 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
                 )
 
     return validation_errors
+
 
 def validate_jira_date_hierarchy(session: Session) -> List[str]:
     """
@@ -328,5 +333,3 @@ def validate_all_timelines(session: Session) -> Dict[str, List[str]]:
         "bug_build": validate_bug_build_timeline(session),
         "jira_hierarchy": validate_jira_date_hierarchy(session),
     }
-
-
