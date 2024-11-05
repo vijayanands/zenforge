@@ -141,20 +141,18 @@ def validate_pr_commit_timeline(session: Session) -> List[str]:
 
 
 def validate_cicd_pr_timeline(session: Session) -> List[str]:
-    """Validate that CI/CD builds start only after PR completion"""
+    """Validate CICD build timestamps against PR merge times"""
     errors = []
 
-    cicd_events = session.query(CICDEvent).order_by(CICDEvent.timestamp).all()
-    prs = session.query(PullRequest).all()
+    cicd_events = session.query(CICDEvent).filter(CICDEvent.pr_id.isnot(None)).all()
 
     for event in cicd_events:
-        for pr in prs:
-            if (event.event_id == pr.project_id and
-                pr.status == PRStatus.MERGED and
-                event.timestamp < pr.merged_at):
+        pr = session.query(PullRequest).filter(PullRequest.id == event.pr_id).first()
+        if pr and pr.status == PRStatus.MERGED:
+            if event.timestamp <= pr.merged_at:
                 errors.append(
                     f"CICD event {event.id} at {event.timestamp} started before "
-                    f"PR {pr.id} was merged at {pr.merged_at}"
+                    f"its associated PR {pr.id} was merged at {pr.merged_at}"
                 )
 
     return errors

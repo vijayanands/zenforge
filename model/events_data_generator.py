@@ -960,57 +960,93 @@ def generate_commits(
     return sorted(commits, key=lambda x: x["timestamp"])
 
 
-def generate_cicd_events(projects: Dict[str, Dict[str, Any]], commits: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Modified CICD event generation with branch and tag fields"""
+def generate_cicd_events(projects: Dict[str, Dict[str, Any]],
+                         pull_requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Generate CICD events with proper PR relationships and tag-based builds"""
     cicd_events = []
     environments = ["dev", "staging", "qa", "uat", "production"]
 
-    # Group commits by project and sort by timestamp
-    project_commits = {}
-    for commit in commits:
-        if commit["event_id"] not in project_commits:
-            project_commits[commit["event_id"]] = []
-        project_commits[commit["event_id"]].append(commit)
+    # Create PR lookup by project
+    project_prs = {}
+    for pr in pull_requests:
+        if pr["project_id"] not in project_prs:
+            project_prs[pr["project_id"]] = []
+        project_prs[pr["project_id"]].append(pr)
 
-    for proj_id in project_commits:
-        project_commits[proj_id].sort(key=lambda x: x["timestamp"])
+    # Create version tags for completed PRs
+    version_tags = {}
+    for pr in pull_requests:
+        if pr["status"] == "MERGED" and pr["branch_to"] == "main":
+            tag = f"v1.{randint(0, 9)}.{randint(0, 9)}"
+            if pr["project_id"] not in version_tags:
+                version_tags[pr["project_id"]] = []
+            version_tags[pr["project_id"]].append({
+                "tag": tag,
+                "branch": pr["branch_to"],
+                "timestamp": pr["merged_at"] + timedelta(minutes=randint(30, 120))
+            })
 
-    for proj_id, proj_commits in project_commits.items():
-        completion_state = projects[proj_id]["completion_state"]
+    for proj_id, details in projects.items():
+        completion_state = details["completion_state"]
+        project_pull_requests = project_prs.get(proj_id, [])
 
-        # Process commits in chronological order
-        for i, commit in enumerate(proj_commits):
-            # Only create CICD events for some commits
-            if randint(1, 100) <= 80:  # 80% chance of creating CICD events
-                commit_time = commit["timestamp"]
+        # Generate builds for merged PRs
+        for pr in project_pull_requests:
+            if pr["status"] == "MERGED":
+                # Create builds that happen after PR merge
+                build_time = pr["merged_at"] + timedelta(minutes=randint(5, 30))
 
                 for env in environments:
                     cicd_status = data_generator.get_cicd_status(completion_state)
 
-                    # Determine tag based on environment and status
-                    tag = None
-                    if env in ["production", "staging"] and cicd_status["status"] == "success":
-                        # Create version tag for successful prod/staging deployments
-                        tag = f"v1.{randint(0, 9)}.{randint(0, 9)}"
-
-                    # Create build event after commit
-                    build_event = {
+                    cicd_events.append({
                         "id": f"cicd_{uuid.uuid4().hex[:8]}",
                         "event_id": proj_id,
-                        "timestamp": commit_time + timedelta(minutes=randint(5, 30)),
+                        "pr_id": pr["id"],
+                        "timestamp": build_time,
                         "environment": env,
                         "event_type": "build",
                         "build_id": f"build_{uuid.uuid4().hex[:8]}",
                         "status": cicd_status["status"],
                         "duration_seconds": randint(180, 900),
                         "metrics": cicd_status["metrics"],
-                        "reason": None,
-                        "branch": commit["branch"],  # Use the commit's branch
-                        "tag": tag  # Add optional tag
-                    }
-                    cicd_events.append(build_event)
+                        "reason": "post-merge-build",
+                        "branch": pr["branch_to"],
+                        "tag": None
+                    })
+
+                    # Increment build time for next environment
+                    build_time += timedelta(minutes=randint(30, 60))
+
+        # Generate tag-based builds
+        project_tags = version_tags.get(proj_id, [])
+        for tag_info in project_tags:
+            # Create builds for tags
+            build_time = tag_info["timestamp"]
+
+            for env in ['staging', 'production']:  # Tag-based builds typically only go to higher environments
+                cicd_status = data_generator.get_cicd_status(completion_state)
+
+                cicd_events.append({
+                    "id": f"cicd_{uuid.uuid4().hex[:8]}",
+                    "event_id": proj_id,
+                    "pr_id": None,  # No direct PR association for tag-based builds
+                    "timestamp": build_time,
+                    "environment": env,
+                    "event_type": "build",
+                    "build_id": f"build_{uuid.uuid4().hex[:8]}",
+                    "status": cicd_status["status"],
+                    "duration_seconds": randint(180, 900),
+                    "metrics": cicd_status["metrics"],
+                    "reason": "tag-based-build",
+                    "branch": tag_info["branch"],
+                    "tag": tag_info["tag"]
+                })
+
+                build_time += timedelta(minutes=randint(30, 60))
 
     return sorted(cicd_events, key=lambda x: x["timestamp"])
+
 
 def generate_bugs(
     projects: Dict[str, Dict[str, Any]],
@@ -1356,12 +1392,19 @@ def generate_team_metrics(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str,
     return team_metrics
 
 
-def generate_pull_requests(
-    projects: List[Dict[str, Any]], commits: List[Dict[str, Any]]
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Generate pull requests and comments with proper commit grouping"""
+def generate_pull_requests(projects: List[Dict[str, Any]], commits: List[Dict[str, Any]]) -> Tuple[
+    List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Generate pull requests and comments with enhanced branch targeting"""
     pull_requests = []
     pr_comments = []
+
+    # Define target branches with weights
+    target_branches = {
+        "main": 0.5,  # 50% to main
+        "develop": 0.25,  # 25% to develop
+        "staging": 0.15,  # 15% to staging
+        "test": 0.10  # 10% to test
+    }
 
     # Create a map of projects for easier lookup
     projects_map = {project["id"]: project for project in projects}
@@ -1394,42 +1437,50 @@ def generate_pull_requests(
             pr_id = f"PR-{commit['id']}"
             created_at = commit["timestamp"] + timedelta(minutes=randint(5, 30))
 
-            # Determine PR status based on project state
-            if project["status"] == "Completed":
-                status = "MERGED"
-                merged_at = created_at + timedelta(days=randint(1, 3))
+            # Select target branch based on weights
+            branch_to = np.random.choice(
+                list(target_branches.keys()),
+                p=list(target_branches.values())
+            )
+
+            # Determine PR status based on target branch and project state
+            if branch_to == "main":
+                # Higher merge rate for main branch
+                status = np.random.choice(
+                    ["MERGED", "BLOCKED", "OPEN"],
+                    p=[0.8, 0.1, 0.1]
+                )
             else:
                 status = np.random.choice(
-                    ["OPEN", "BLOCKED", "MERGED"], p=[0.4, 0.3, 0.3]
-                )
-                merged_at = (
-                    created_at + timedelta(days=randint(1, 3))
-                    if status == "MERGED"
-                    else None
+                    ["MERGED", "BLOCKED", "OPEN"],
+                    p=[0.6, 0.2, 0.2]
                 )
 
+            merged_at = None
+            if status == "MERGED":
+                merged_at = created_at + timedelta(days=randint(1, 3))
+
             # Create PR
-            pull_requests.append(
-                {
-                    "id": pr_id,
-                    "created_at": created_at,
-                    "project_id": proj_id,
-                    "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
-                    "description": f"Implementing changes for {project['title']}",
-                    "branch_from": commit["branch"],
-                    "branch_to": "main",
-                    "author": commit["author"],
-                    "status": status,
-                    "merged_at": merged_at,
-                    "commit_id": commit["id"],
-                    "commit_timestamp": commit["timestamp"],
-                }
-            )
+            pull_requests.append({
+                "id": pr_id,
+                "created_at": created_at,
+                "project_id": proj_id,
+                "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
+                "description": f"Implementing changes for {project['title']}",
+                "branch_from": commit["branch"],
+                "branch_to": branch_to,
+                "author": commit["author"],
+                "status": status,
+                "merged_at": merged_at,
+                "commit_id": commit["id"],
+                "commit_timestamp": commit["timestamp"]
+            })
 
             # Generate comments for the PR
             num_comments = randint(2, 8)
             comment_time = created_at
 
+            # Rest of the comment generation remains the same...
             comment_templates = [
                 "Please review the changes in file_{num}",
                 "I've addressed the previous comments",
@@ -1449,21 +1500,15 @@ def generate_pull_requests(
                     break
 
                 template = np.random.choice(comment_templates)
-                content = (
-                    template.format(num=randint(1, commit["files_changed"]))
-                    if "{num}" in template
-                    else template
-                )
+                content = template.format(num=randint(1, commit["files_changed"])) if "{num}" in template else template
 
-                pr_comments.append(
-                    {
-                        "id": f"COM-{uuid.uuid4().hex[:8]}",
-                        "pr_id": pr_id,
-                        "created_at": comment_time,
-                        "author": f"reviewer{randint(1, 4)}@example.com",
-                        "content": content,
-                    }
-                )
+                pr_comments.append({
+                    "id": f"COM-{uuid.uuid4().hex[:8]}",
+                    "pr_id": pr_id,
+                    "created_at": comment_time,
+                    "author": f"reviewer{randint(1, 4)}@example.com",
+                    "content": content
+                })
 
     return pull_requests, pr_comments
 
@@ -1489,11 +1534,12 @@ def generate_all_data() -> Dict[str, Any]:
         sprints = adjust_sprint_dates(sprints, jira_items, design_completion_times)
 
         print("Adjusting sprint and Jira timelines...")
-        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(design_events, sprints, jira_items,
-                                                                            sprint_jira_map)
+        adjusted_sprints, adjusted_jiras = adjust_sprint_and_jira_timelines(
+            design_events, sprints, jira_items, sprint_jira_map
+        )
 
         print("Generating and adjusting commits...")
-        commits = generate_commits(projects, adjusted_jiras)  # Use adjusted Jiras
+        commits = generate_commits(projects, adjusted_jiras)
         commits = adjust_commit_dates(commits, adjusted_jiras)
 
         print("Generating and adjusting pull requests...")
@@ -1501,15 +1547,14 @@ def generate_all_data() -> Dict[str, Any]:
         pull_requests = adjust_pr_dates(pull_requests, commits)
 
         print("Generating CICD events...")
-        cicd_events = generate_cicd_events(projects, commits)
+        cicd_events = generate_cicd_events(projects, pull_requests)  # Updated to include pull_requests
 
         print("Adjusting CICD event dates...")
         cicd_events = adjust_cicd_dates(cicd_events, pull_requests)
 
+        # Rest of the function remains the same
         print("Generating and adjusting bugs...")
-        bugs = generate_bugs(
-            projects, adjusted_jiras, cicd_events
-        )  # Use adjusted Jiras
+        bugs = generate_bugs(projects, adjusted_jiras, cicd_events)
         bugs = adjust_bug_dates(bugs, cicd_events)
 
         print("Generating team metrics...")
@@ -1806,31 +1851,24 @@ def adjust_bug_dates(
 
     return adjusted_bugs
 
-def adjust_cicd_dates(
-    cicd_events: List[Dict[str, Any]],
-    pull_requests: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
+
+def adjust_cicd_dates(cicd_events: List[Dict[str, Any]], pull_requests: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Adjust CI/CD event dates to ensure they start after PR completion"""
-    # Create map of PR merge times by project
-    project_pr_merge_times = {}
+    # Create map of PR merge times by project and PR ID
+    pr_merge_times = {}
     for pr in pull_requests:
         if pr["status"] == "MERGED" and pr.get("merged_at"):
-            if pr["project_id"] not in project_pr_merge_times:
-                project_pr_merge_times[pr["project_id"]] = []
-            project_pr_merge_times[pr["project_id"]].append(pr["merged_at"])
+            pr_merge_times[(pr["id"], pr["created_at"])] = pr["merged_at"]
 
     adjusted_events = []
     for event in cicd_events:
-        project_id = event["event_id"]
-        pr_merge_times = project_pr_merge_times.get(project_id, [])
+        if event.get("pr_id") and event.get("pr_created_at"):
+            pr_key = (event["pr_id"], event["pr_created_at"])
+            pr_merge_time = pr_merge_times.get(pr_key)
 
-        if pr_merge_times:
-            # Find the closest PR merge time before this event
-            valid_merge_times = [t for t in pr_merge_times if t < event["timestamp"]]
-            if valid_merge_times:
-                latest_merge = max(valid_merge_times)
-                # Add a small delay after the PR merge
-                event["timestamp"] = latest_merge + timedelta(minutes=randint(5, 30))
+            if pr_merge_time:
+                # Ensure build happens after PR merge
+                event["timestamp"] = pr_merge_time + timedelta(minutes=randint(5, 30))
 
         adjusted_events.append(event)
 

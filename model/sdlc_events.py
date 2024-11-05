@@ -141,13 +141,14 @@ class CodeCommit(Base):
         String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False
     )
 
-
 class CICDEvent(Base):
     __tablename__ = "cicd_events"
     __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)
     event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
+    pr_id = Column(String)
+    pr_created_at = Column(DateTime)
     timestamp = Column(DateTime, nullable=False)
     environment = Column(String)
     event_type = Column(String)
@@ -155,10 +156,18 @@ class CICDEvent(Base):
     status = Column(String)
     duration_seconds = Column(Integer)
     metrics = Column(JSONB)
-    reason = Column(String, nullable=True)
-    # New fields
-    branch = Column(String, nullable=False)  # Branch is required
-    tag = Column(String, nullable=True)      # Tag is optional
+    reason = Column(String, nullable=False)
+    branch = Column(String, nullable=False)
+    tag = Column(String, nullable=True)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ['pr_id', 'pr_created_at'],
+            ['sdlc_timeseries.pull_requests.id', 'sdlc_timeseries.pull_requests.created_at']
+        ),
+        {"schema": "sdlc_timeseries"}
+    )
+
 
 class Bug(Base):
     __tablename__ = "bugs"
@@ -504,7 +513,6 @@ class PRStatus(enum.Enum):
     BLOCKED = "BLOCKED"
     MERGED = "MERGED"
 
-
 class PullRequest(Base):
     __tablename__ = "pull_requests"
     __table_args__ = (
@@ -524,7 +532,6 @@ class PullRequest(Base):
     merged_at = Column(DateTime)
     commit_id = Column(String)
     commit_timestamp = Column(DateTime)
-
 
 class PRComment(Base):
     __tablename__ = "pr_comments"
