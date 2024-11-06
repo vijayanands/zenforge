@@ -546,7 +546,9 @@ def main():
 
             # Timeline View
             st.subheader("Project Timeline")
-            timeline_fig = create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_data)
+            timeline_fig = create_timeline_gantt(
+                design_data, sprint_data, commit_data, pr_data, cicd_data
+            )
             st.plotly_chart(timeline_fig, use_container_width=True)
 
             # Create metric dashboard
@@ -562,8 +564,11 @@ def main():
                     st.markdown("### Design Phase Metrics")
                     for _, row in design_data.iterrows():
                         duration = (row["end_time"] - row["start_time"]).days
-                        create_metric_card(row["design_type"], f"{duration} days",
-                                           help_text=f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}")
+                        create_metric_card(
+                            row["design_type"],
+                            f"{duration} days",
+                            help_text=f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}",
+                        )
                 else:
                     st.info("No design phase data available")
 
@@ -573,19 +578,28 @@ def main():
 
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        create_metric_card("Average Velocity", f"{sprint_data['team_velocity'].mean():.1f}",
-                                           help_text="Points completed per sprint")
+                        create_metric_card(
+                            "Average Velocity",
+                            f"{sprint_data['team_velocity'].mean():.1f}",
+                            help_text="Points completed per sprint",
+                        )
                     with col2:
                         completion_rate = (
                             sprint_data["completed_stories"].sum()
                             / sprint_data["planned_stories"].sum()
                             * 100
                         )
-                        create_metric_card("Completion Rate", f"{completion_rate:.1f}%",
-                                           help_text="Stories completed vs planned")
+                        create_metric_card(
+                            "Completion Rate",
+                            f"{completion_rate:.1f}%",
+                            help_text="Stories completed vs planned",
+                        )
                     with col3:
-                        create_metric_card("Total Story Points", f"{sprint_data['completed_story_points'].sum()}",
-                                           help_text="Completed across all sprints")
+                        create_metric_card(
+                            "Total Story Points",
+                            f"{sprint_data['completed_story_points'].sum()}",
+                            help_text="Completed across all sprints",
+                        )
                 else:
                     st.info("No sprint data available")
 
@@ -595,15 +609,23 @@ def main():
 
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        create_metric_card("Total Commits", commit_data["commit_count"].sum(),
-                                           help_text="Across all branches")
+                        create_metric_card(
+                            "Total Commits",
+                            commit_data["commit_count"].sum(),
+                            help_text="Across all branches",
+                        )
                     with col2:
-                        create_metric_card("Code Coverage", f"{commit_data['avg_coverage'].mean():.1f}%",
-                                           help_text="Average across all commits")
+                        create_metric_card(
+                            "Code Coverage",
+                            f"{commit_data['avg_coverage'].mean():.1f}%",
+                            help_text="Average across all commits",
+                        )
                     with col3:
-                        create_metric_card("Code Changes",
-                                           f"+{commit_data['total_lines_added'].sum()}/-{commit_data['total_lines_removed'].sum()}",
-                                           help_text="Lines added/removed")
+                        create_metric_card(
+                            "Code Changes",
+                            f"+{commit_data['total_lines_added'].sum()}/-{commit_data['total_lines_removed'].sum()}",
+                            help_text="Lines added/removed",
+                        )
                 else:
                     st.info("No commit data available")
 
@@ -616,11 +638,17 @@ def main():
                             / len(cicd_data)
                             * 100
                         )
-                        create_metric_card("Build Success Rate", f"{success_rate:.1f}%",
-                                           help_text="Successful builds percentage")
+                        create_metric_card(
+                            "Build Success Rate",
+                            f"{success_rate:.1f}%",
+                            help_text="Successful builds percentage",
+                        )
                     with col2:
-                        create_metric_card("Average Build Duration", f"{cicd_data['avg_duration'].mean():.0f}s",
-                                           help_text="Average build time in seconds")
+                        create_metric_card(
+                            "Average Build Duration",
+                            f"{cicd_data['avg_duration'].mean():.0f}s",
+                            help_text="Average build time in seconds",
+                        )
                 else:
                     st.info("No CI/CD data available")
 
@@ -628,12 +656,19 @@ def main():
                 if not bug_data.empty:
                     col1, col2 = st.columns(2)
                     with col1:
-                        create_metric_card("Total P0 Bugs", bug_data["bug_count"].sum(), help_text="High priority bugs")
+                        create_metric_card(
+                            "Total P0 Bugs",
+                            bug_data["bug_count"].sum(),
+                            help_text="High priority bugs",
+                        )
                     with col2:
                         avg_resolution = bug_data["avg_resolution_time"].mean()
                         if pd.notna(avg_resolution):
-                            create_metric_card("Average Resolution Time", f"{avg_resolution:.1f}h",
-                                               help_text="Average time to fix P0 bugs")
+                            create_metric_card(
+                                "Average Resolution Time",
+                                f"{avg_resolution:.1f}h",
+                                help_text="Average time to fix P0 bugs",
+                            )
                 else:
                     st.info("No bug data available")
 

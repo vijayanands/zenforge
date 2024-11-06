@@ -1,19 +1,22 @@
 # load_events_db.py
 import json
 import random
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 from sqlalchemy import create_engine, text
 
 from model.events_data_generator import (
+    adjust_cicd_dates,
+    generate_cicd_events,
     generate_pull_requests,
     get_sample_data,
-    generate_cicd_events,
-    adjust_cicd_dates,
 )
 from model.sdlc_events import (
+    CICDEvent,
     DatabaseManager,
     JiraItem,
+    PRStatus,
+    PullRequest,
     connection_string,
     create_bug,
     create_cicd_event,
@@ -27,9 +30,6 @@ from model.sdlc_events import (
     create_team_metrics,
     db_name,
     server_connection_string,
-    PullRequest,
-    PRStatus,
-    CICDEvent,
     verify_pr_exists,
 )
 
@@ -96,10 +96,6 @@ def load_cicd_events(db_manager, cicd_events: List[Dict[str, Any]]) -> int:
                 # Create CICD event
                 create_cicd_event(event)
                 success_count += 1
-
-                if success_count % 100 == 0:
-                    print(f"Loaded {success_count} CICD events...")
-
             except Exception as e:
                 print(f"Error loading CICD event {event.get('id')}: {str(e)}")
                 continue
@@ -256,8 +252,6 @@ def load_data(db_manager, all_data: Dict[str, Any]):
                         if jira_exists:
                             create_bug(modified_bug)
                             bug_count += 1
-                            if bug_count % 10 == 0:
-                                print(f"Loaded {bug_count} bugs...")
                         else:
                             print(
                                 f"Skipping bug {modified_bug['id']} - Jira {modified_bug['jira_id']} not found"

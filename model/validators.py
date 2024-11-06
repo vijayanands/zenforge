@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 
 from model.sdlc_events import (
+    Bug,
     CICDEvent,
     CodeCommit,
     DesignEvent,
@@ -11,7 +12,6 @@ from model.sdlc_events import (
     PullRequest,
     Sprint,
     sprint_jira_association,
-    Bug,
 )
 
 

@@ -410,7 +410,6 @@ def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
             event = CICDEvent(**event_data)
             session.add(event)
             session.commit()
-            print(f"Successfully created CICD event {event.id}")
             return event
 
         except Exception as e:

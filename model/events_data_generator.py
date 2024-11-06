@@ -13,9 +13,9 @@ from model.sdlc_events import (
     PRStatus,
     StageType,
     db_manager,
-    verify_temporal_consistency,
-    verify_project_references,
     verify_jira_references,
+    verify_project_references,
+    verify_temporal_consistency,
 )
 from model.validators import (
     validate_all_timelines,
@@ -576,109 +576,258 @@ def generate_design_related_jiras(
 
 
 def generate_design_events(projects: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Generate design events for all projects with proper Jira linking and status transitions"""
+    """
+    Generate design events for all projects with sequential and parallel dependencies:
+    - Requirements and UX are sequential
+    - Architecture, API Design, and Database Design start in parallel after Requirements
+    - Security Review starts after Architecture, API Design, and Database Design complete
+
+    Args:
+        projects: Dictionary of project details
+    Returns:
+        List of design events with proper timeline dependencies
+    """
     design_events = []
-    design_phases = data_generator.generate_design_phases()
 
     for proj_id, details in projects.items():
         start_date = details["start_date"]
         completion_state = details["completion_state"]
 
-        for phase in design_phases:
-            phase_status = data_generator.get_design_event_status(completion_state)
-            jira_id = f"{proj_id}-{phase.upper()}-1"  # Matches the ID format from generate_design_related_jiras
+        # Initialize tracking for phase completion
+        phase_completion_times = {}
 
-            # Initial event (START)
+        # Phase 1: Requirements (First phase)
+        requirements_duration = timedelta(days=np.random.randint(5, 10))
+        requirements_completion = start_date + requirements_duration
+        phase_completion_times["requirements"] = requirements_completion
+
+        # Generate Requirements events
+        design_events.extend(
+            [
+                {
+                    "id": f"{proj_id}-REQUIREMENTS-START",
+                    "event_id": proj_id,
+                    "design_type": "requirements",
+                    "stage": StageType.START,
+                    "timestamp": start_date,
+                    "author": "requirements_lead@example.com",
+                    "jira": f"{proj_id}-REQUIREMENTS-1",
+                    "stakeholders": "Product,Dev,Arch",
+                    "review_status": "Pending",
+                }
+            ]
+        )
+
+        if completion_state in [
+            "design_only",
+            "design_and_sprint",
+            "pre_release",
+            "all_complete",
+        ]:
             design_events.append(
                 {
-                    "id": f"{proj_id}-{phase.upper()}",
+                    "id": f"{proj_id}-REQUIREMENTS-END",
+                    "event_id": proj_id,
+                    "design_type": "requirements",
+                    "stage": StageType.END,
+                    "timestamp": requirements_completion,
+                    "author": "requirements_lead@example.com",
+                    "jira": f"{proj_id}-REQUIREMENTS-1",
+                    "stakeholders": "Product,Dev,Arch",
+                    "review_status": "Approved",
+                }
+            )
+
+        # Phase 2: UX Design (Follows Requirements)
+        ux_duration = timedelta(days=np.random.randint(7, 12))
+        ux_start = requirements_completion + timedelta(days=1)
+        ux_completion = ux_start + ux_duration
+        phase_completion_times["ux_design"] = ux_completion
+
+        design_events.extend(
+            [
+                {
+                    "id": f"{proj_id}-UX_DESIGN-START",
+                    "event_id": proj_id,
+                    "design_type": "ux_design",
+                    "stage": StageType.START,
+                    "timestamp": ux_start,
+                    "author": "ux_lead@example.com",
+                    "jira": f"{proj_id}-UX_DESIGN-1",
+                    "stakeholders": "UX,Dev,Product",
+                    "review_status": "Pending",
+                }
+            ]
+        )
+
+        if completion_state in [
+            "design_only",
+            "design_and_sprint",
+            "pre_release",
+            "all_complete",
+        ]:
+            design_events.append(
+                {
+                    "id": f"{proj_id}-UX_DESIGN-END",
+                    "event_id": proj_id,
+                    "design_type": "ux_design",
+                    "stage": StageType.END,
+                    "timestamp": ux_completion,
+                    "author": "ux_lead@example.com",
+                    "jira": f"{proj_id}-UX_DESIGN-1",
+                    "stakeholders": "UX,Dev,Product",
+                    "review_status": "Approved",
+                }
+            )
+
+        # Phase 3: Parallel phases (Architecture, API Design, Database Design)
+        parallel_start = requirements_completion + timedelta(days=1)
+
+        # Generate events for parallel phases
+        parallel_phases = {
+            "architecture": {
+                "duration": np.random.randint(8, 15),
+                "author": "arch_lead@example.com",
+            },
+            "api_design": {
+                "duration": np.random.randint(6, 12),
+                "author": "api_lead@example.com",
+            },
+            "database_design": {
+                "duration": np.random.randint(7, 13),
+                "author": "db_lead@example.com",
+            },
+        }
+
+        # Create start events and calculate completion times for parallel phases
+        for phase, details in parallel_phases.items():
+            phase_duration = timedelta(days=details["duration"])
+            phase_completion = parallel_start + phase_duration
+            phase_completion_times[phase] = phase_completion
+
+            design_events.append(
+                {
+                    "id": f"{proj_id}-{phase.upper()}-START",
                     "event_id": proj_id,
                     "design_type": phase,
                     "stage": StageType.START,
-                    "timestamp": start_date,
-                    "author": f"{phase.split('_')[0]}@example.com",
-                    "jira": jira_id,
-                    "stakeholders": data_generator.generate_stakeholders(),
+                    "timestamp": parallel_start,
+                    "author": details["author"],
+                    "jira": f"{proj_id}-{phase.upper()}-1",
+                    "stakeholders": "Dev,Arch",
                     "review_status": "Pending",
                 }
             )
 
-            current_date = start_date + timedelta(
-                days=2
-            )  # Base date for subsequent events
+            if completion_state in [
+                "design_only",
+                "design_and_sprint",
+                "pre_release",
+                "all_complete",
+            ]:
+                design_events.append(
+                    {
+                        "id": f"{proj_id}-{phase.upper()}-END",
+                        "event_id": proj_id,
+                        "design_type": phase,
+                        "stage": StageType.END,
+                        "timestamp": phase_completion,
+                        "author": details["author"],
+                        "jira": f"{proj_id}-{phase.upper()}-1",
+                        "stakeholders": "Dev,Arch",
+                        "review_status": "Approved",
+                    }
+                )
 
-            if phase_status["stage"] != "start":
-                if phase_status["stage"] in ["blocked", "resume"]:
-                    # Generate blocked-resume cycles
-                    num_revisions = np.random.randint(1, 3)
-                    days_between_events = np.random.randint(
-                        2, 4
-                    )  # 2-4 days between status changes
+        # Phase 4: Security Review (after all parallel phases complete)
+        security_start = max(
+            phase_completion_times["architecture"],
+            phase_completion_times["api_design"],
+            phase_completion_times["database_design"],
+        ) + timedelta(days=1)
 
-                    for rev_idx in range(num_revisions):
-                        # Blocked state
-                        design_events.append(
+        security_duration = timedelta(days=np.random.randint(5, 10))
+        security_completion = security_start + security_duration
+        phase_completion_times["security_review"] = security_completion
+
+        design_events.extend(
+            [
+                {
+                    "id": f"{proj_id}-SECURITY_REVIEW-START",
+                    "event_id": proj_id,
+                    "design_type": "security_review",
+                    "stage": StageType.START,
+                    "timestamp": security_start,
+                    "author": "security_lead@example.com",
+                    "jira": f"{proj_id}-SECURITY_REVIEW-1",
+                    "stakeholders": "Security,Dev,Arch",
+                    "review_status": "Pending",
+                }
+            ]
+        )
+
+        if completion_state in [
+            "design_only",
+            "design_and_sprint",
+            "pre_release",
+            "all_complete",
+        ]:
+            design_events.append(
+                {
+                    "id": f"{proj_id}-SECURITY_REVIEW-END",
+                    "event_id": proj_id,
+                    "design_type": "security_review",
+                    "stage": StageType.END,
+                    "timestamp": security_completion,
+                    "author": "security_lead@example.com",
+                    "jira": f"{proj_id}-SECURITY_REVIEW-1",
+                    "stakeholders": "Security,Dev,Arch",
+                    "review_status": "Approved",
+                }
+            )
+
+        # For mixed states, add blocked/resume events randomly
+        if completion_state in ["mixed", "mixed_all"]:
+            for phase in phase_completion_times.keys():
+                if np.random.random() < 0.3:  # 30% chance of having blocks
+                    phase_start = next(
+                        event["timestamp"]
+                        for event in design_events
+                        if event["design_type"] == phase
+                        and event["stage"] == StageType.START
+                    )
+                    block_time = phase_start + timedelta(days=np.random.randint(2, 4))
+                    resume_time = block_time + timedelta(days=np.random.randint(2, 4))
+
+                    design_events.extend(
+                        [
                             {
-                                "id": f"{proj_id}-{phase.upper()}-BLOCK{rev_idx + 1}",
+                                "id": f"{proj_id}-{phase.upper()}-BLOCK1",
                                 "event_id": proj_id,
                                 "design_type": phase,
                                 "stage": StageType.BLOCKED,
-                                "timestamp": current_date,
-                                "author": f"{phase.split('_')[0]}@example.com",
-                                "jira": jira_id,
-                                "stakeholders": data_generator.generate_stakeholders(),
+                                "timestamp": block_time,
+                                "author": f"{phase.split('_')[0]}_lead@example.com",
+                                "jira": f"{proj_id}-{phase.upper()}-1",
+                                "stakeholders": "Dev,Arch",
                                 "review_status": "In Review",
-                            }
-                        )
-                        current_date += timedelta(days=days_between_events)
-
-                        # Resume state
-                        design_events.append(
+                            },
                             {
-                                "id": f"{proj_id}-{phase.upper()}-RESUME{rev_idx + 1}",
+                                "id": f"{proj_id}-{phase.upper()}-RESUME1",
                                 "event_id": proj_id,
                                 "design_type": phase,
                                 "stage": StageType.RESUME,
-                                "timestamp": current_date,
-                                "author": f"{phase.split('_')[0]}@example.com",
-                                "jira": jira_id,
-                                "stakeholders": data_generator.generate_stakeholders(),
+                                "timestamp": resume_time,
+                                "author": f"{phase.split('_')[0]}_lead@example.com",
+                                "jira": f"{proj_id}-{phase.upper()}-1",
+                                "stakeholders": "Dev,Arch",
                                 "review_status": "In Review",
-                            }
-                        )
-                        current_date += timedelta(days=days_between_events)
-
-                # Final completion event (END)
-                if phase_status["stage"] == "end" or completion_state in [
-                    "design_only",
-                    "design_and_sprint",
-                    "pre_release",
-                    "all_complete",
-                ]:
-                    final_date = max(
-                        current_date, start_date + timedelta(days=7)
-                    )  # Ensure minimum 7 days for completion
-                    design_events.append(
-                        {
-                            "id": f"{proj_id}-{phase.upper()}-FINAL",
-                            "event_id": proj_id,
-                            "design_type": phase,
-                            "stage": StageType.END,
-                            "timestamp": final_date,
-                            "author": f"{phase.split('_')[0]}@example.com",
-                            "jira": jira_id,
-                            "stakeholders": data_generator.generate_stakeholders(),
-                            "review_status": phase_status["review_status"],
-                        }
+                            },
+                        ]
                     )
 
-            # Move start date for next phase
-            start_date += timedelta(
-                days=15
-            )  # Each phase starts 15 days after the previous one
-
     # Sort all events by timestamp to ensure chronological order
-    design_events.sort(key=lambda x: (x["event_id"], x["design_type"], x["timestamp"]))
+    design_events.sort(key=lambda x: (x["event_id"], x["timestamp"]))
 
     return design_events
 
@@ -1552,9 +1701,7 @@ def generate_cicd_events(
     cicd_events = []
     environments = ["dev", "staging", "qa", "uat", "production"]
 
-    print("Generating CICD events...")
     print(f"Input: {len(pull_requests)} pull requests")
-
     # Filter for merged PRs
     merged_prs = [
         pr
