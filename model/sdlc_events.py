@@ -692,7 +692,7 @@ class DatabaseManager:
             ("code_commits", "timestamp"),
             ("team_metrics", "week_starting"),
             ("pull_requests", "created_at"),
-            ("pr_comments", "created_at"),
+            # ("pr_comments", "created_at"),
         ]
 
         with self.engine.begin() as connection:
