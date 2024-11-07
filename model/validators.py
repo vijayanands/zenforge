@@ -3,10 +3,13 @@ from typing import Any, Dict, List
 from sqlalchemy.orm import Session
 
 from model.sdlc_events import (
-    Bug,
+    BugStatus,
+    BuildMode,
+    BuildStatus,
     CICDEvent,
     CodeCommit,
     DesignEvent,
+    Environment,
     JiraItem,
     PRStatus,
     PullRequest,
@@ -139,43 +142,6 @@ def validate_pr_commit_timeline(session: Session) -> List[str]:
     return errors
 
 
-def validate_cicd_pr_timeline(session: Session) -> List[str]:
-    """Validate CICD build timestamps against PR merge times"""
-    errors = []
-
-    cicd_events = session.query(CICDEvent).filter(CICDEvent.pr_id.isnot(None)).all()
-
-    for event in cicd_events:
-        pr = session.query(PullRequest).filter(PullRequest.id == event.pr_id).first()
-        if pr and pr.status == PRStatus.MERGED:
-            if event.timestamp <= pr.merged_at:
-                errors.append(
-                    f"CICD event {event.id} at {event.timestamp} started before "
-                    f"its associated PR {pr.id} was merged at {pr.merged_at}"
-                )
-
-    return errors
-
-
-def validate_bug_build_timeline(session: Session) -> List[str]:
-    """Validate that P0 bugs and releases only happen after CI/CD build completion"""
-    errors = []
-
-    bugs = (
-        session.query(Bug).filter(Bug.severity == "P0").order_by(Bug.created_date).all()
-    )
-    for bug in bugs:
-        build = (
-            session.query(CICDEvent).filter(CICDEvent.build_id == bug.build_id).first()
-        )
-        if build and bug.created_date < build.timestamp:
-            errors.append(
-                f"P0 Bug {bug.id} created at {bug.created_date} before build {build.id} completion at {build.timestamp}"
-            )
-
-    return errors
-
-
 def validate_relationships(data: Dict[str, Any]) -> List[str]:
     """Validate all relationships in the generated data"""
     validation_errors = []
@@ -186,22 +152,6 @@ def validate_relationships(data: Dict[str, Any]) -> List[str]:
         if commit["jira_id"] not in jira_ids:
             validation_errors.append(
                 f"Commit {commit['id']} has invalid jira_id {commit['jira_id']}"
-            )
-
-    # Validate bugs have valid Jira IDs and build IDs
-    build_ids = set()
-    for cicd in data["cicd_events"]:
-        if cicd["build_id"]:
-            build_ids.add(cicd["build_id"])
-
-    for bug in data["bugs"]:
-        if bug["jira_id"] not in jira_ids:
-            validation_errors.append(
-                f"Bug {bug['id']} has invalid jira_id {bug['jira_id']}"
-            )
-        if bug["build_id"] not in build_ids:
-            validation_errors.append(
-                f"Bug {bug['id']} has invalid build_id {bug['build_id']}"
             )
 
     # Validate sprint-jira associations
@@ -329,7 +279,231 @@ def validate_all_timelines(session: Session) -> Dict[str, List[str]]:
             }
         ),  # Added new validation
         "pr_commit": validate_pr_commit_timeline(session),
-        "cicd_pr": validate_cicd_pr_timeline(session),
-        "bug_build": validate_bug_build_timeline(session),
         "jira_hierarchy": validate_jira_date_hierarchy(session),
+        "cicd_timeline": validate_cicd_event_timeline(session),
     }
+
+
+def validate_cicd_event_timeline(session: Session) -> List[str]:
+    """
+    Validate CICD event timelines:
+    1. Automatic builds must start after their associated PR merge time
+    2. Events must have valid environment progression
+    3. Build durations must be positive
+    """
+    errors = []
+
+    # Get all CICD events
+    cicd_events = session.query(CICDEvent).order_by(CICDEvent.timestamp).all()
+
+    # Get all PRs for reference
+    prs = {pr.id: pr for pr in session.query(PullRequest).all()}
+
+    # Track environment progression for each PR/manual build
+    env_order = {
+        Environment.DEV: 0,
+        Environment.QA: 1,
+        Environment.STAGING: 2,
+        Environment.UAT: 3,
+        Environment.PRODUCTION: 4,
+    }
+
+    build_env_progress = {}
+
+    for event in cicd_events:
+        # Validate build duration
+        if event.duration_seconds <= 0:
+            errors.append(
+                f"CICD event {event.build_id} has invalid duration: {event.duration_seconds}"
+            )
+
+        # Validate automatic builds against PR merge times
+        if event.mode == BuildMode.AUTOMATIC:
+            pr = prs.get(event.event_id)
+            if pr and pr.merged_at:
+                if event.timestamp <= pr.merged_at:
+                    errors.append(
+                        f"CICD event {event.build_id} timestamp ({event.timestamp}) "
+                        f"is before its PR merge time ({pr.merged_at})"
+                    )
+
+        # Track environment progression
+        if event.event_id not in build_env_progress:
+            build_env_progress[event.event_id] = env_order[event.environment]
+        else:
+            # Environment can stay the same or go up, but not go down
+            if env_order[event.environment] < build_env_progress[event.event_id]:
+                errors.append(
+                    f"CICD event {event.build_id} has invalid environment progression: "
+                    f"went from higher environment to {event.environment.value}"
+                )
+            build_env_progress[event.event_id] = max(
+                build_env_progress[event.event_id], env_order[event.environment]
+            )
+
+    return errors
+
+
+def validate_cicd_relationships(data: Dict[str, Any]) -> List[str]:
+    """Validate relationships between CICD events and other entities"""
+    errors = []
+
+    # Get relevant data
+    cicd_events = data.get("cicd_events", [])
+    pull_requests = {pr["id"]: pr for pr in data.get("pull_requests", [])}
+    project_ids = {proj["id"] for proj in data.get("projects", [])}
+
+    for event in cicd_events:
+        # Validate project_id exists
+        if event["project_id"] not in project_ids:
+            errors.append(
+                f"CICD event {event['build_id']} references non-existent project {event['project_id']}"
+            )
+
+            if event["mode"] == BuildMode.AUTOMATIC.value:
+                # Validate PR references for automatic builds
+                pr = pull_requests.get(event["event_id"])
+                if not pr:
+                    errors.append(
+                        f"CICD event {event['build_id']} references non-existent PR {event['event_id']}"
+                    )
+                elif pr["status"] != PRStatus.MERGED.value:
+                    errors.append(
+                        f"CICD event {event['build_id']} references non-merged PR {event['event_id']}"
+                    )
+                # Validate project_id matches PR's project_id
+                elif pr["project_id"] != event["project_id"]:
+                    errors.append(
+                        f"CICD event {event['build_id']} project_id ({event['project_id']}) "
+                        f"doesn't match PR project_id ({pr['project_id']})"
+                    )
+
+                # Validate branch matches PR's target branch
+                if pr and event["branch"] != pr["branch_to"]:
+                    errors.append(
+                        f"CICD event {event['build_id']} branch ({event['branch']}) "
+                        f"doesn't match PR target branch ({pr['branch_to']})"
+                    )
+
+        return errors
+
+
+def validate_bug_build_association(
+    bugs: List[Dict[str, Any]], cicd_events: List[Dict[str, Any]]
+) -> List[str]:
+    """Validate that bugs are only associated with successful builds"""
+    errors = []
+
+    # Create a map of successful builds
+    successful_builds = {
+        event["build_id"]: event
+        for event in cicd_events
+        if event["status"] == BuildStatus.SUCCESS.value
+    }
+
+    for bug in bugs:
+        if bug["build_id"] not in successful_builds:
+            errors.append(
+                f"Bug {bug['id']} is associated with non-successful or non-existent build {bug['build_id']}"
+            )
+        else:
+            build = successful_builds[bug["build_id"]]
+            if bug["environment_found"] != build["environment"]:
+                errors.append(
+                    f"Bug {bug['id']} environment doesn't match build environment"
+                )
+            if bug["release_id"] != build["release_version"]:
+                errors.append(
+                    f"Bug {bug['id']} release version doesn't match build release version"
+                )
+
+    return errors
+
+
+def validate_bug_data(bug_data: Dict[str, Any]) -> List[str]:
+    """Validate bug data before creation"""
+    errors = []
+
+    # Validate dates
+    if bug_data.get("resolved_date"):
+        if bug_data["resolved_date"] <= bug_data["created_date"]:
+            errors.append("Resolved date must be after created date")
+
+    if bug_data.get("close_date"):
+        if not bug_data.get("resolved_date"):
+            errors.append("Bug cannot have close date without resolved date")
+        elif bug_data["close_date"] <= bug_data["resolved_date"]:
+            errors.append("Close date must be after resolved date")
+
+    # Validate resolution time
+    if bug_data.get("resolution_time_hours"):
+        if not bug_data.get("resolved_date"):
+            errors.append("Resolution time cannot be set without resolved date")
+        else:
+            time_diff = (
+                bug_data["resolved_date"] - bug_data["created_date"]
+            ).total_seconds() / 3600
+            if bug_data["resolution_time_hours"] > time_diff:
+                errors.append(
+                    "Resolution time cannot be greater than time between creation and resolution"
+                )
+
+    # Validate status transitions
+    if bug_data["status"] == BugStatus.CLOSED and not bug_data.get("close_date"):
+        errors.append("Closed status requires close date")
+    if bug_data["status"] == BugStatus.FIXED and not bug_data.get("resolved_date"):
+        errors.append("Fixed status requires resolved date")
+
+    return errors
+
+
+def validate_bug_timelines(
+    bugs: List[Dict[str, Any]], cicd_events: List[Dict[str, Any]]
+) -> List[str]:
+    """Validate temporal consistency of bugs with respect to their associated builds"""
+    errors = []
+
+    # Create a map of builds for quick lookup
+    builds = {event["build_id"]: event for event in cicd_events}
+
+    for bug in bugs:
+        build = builds.get(bug["build_id"])
+        if not build:
+            continue
+
+        # Bug must be created after its associated build
+        if bug["created_date"] <= build["timestamp"]:
+            errors.append(
+                f"Bug {bug['id']} created at {bug['created_date']} before its "
+                f"associated build {build['build_id']} at {build['timestamp']}"
+            )
+
+        # Validate resolution timeline
+        if bug["resolved_date"]:
+            if bug["resolved_date"] <= bug["created_date"]:
+                errors.append(
+                    f"Bug {bug['id']} resolved at {bug['resolved_date']} before "
+                    f"its creation at {bug['created_date']}"
+                )
+
+            # Validate resolution time against actual time difference
+            time_diff = (
+                bug["resolved_date"] - bug["created_date"]
+            ).total_seconds() / 3600
+            if bug["resolution_time_hours"] > time_diff:
+                errors.append(
+                    f"Bug {bug['id']} resolution time ({bug['resolution_time_hours']} hours) "
+                    f"greater than actual time difference ({time_diff:.2f} hours)"
+                )
+
+        # Validate closure timeline
+        if bug["close_date"]:
+            if not bug["resolved_date"]:
+                errors.append(f"Bug {bug['id']} has close date but no resolution date")
+            elif bug["close_date"] <= bug["resolved_date"]:
+                errors.append(
+                    f"Bug {bug['id']} closed at {bug['close_date']} before "
+                    f"resolution at {bug['resolved_date']}"
+                )
+
+    return errors

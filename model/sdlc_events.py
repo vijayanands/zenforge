@@ -1,5 +1,4 @@
 import enum
-import json
 from datetime import datetime
 from operator import and_
 from typing import Any, Dict, List, Optional, Type
@@ -10,7 +9,6 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import (
     Float,
     ForeignKey,
-    ForeignKeyConstraint,
     Integer,
     PrimaryKeyConstraint,
     String,
@@ -21,7 +19,6 @@ from sqlalchemy import (
     create_engine,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 
@@ -44,7 +41,80 @@ class StageType(enum.Enum):
     RESUME = "resume"
 
 
+# Add new enum for PR status
+class PRStatus(enum.Enum):
+    OPEN = "OPEN"
+    BLOCKED = "BLOCKED"
+    MERGED = "MERGED"
+
+
+class Environment(enum.Enum):
+    DEV = "dev"
+    QA = "qa"
+    STAGING = "staging"
+    UAT = "uat"
+    PRODUCTION = "production"
+
+
+class BuildStatus(enum.Enum):
+    IN_PROGRESS = "in_progress"
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
+class BuildMode(enum.Enum):
+    MANUAL = "manual"
+    AUTOMATIC = "automatic"
+
+
+# Enums for Bug table
+class BugType(enum.Enum):
+    SECURITY = "security"
+    PERFORMANCE = "performance"
+    FUNCTIONALITY = "functionality"
+    DATA = "data"
+    UI_UX = "ui_ux"
+
+
+class ImpactArea(enum.Enum):
+    CUSTOMER = "customer"
+    INTERNAL = "internal"
+    INTEGRATION = "integration"
+    INFRASTRUCTURE = "infrastructure"
+
+
+class BugStatus(enum.Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    FIXED = "FIXED"
+    CLOSED = "CLOSED"
+    BLOCKED = "BLOCKED"
+
+
 # Regular tables
+class CICDEvent(Base):
+    __tablename__ = "cicd_events"
+    __table_args__ = (
+        PrimaryKeyConstraint("event_id", "timestamp"),
+        {"schema": "sdlc_timeseries"},
+    )
+
+    event_id = Column(String)
+    timestamp = Column(DateTime, nullable=False)
+    project_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id"), nullable=False
+    )  # Add this line
+    environment = Column(SQLEnum(Environment), nullable=False)
+    event_type = Column(String, default="build", nullable=False)
+    build_id = Column(String, nullable=False)
+    status = Column(SQLEnum(BuildStatus), nullable=False)
+    duration_seconds = Column(Integer, nullable=False)
+    branch = Column(String, nullable=False)
+    tag = Column(String, nullable=True)
+    mode = Column(SQLEnum(BuildMode), nullable=False)
+    release_version = Column(String, nullable=True)
+
+
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = {"schema": "sdlc_timeseries"}
@@ -143,66 +213,6 @@ class CodeCommit(Base):
     )
 
 
-class CICDEvent(Base):
-    __tablename__ = "cicd_events"
-
-    id = Column(String, primary_key=True)
-    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
-    pr_id = Column(String)
-    pr_created_at = Column(DateTime)
-    timestamp = Column(DateTime, nullable=False)
-    environment = Column(String)
-    event_type = Column(String)
-    build_id = Column(String, nullable=False, unique=True)
-    status = Column(String)
-    duration_seconds = Column(Integer)
-    metrics = Column(JSONB)
-    reason = Column(String, nullable=False)
-    branch = Column(String, nullable=False)
-    tag = Column(String, nullable=True)
-
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["pr_id", "pr_created_at"],
-            [
-                "sdlc_timeseries.pull_requests.id",
-                "sdlc_timeseries.pull_requests.created_at",
-            ],
-        ),
-        {"schema": "sdlc_timeseries"},
-    )
-
-
-class Bug(Base):
-    __tablename__ = "bugs"
-    __table_args__ = {"schema": "sdlc_timeseries"}
-
-    id = Column(String, primary_key=True)
-    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
-    bug_type = Column(String)
-    impact_area = Column(String)
-    severity = Column(String)
-    title = Column(String)
-    status = Column(String)
-    created_date = Column(DateTime, nullable=False)
-    resolved_date = Column(DateTime)
-    resolution_time_hours = Column(Integer)
-    assigned_to = Column(String)
-    environment_found = Column(String)
-    number_of_customers_affected = Column(Integer)
-    root_cause = Column(String)
-    fix_version = Column(String)
-    regression_test_status = Column(String)
-    customer_communication_needed = Column(Boolean)
-    postmortem_link = Column(String)
-    jira_id = Column(
-        String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=False
-    )
-    build_id = Column(
-        String, ForeignKey("sdlc_timeseries.cicd_events.build_id"), nullable=False
-    )
-
-
 class DesignEvent(Base):
     __tablename__ = "design_events"
     __table_args__ = (
@@ -221,30 +231,92 @@ class DesignEvent(Base):
     review_status = Column(String)
 
 
-class TeamMetrics(Base):
-    __tablename__ = "team_metrics"
+class PullRequest(Base):
+    __tablename__ = "pull_requests"
     __table_args__ = (
-        PrimaryKeyConstraint("id", "week_starting"),
+        PrimaryKeyConstraint("id", "created_at"),
         {"schema": "sdlc_timeseries"},
     )
 
     id = Column(String)
-    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
-    week_starting = Column(DateTime, nullable=False)
-    team_size = Column(Integer)
-    velocity = Column(Float)
-    code_review_turnaround_hours = Column(Float)
-    build_success_rate = Column(Float)
-    test_coverage = Column(Float)
-    bugs_reported = Column(Integer)
-    bugs_fixed = Column(Integer)
-    technical_debt_hours = Column(Integer)
-    pair_programming_hours = Column(Integer)
-    code_review_comments = Column(Integer)
-    documentation_updates = Column(Integer)
-    knowledge_sharing_sessions = Column(Integer)
-    team_satisfaction = Column(Float)
-    sprint_completion_rate = Column(Float)
+    created_at = Column(DateTime, nullable=False)
+    project_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    branch_from = Column(String, nullable=False)
+    branch_to = Column(String, nullable=False)
+    author = Column(String, nullable=False)
+    status = Column(SQLEnum(PRStatus), nullable=False)
+    merged_at = Column(DateTime)
+    commit_id = Column(String)
+    commit_timestamp = Column(DateTime)
+
+
+class Bug(Base):
+    __tablename__ = "bugs"
+    __table_args__ = {"schema": "sdlc_timeseries"}
+
+    id = Column(String, primary_key=True)
+    project_id = Column(
+        String, ForeignKey("sdlc_timeseries.projects.id"), nullable=False
+    )
+    bug_type = Column(SQLEnum(BugType), nullable=False)
+    impact_area = Column(SQLEnum(ImpactArea), nullable=False)
+    severity = Column(String, default="P0", nullable=False)
+    title = Column(String, nullable=False)
+    status = Column(SQLEnum(BugStatus), nullable=False)
+    created_date = Column(DateTime, nullable=False)
+    resolved_date = Column(DateTime)
+    close_date = Column(DateTime)
+    resolution_time_hours = Column(Float)
+    assigned_to = Column(String, nullable=False)
+    environment_found = Column(SQLEnum(Environment), nullable=False)
+    build_id = Column(String, nullable=False)
+    release_id = Column(String, nullable=False)
+
+
+"""
+CICD Related CRUD
+"""
+
+
+# Add CRUD functions for CICD events
+def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
+    """Create a new CICD event"""
+    with db_manager.get_session() as session:
+        if "environment" in event_data:
+            event_data["environment"] = Environment(event_data["environment"])
+        if "status" in event_data:
+            event_data["status"] = BuildStatus(event_data["status"])
+        if "mode" in event_data:
+            event_data["mode"] = BuildMode(event_data["mode"])
+
+        event = CICDEvent(**event_data)
+        session.add(event)
+        session.commit()
+        return event
+
+
+def get_cicd_events(
+    event_id: Optional[str] = None,
+    environment: Optional[Environment] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> List[CICDEvent]:
+    """Get CICD events with optional filters"""
+    with db_manager.get_session() as session:
+        query = session.query(CICDEvent)
+
+        if event_id:
+            query = query.filter(CICDEvent.event_id == event_id)
+        if environment:
+            query = query.filter(CICDEvent.environment == environment)
+        if start_date:
+            query = query.filter(CICDEvent.timestamp >= start_date)
+        if end_date:
+            query = query.filter(CICDEvent.timestamp <= end_date)
+
+        return query.order_by(CICDEvent.timestamp).all()
 
 
 """
@@ -376,105 +448,6 @@ def get_commits(
 
 
 """
-CI/CD Related CRUD
-"""
-
-
-def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
-    """Create a CICD event with better error handling and PR verification"""
-    with db_manager.get_session() as session:
-        try:
-            # Verify PR exists if PR reference is provided
-            if event_data.get("pr_id") and event_data.get("pr_created_at"):
-                pr_exists = verify_pr_exists(
-                    session, event_data["pr_id"], event_data["pr_created_at"]
-                )
-                if not pr_exists:
-                    print(
-                        f"Warning: Removing PR reference for CICD event {event_data['id']} - PR {event_data['pr_id']} not found"
-                    )
-                    event_data["pr_id"] = None
-                    event_data["pr_created_at"] = None
-
-            # Convert numpy string to regular string if needed
-            if hasattr(event_data.get("status"), "item"):
-                event_data["status"] = event_data["status"].item()
-            if hasattr(event_data.get("branch"), "item"):
-                event_data["branch"] = event_data["branch"].item()
-
-            # Convert metrics to JSON string if it isn't already
-            if isinstance(event_data.get("metrics"), dict):
-                event_data["metrics"] = json.dumps(event_data["metrics"])
-
-            # Create the event
-            event = CICDEvent(**event_data)
-            session.add(event)
-            session.commit()
-            return event
-
-        except Exception as e:
-            session.rollback()
-            print(f"Error loading CICD event: {str(e)}")
-            print(f"Event data: {json.dumps(event_data, default=str)}")
-            raise
-
-
-def get_cicd_events(
-    event_id: str, environment: Optional[str] = None, event_type: Optional[str] = None
-) -> list[Type[CICDEvent]]:
-    with db_manager.get_session() as session:
-        query = session.query(CICDEvent).filter(CICDEvent.event_id == event_id)
-        if environment:
-            query = query.filter(CICDEvent.environment == environment)
-        if event_type:
-            query = query.filter(CICDEvent.event_type == event_type)
-        return query.order_by(CICDEvent.timestamp).all()
-
-
-"""
-Bug Related CRUD
-"""
-
-
-def create_bug(bug_data: Dict[str, Any]) -> Bug:
-    with db_manager.get_session() as session:
-        bug = Bug(**bug_data)
-        session.add(bug)
-        session.commit()
-        return bug
-
-
-def get_bugs(
-    event_id: str, severity: Optional[str] = None, status: Optional[str] = None
-) -> list[Type[Bug]]:
-    with db_manager.get_session() as session:
-        query = session.query(Bug).filter(Bug.event_id == event_id)
-        if severity:
-            query = query.filter(Bug.severity == severity)
-        if status:
-            query = query.filter(Bug.status == status)
-        return query.order_by(Bug.created_date).all()
-
-
-def update_bug_status(
-    bug_id: str, new_status: str, resolution_date: Optional[datetime] = None
-) -> bool:
-    with db_manager.get_session() as session:
-        update_data = {"status": new_status}
-        if resolution_date:
-            update_data["resolved_date"] = resolution_date
-            # Calculate resolution time
-            bug = session.query(Bug).filter(Bug.id == bug_id).first()
-            if bug and bug.created_date:
-                hours = (resolution_date - bug.created_date).total_seconds() / 3600
-                update_data["resolution_time_hours"] = int(hours)
-
-        result = session.query(Bug).filter(Bug.id == bug_id).update(update_data)
-        session.commit()
-        return result > 0
-
-
-"""
 Sprint Related CRUD
 """
 
@@ -512,61 +485,6 @@ def create_sprint_jira_associations(sprint_id: str, jira_ids: List[str]) -> bool
             print(f"Error creating sprint-jira associations: {e}")
             session.rollback()
             return False
-
-
-"""
-Team Related CRUD
-"""
-
-
-def create_team_metrics(metrics_data: Dict[str, Any]) -> TeamMetrics:
-    with db_manager.get_session() as session:
-        metrics = TeamMetrics(**metrics_data)
-        session.add(metrics)
-        session.commit()
-        return metrics
-
-
-def get_team_metrics(
-    event_id: str,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-) -> list[Type[TeamMetrics]]:
-    with db_manager.get_session() as session:
-        query = session.query(TeamMetrics).filter(TeamMetrics.event_id == event_id)
-        if start_date:
-            query = query.filter(TeamMetrics.week_starting >= start_date)
-        if end_date:
-            query = query.filter(TeamMetrics.week_starting <= end_date)
-        return query.order_by(TeamMetrics.week_starting).all()
-
-
-# Add new enum for PR status
-class PRStatus(enum.Enum):
-    OPEN = "OPEN"
-    BLOCKED = "BLOCKED"
-    MERGED = "MERGED"
-
-
-class PullRequest(Base):
-    __tablename__ = "pull_requests"
-    __table_args__ = (
-        PrimaryKeyConstraint("id", "created_at"),
-        {"schema": "sdlc_timeseries"},
-    )
-
-    id = Column(String)
-    created_at = Column(DateTime, nullable=False)
-    project_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
-    title = Column(String, nullable=False)
-    description = Column(Text)
-    branch_from = Column(String, nullable=False)
-    branch_to = Column(String, nullable=False)
-    author = Column(String, nullable=False)
-    status = Column(SQLEnum(PRStatus), nullable=False)
-    merged_at = Column(DateTime)
-    commit_id = Column(String)
-    commit_timestamp = Column(DateTime)
 
 
 # Add CRUD functions for Pull Requests
@@ -620,6 +538,73 @@ def update_pull_request_status(
         return result > 0
 
 
+# CRUD Operations
+def create_bug(bug_data: Dict[str, Any]) -> Bug:
+    """Create a new bug record"""
+    with db_manager.get_session() as session:
+        if isinstance(bug_data.get("bug_type"), str):
+            bug_data["bug_type"] = BugType(bug_data["bug_type"])
+        if isinstance(bug_data.get("impact_area"), str):
+            bug_data["impact_area"] = ImpactArea(bug_data["impact_area"])
+        if isinstance(bug_data.get("status"), str):
+            bug_data["status"] = BugStatus(bug_data["status"])
+        if isinstance(bug_data.get("environment_found"), str):
+            bug_data["environment_found"] = Environment(bug_data["environment_found"])
+
+        bug = Bug(**bug_data)
+        session.add(bug)
+        session.commit()
+        return bug
+
+
+def get_bug(bug_id: str) -> Optional[Bug]:
+    """Retrieve a bug by ID"""
+    with db_manager.get_session() as session:
+        return session.query(Bug).filter(Bug.id == bug_id).first()
+
+
+def get_bugs_by_project(
+    project_id: str,
+    status: Optional[BugStatus] = None,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+) -> List[Bug]:
+    """Get bugs for a project with optional filters"""
+    with db_manager.get_session() as session:
+        query = session.query(Bug).filter(Bug.project_id == project_id)
+
+        if status:
+            query = query.filter(Bug.status == status)
+        if start_date:
+            query = query.filter(Bug.created_date >= start_date)
+        if end_date:
+            query = query.filter(Bug.created_date <= end_date)
+
+        return query.order_by(Bug.created_date).all()
+
+
+def update_bug_status(
+    bug_id: str,
+    new_status: BugStatus,
+    resolution_time_hours: Optional[float] = None,
+    resolved_date: Optional[datetime] = None,
+    close_date: Optional[datetime] = None,
+) -> bool:
+    """Update bug status and related fields"""
+    with db_manager.get_session() as session:
+        update_data = {"status": new_status}
+        if resolution_time_hours is not None:
+            update_data["resolution_time_hours"] = resolution_time_hours
+        if resolved_date is not None:
+            update_data["resolved_date"] = resolved_date
+        if close_date is not None:
+            update_data["close_date"] = close_date
+
+        result = session.query(Bug).filter(Bug.id == bug_id).update(update_data)
+        session.commit()
+        return result > 0
+
+
 class DatabaseManager:
     def __init__(self, connection_string: str):
         self.engine = create_engine(connection_string)
@@ -652,12 +637,6 @@ class DatabaseManager:
                 connection.execute(
                     text(
                         """
-                        CREATE INDEX IF NOT EXISTS idx_cicd_events_timestamp 
-                        ON sdlc_timeseries.cicd_events (timestamp);
-
-                        CREATE INDEX IF NOT EXISTS idx_bugs_created_date 
-                        ON sdlc_timeseries.bugs (created_date);
-
                         CREATE INDEX IF NOT EXISTS idx_jira_items_created_date 
                         ON sdlc_timeseries.jira_items (created_date);
 
@@ -680,6 +659,19 @@ class DatabaseManager:
                     )
                 )
 
+                # Add bug-related indexes
+                connection.execute(
+                    text(
+                        """
+                        CREATE INDEX IF NOT EXISTS idx_bugs_created_date 
+                        ON sdlc_timeseries.bugs (created_date);
+
+                        CREATE INDEX IF NOT EXISTS idx_bugs_project_build 
+                        ON sdlc_timeseries.bugs (project_id, build_id);
+                        """
+                    )
+                )
+
                 print("Created regular indexes")
             except Exception as e:
                 print(f"Error creating indexes: {e}")
@@ -690,9 +682,7 @@ class DatabaseManager:
         hypertables = [
             ("design_events", "timestamp"),
             ("code_commits", "timestamp"),
-            ("team_metrics", "week_starting"),
             ("pull_requests", "created_at"),
-            # ("pr_comments", "created_at"),
         ]
 
         with self.engine.begin() as connection:
@@ -813,13 +803,6 @@ def verify_project_references(all_data: Dict[str, Any]) -> List[str]:
         if commit["event_id"] not in project_ids:
             errors.append(
                 f"Commit {commit['id']} references invalid project {commit['event_id']}"
-            )
-
-    # Check CICD events
-    for event in all_data["cicd_events"]:
-        if event["event_id"] not in project_ids:
-            errors.append(
-                f"CICD event {event['id']} references invalid project {event['event_id']}"
             )
 
     # Check sprints
