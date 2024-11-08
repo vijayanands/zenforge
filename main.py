@@ -1,12 +1,15 @@
-import sys
-
 import streamlit as st
+from dotenv import load_dotenv
+import os
 
 from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
 from demo_code.ic.dashboard import show_ic_dashboard
 from demo_code.second_line_manager_or_director.dashboard import show_director_dashboard
 from demo_code.ui.title_bar import set_title_bar
 from model.load_events_db import load_sample_data_into_timeseries_db
+from sdlc_timeline import main as show_sdlc_timeline
+
+load_dotenv()
 
 # Constants
 PAGE_TITLE = "Pathforge ZenForge"
@@ -24,15 +27,18 @@ PERSONA_NAVIGATION = {
     "Individual Contributor": [
         "Productivity",
         "Performance & Career",
+        "SDLC Timeline",  # Added SDLC Timeline option
     ],
     "First Line Manager": [
         "Productivity",
         "Performance & Career",
+        "SDLC Timeline",  # Added SDLC Timeline option
     ],
     "Second Line Manager/Director": [
         "Productivity",
         "Performance",
         "Projects and Portfolio",
+        "SDLC Timeline",  # Added SDLC Timeline option
     ],
 }
 
@@ -58,7 +64,10 @@ def zenforge_dashboard():
         else:
             nav_option = None
 
-    if persona == PERSONA_OPTIONS[0]:  # Individual Contributor
+    # Display appropriate dashboard based on persona and navigation option
+    if nav_option == "SDLC Timeline":
+        show_sdlc_timeline()
+    elif persona == PERSONA_OPTIONS[0]:  # Individual Contributor
         show_ic_dashboard(nav_option)
     elif persona == PERSONA_OPTIONS[1]:  # First Line Manager
         show_first_line_manager_dashboard(nav_option)
@@ -102,24 +111,18 @@ def create_end_to_end_timechart_for_project(project: str):
         "    "
     )
 
-if __name__ == "__main__":
-    # Check if running with streamlit
-    if len(sys.argv) > 1 and sys.argv[1] == "streamlit":
-        zenforge_dashboard()
-    else:
-        # Command line interface
-        function_input = input(
-            "Please enter the function to run ('load_data' or 'view_project' or 'dashboard'): "
-        )
-        if function_input == "load_data":
-            load_sample_data_into_timeseries_db()
-            sys.exit(1)
-        elif function_input == "view_project":
-            project: str = "PRJ-001"
-            create_end_to_end_timechart_for_project(project)
-            sys.exit(1)
-        elif function_input == "dashboard":
-            zenforge_dashboard()
-        else:
-            print("Invalid option. Please choose 'load_data' or 'view_project' or 'dashboard'.")
 
+if __name__ == "__main__":
+    # Check LOAD_SYNTHETIC_DATA environment variable
+    should_load_synthetic = os.getenv("LOAD_SYNTHETIC_DATA", "false").lower() in [
+        "true",
+        "1",
+        "yes",
+        "t",
+    ]
+
+    # Load synthetic data only if the environment variable is set to true
+    if should_load_synthetic:
+        load_sample_data_into_timeseries_db()
+
+    zenforge_dashboard()
