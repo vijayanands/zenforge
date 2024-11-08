@@ -5,6 +5,8 @@ import streamlit as st
 from plotly.subplots import make_subplots
 from sqlalchemy import create_engine
 
+from model.sdlc_events import Environment, BuildStatus
+
 
 # Database connection
 def get_database_connection():
@@ -128,37 +130,92 @@ def get_bug_data(project_id):
         COUNT(*) as bug_count,
         AVG(resolution_time_hours) as avg_resolution_time
     FROM sdlc_timeseries.bugs
-    WHERE event_id = %(project_id)s AND severity = 'P0'
+    WHERE project_id = %(project_id)s AND severity = 'P0'
     GROUP BY DATE(created_date), severity, status
     ORDER BY bug_date
     """
     return pd.read_sql_query(query, engine, params={"project_id": project_id})
 
+def get_jira_metrics(project_id):
+    engine = get_database_connection()
+    query = """
+    SELECT 
+        j.id as issue_key,
+        j.created_date,
+        j.completed_date as resolved_date,
+        s.id as sprint_id,
+        EXTRACT(EPOCH FROM (j.completed_date - j.created_date))/3600 as resolution_time_hours,
+        COALESCE(
+            (SELECT SUM(duration_seconds)/3600 
+             FROM sdlc_timeseries.cicd_events c 
+             WHERE c.event_id = j.event_id),
+            0
+        ) as build_time_hours,
+        j.story_points
+    FROM sdlc_timeseries.jira_items j
+    LEFT JOIN sdlc_timeseries.sprint_jira_association sja ON j.id = sja.jira_id
+    LEFT JOIN sdlc_timeseries.sprints s ON sja.sprint_id = s.id
+    WHERE j.event_id = %(project_id)s
+    AND j.completed_date IS NOT NULL
+    ORDER BY j.created_date
+    """
+    return pd.read_sql_query(query, engine, params={"project_id": project_id})
 
-def create_timeline_visualization(
-    design_data, sprint_data, commit_data, pr_data, cicd_data, bug_data
-):
+def get_release_bug_correlation(project_id):
+    engine = get_database_connection()
+    query = """
+    WITH releases AS (
+        SELECT 
+            DATE(timestamp + (duration_seconds || ' seconds')::interval) as deployment_complete_date,
+            COUNT(*) as deployment_count
+        FROM sdlc_timeseries.cicd_events
+        WHERE event_id = %(project_id)s
+        AND environment::text = %(env)s
+        AND event_type = 'deployment'
+        AND status::text = %(build_status)s
+        GROUP BY DATE(timestamp + (duration_seconds || ' seconds')::interval)
+    )
+    SELECT 
+        r.deployment_complete_date,
+        r.deployment_count,
+        COUNT(b.id) as bugs_count,
+        SUM(CASE WHEN b.severity = 'P0' THEN 1 ELSE 0 END) as p0_bugs_count
+    FROM releases r
+    LEFT JOIN sdlc_timeseries.bugs b ON 
+        b.created_date >= r.deployment_complete_date AND 
+        b.created_date < r.deployment_complete_date + interval '7 days' AND
+        b.project_id = %(project_id)s
+    GROUP BY r.deployment_complete_date, r.deployment_count
+    ORDER BY r.deployment_complete_date
+    """
+    return pd.read_sql_query(
+        query,
+        engine,
+        params={
+            "project_id": project_id,
+            "env": Environment.PRODUCTION.value,
+            "build_status": BuildStatus.SUCCESS.value
+        }
+    )
+
+def create_timeline_visualization(design_data, sprint_data, commit_data, pr_data, cicd_data, jira_data,
+                                  release_bug_data):
     # Create figure with subplots
     fig = make_subplots(
-        rows=6,
+        rows=8,
         cols=1,
         subplot_titles=(
             "Design Phase",
             "Sprint Progress",
+            "JIRA Resolution Times",  # New
+            "Build Times per JIRA",   # New
             "Commits",
             "Pull Requests",
             "CI/CD Events",
-            "P0 Bugs",
+            "Release vs Bugs",        # New
         ),
         vertical_spacing=0.05,
-        row_heights=[
-            0.2,
-            0.2,
-            0.15,
-            0.15,
-            0.15,
-            0.15,
-        ],  # Changed from 'heights' to 'row_heights'
+        row_heights=[0.15, 0.15, 0.15, 0.15, 0.1, 0.1, 0.1, 0.1],
     )
 
     # Design Phase Timeline
@@ -252,22 +309,74 @@ def create_timeline_visualization(
                 col=1,
             )
 
-    # Bugs
-    if not bug_data.empty:
-        status_colors = {"Open": "red", "In Progress": "orange", "Fixed": "green"}
-        for status in bug_data["status"].unique():
-            status_data = bug_data[bug_data["status"] == status]
-            fig.add_trace(
-                go.Scatter(
-                    x=status_data["bug_date"],
-                    y=status_data["bug_count"],
-                    mode="lines+markers",
-                    name=f"P0 Bugs - {status}",
-                    line=dict(color=status_colors.get(status, "gray")),
+    # Add JIRA Resolution Times (row 3)
+    if not jira_data.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=jira_data["created_date"],
+                y=jira_data["resolution_time_hours"],
+                mode="markers",
+                name="JIRA Resolution Time",
+                marker=dict(
+                    size=jira_data["story_points"]*3,  # Size based on story points
+                    color="orange",
                 ),
-                row=6,
-                col=1,
-            )
+                text=jira_data["issue_key"],
+            ),
+            row=3,
+            col=1,
+        )
+
+    # Add Build Times per JIRA (row 4)
+    if not jira_data.empty:
+        fig.add_trace(
+            go.Bar(
+                x=jira_data["issue_key"],
+                y=jira_data["build_time_hours"],
+                name="Build Time",
+                marker_color="teal",
+            ),
+            row=4,
+            col=1,
+        )
+
+    # Add Release vs Bugs correlation (row 8)
+    if not release_bug_data.empty:
+        # Deployments
+        fig.add_trace(
+            go.Bar(
+                x=release_bug_data["deployment_date"],
+                y=release_bug_data["deployment_count"],
+                name="Deployments",
+                marker_color="green",
+            ),
+            row=8,
+            col=1,
+        )
+        # Bugs
+        fig.add_trace(
+            go.Scatter(
+                x=release_bug_data["deployment_date"],
+                y=release_bug_data["bugs_count"],
+                mode="lines+markers",
+                name="Total Bugs",
+                line=dict(color="red"),
+            ),
+            row=8,
+            col=1,
+        )
+        # P0 Bugs
+        fig.add_trace(
+            go.Scatter(
+                x=release_bug_data["deployment_date"],
+                y=release_bug_data["p0_bugs_count"],
+                mode="lines+markers",
+                name="P0 Bugs",
+                line=dict(color="darkred"),
+            ),
+            row=8,
+            col=1,
+        )
 
     # Update layout
     fig.update_layout(
@@ -284,6 +393,9 @@ def create_timeline_visualization(
     fig.update_yaxes(title_text="PR Count", row=4, col=1)
     fig.update_yaxes(title_text="Event Count", row=5, col=1)
     fig.update_yaxes(title_text="Bug Count", row=6, col=1)
+    fig.update_yaxes(title_text="Resolution Hours", row=3, col=1)
+    fig.update_yaxes(title_text="Build Hours", row=4, col=1)
+    fig.update_yaxes(title_text="Count", row=8, col=1)
 
     # Update x-axes labels
     fig.update_xaxes(
@@ -292,10 +404,12 @@ def create_timeline_visualization(
 
     # Update subplot spacing
     fig.update_layout(
-        height=1200,
+        height=1600,  # Increased height for additional plots
         showlegend=True,
+        title_text="Software Development Lifecycle Timeline",
+        template="plotly_white",
         legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-        margin=dict(t=100, b=100),  # Add more margin at top and bottom
+        margin=dict(t=100, b=100),
     )
 
     return fig
@@ -543,6 +657,8 @@ def main():
                 pr_data = get_pr_data(selected_project)
                 cicd_data = get_cicd_data(selected_project)
                 bug_data = get_bug_data(selected_project)
+                jira_data = get_jira_metrics(selected_project)
+                release_bug_data = get_release_bug_correlation(selected_project)
 
             # Timeline View
             st.subheader("Project Timeline")
@@ -555,8 +671,8 @@ def main():
             sprint_fig, commit_fig = create_metrics_dashboard(sprint_data, commit_data)
 
             # Detailed Metrics in Tabs with Cards
-            tab1, tab2, tab3, tab4, tab5 = st.tabs(
-                ["Design", "Sprint Progress", "Development", "CI/CD", "Quality"]
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+                ["Design", "Sprint Progress", "Development", "JIRA Metrics", "CI/CD", "Quality"]
             )
 
             with tab1:
@@ -630,6 +746,30 @@ def main():
                     st.info("No commit data available")
 
             with tab4:
+                if not jira_data.empty:
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        create_metric_card(
+                            "Average Resolution Time",
+                            f"{jira_data['resolution_time_hours'].mean():.1f}h",
+                            help_text="Average time to resolve JIRAs"
+                        )
+                    with col2:
+                        create_metric_card(
+                            "Average Build Time",
+                            f"{jira_data['build_time_hours'].mean():.1f}h",
+                            help_text="Average build time per JIRA"
+                        )
+                    with col3:
+                        create_metric_card(
+                            "Total Story Points",
+                            f"{jira_data['story_points'].sum()}",
+                            help_text="Total story points completed"
+                        )
+                else:
+                    st.info("No JIRA data available")
+
+            with tab5:
                 if not cicd_data.empty:
                     col1, col2 = st.columns(2)
                     with col1:
@@ -652,7 +792,7 @@ def main():
                 else:
                     st.info("No CI/CD data available")
 
-            with tab5:
+            with tab6:
                 if not bug_data.empty:
                     col1, col2 = st.columns(2)
                     with col1:

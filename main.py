@@ -1,3 +1,5 @@
+import sys
+
 import streamlit as st
 
 from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
@@ -100,16 +102,24 @@ def create_end_to_end_timechart_for_project(project: str):
         "    "
     )
 
-
 if __name__ == "__main__":
-    # Prompt the user to enter the value for --function instead of expecting it as an argument
-    function_input = input(
-        "Please enter the function to run ('load_data' or 'view_project'): "
-    )
-    if function_input == "load_data":
-        load_sample_data_into_timeseries_db()
-    elif function_input == "view_project":
-        project: str = "PRJ-001"
-        create_end_to_end_timechart_for_project(project)
+    # Check if running with streamlit
+    if len(sys.argv) > 1 and sys.argv[1] == "streamlit":
+        zenforge_dashboard()
     else:
-        print("Invalid option. Please choose 'load_data' or 'view_project'.")
+        # Command line interface
+        function_input = input(
+            "Please enter the function to run ('load_data' or 'view_project' or 'dashboard'): "
+        )
+        if function_input == "load_data":
+            load_sample_data_into_timeseries_db()
+            sys.exit(1)
+        elif function_input == "view_project":
+            project: str = "PRJ-001"
+            create_end_to_end_timechart_for_project(project)
+            sys.exit(1)
+        elif function_input == "dashboard":
+            zenforge_dashboard()
+        else:
+            print("Invalid option. Please choose 'load_data' or 'view_project' or 'dashboard'.")
+
