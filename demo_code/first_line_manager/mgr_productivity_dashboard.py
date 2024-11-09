@@ -34,10 +34,6 @@ def generate_employee_position(employee):
     return positions.get(employee, "Employee")
 
 
-def generate_productivity_score():
-    return round(random.uniform(1, 10), 1)
-
-
 def generate_task_data():
     total_tasks = random.randint(50, 100)
     completed = random.randint(20, total_tasks - 10)
@@ -161,9 +157,6 @@ def generate_team_dummy_data(num_teams, duration):
 
 
 def aggregate_employee_data(num_employees):
-    total_productivity_score = sum(
-        generate_productivity_score() for _ in range(num_employees)
-    )
     total_tasks, total_completed, total_in_progress, total_on_track, total_overdue = [
         sum(x) for x in zip(*[generate_task_data() for _ in range(num_employees)])
     ]
@@ -243,7 +236,6 @@ def aggregate_employee_data(num_employees):
     )
 
     return {
-        "productivity_score": round(total_productivity_score / num_employees, 1),
         "total_tasks": total_tasks,
         "completed_tasks": total_completed,
         "in_progress": total_in_progress,
@@ -324,29 +316,21 @@ def productivity_dashboard():
 def employee_productivity_dashboard():
     st.header("Employee Productivity Dashboard")
 
-    # Dropdowns for employee and duration
-    col1, col2 = st.columns(2)
-    with col1:
-        employees = ["All Employees"] + generate_employee_list()
-        selected_employee = st.selectbox(
-            "Select Employee", employees, key="employee_select"
-        )
-    with col2:
-        duration = st.selectbox(
-            "Select Duration", ["Quarterly", "Yearly"], key="duration_select"
-        )
+    # Dropdowns for employee
+    employees = ["All Employees"] + generate_employee_list()
+    selected_employee = st.selectbox(
+        "Select Employee", employees, key="employee_select"
+    )
 
     # Handle "All Employees" selection
     if selected_employee == "All Employees":
         num_employees = len(generate_employee_list())
         data = aggregate_employee_data(num_employees)
         employee_position = f"Team of {num_employees}"
-        productivity_score = data["productivity_score"]
         total_tasks = data["total_tasks"]
         completed_tasks = data["completed_tasks"]
     else:
         data = {
-            "productivity_score": generate_productivity_score(),
             "task_data": generate_task_data(),
             "knowledge_data": generate_knowledge_data(),
             "meeting_data": generate_meeting_data(),
@@ -354,20 +338,17 @@ def employee_productivity_dashboard():
             "code_data": generate_code_data(),
         }
         employee_position = generate_employee_position(selected_employee)
-        productivity_score = data["productivity_score"]
         total_tasks, completed_tasks, _, _, _ = data["task_data"]
 
     # Display employee info and productivity score in a single row
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         create_styled_metric("Employee", selected_employee, "👤")
     with col2:
         create_styled_metric("Position", employee_position, "💼")
     with col3:
-        create_styled_metric("Productivity Score", f"{productivity_score}/10", "🌟")
-    with col4:
         create_styled_metric("Total Tasks", total_tasks, "📋")
-    with col5:
+    with col4:
         create_styled_metric("Completed Tasks", completed_tasks, "✅")
 
     # Tabs
@@ -423,7 +404,7 @@ def employee_productivity_dashboard():
         code_data = data["code_data"]
 
         # All code metrics in two rows
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             create_styled_metric(
                 "Code Quality", f"{code_data['quality_score']}/10", "🏆"
@@ -431,35 +412,11 @@ def employee_productivity_dashboard():
         with col2:
             create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
         with col3:
-            create_styled_metric(
-                "Refactoring Tasks", code_data["refactoring_tasks"], "🔧"
-            )
+            create_styled_metric("Code Commits", code_data["git_commits"], "💻")
         with col4:
-            create_styled_metric(
-                "Features Developed", code_data["features_developed"], "🚀"
-            )
-        with col5:
-            create_styled_metric("Git Commits", code_data["git_commits"], "💻")
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
             create_styled_metric(
                 "Bug Fix Rate", f"{code_data['bug_fix_rate']} bugs/week", "🐛"
             )
-        with col2:
-            create_styled_metric(
-                "Critical Bugs Fixed", code_data["bugs_fixed"]["critical"], "🚨"
-            )
-        with col3:
-            create_styled_metric(
-                "High Bugs Fixed", code_data["bugs_fixed"]["high"], "🔴"
-            )
-        with col4:
-            create_styled_metric(
-                "Medium Bugs Fixed", code_data["bugs_fixed"]["medium"], "🟠"
-            )
-        with col5:
-            create_styled_metric("Low Bugs Fixed", code_data["bugs_fixed"]["low"], "🟡")
 
         # Bugs Fixed by Criticality pie chart
         st.subheader("Bugs Fixed by Criticality")

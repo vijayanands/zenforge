@@ -74,10 +74,6 @@ def generate_employee_position(employee):
     return positions.get(employee, "Employee")
 
 
-def generate_productivity_score():
-    return round(random.uniform(1, 10), 1)
-
-
 def generate_task_data():
     total_tasks = random.randint(50, 100)
     completed = random.randint(20, total_tasks - 10)
@@ -161,8 +157,6 @@ def generate_code_data():
     return {
         "quality_score": round(random.uniform(1, 10), 1),
         "peer_reviews": random.randint(5, 20),
-        "refactoring_tasks": random.randint(2, 10),
-        "features_developed": random.randint(1, 5),
         "bugs_fixed": {
             "low": random.randint(5, 15),
             "medium": random.randint(3, 10),
@@ -185,20 +179,12 @@ def ic_productivity_dashboard():
 
     # Display employee info and productivity score
     employee_position = generate_employee_position(selected_employee)
-    productivity_score = generate_productivity_score()
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
         st.info(f"**Employee:** {selected_employee}")
     with col2:
         st.info(f"**Position:** {employee_position}")
-    with col3:
-        st.info(f"**Productivity Score:** {productivity_score}/10")
-
-    # Duration selection with styled radio buttons in a container
-    duration = create_styled_radio_buttons(
-        "Select Duration", ["Quarterly", "Yearly"], "duration_selection"
-    )
 
     # Tabs
     tab_labels = ["Tasks", "Code", "Knowledge", "Meetings"]
@@ -248,7 +234,7 @@ def ic_productivity_dashboard():
     with tabs[1]:
         code_data = generate_code_data()
 
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             create_styled_metric(
                 "Code Quality", f"{code_data['quality_score']}/10", "🏆"
@@ -256,16 +242,8 @@ def ic_productivity_dashboard():
         with col2:
             create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
         with col3:
-            create_styled_metric(
-                "Refactoring Tasks", code_data["refactoring_tasks"], "🔧"
-            )
+            create_styled_metric("Code Commits", code_data["git_commits"], "🔢")
         with col4:
-            create_styled_metric(
-                "Features Developed", code_data["features_developed"], "🚀"
-            )
-        with col5:
-            create_styled_metric("Git Commits", code_data["git_commits"], "🔢")
-        with col6:
             create_styled_metric(
                 "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
             )
@@ -300,7 +278,7 @@ def ic_productivity_dashboard():
             create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
 
     # Tab 3: Knowledge
-    with tabs[3]:
+    with tabs[2]:
         knowledge_data = generate_knowledge_data()
 
         col1, col2, col3, col4, col5 = st.columns(5)

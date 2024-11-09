@@ -14,10 +14,6 @@ from demo_code.ui.style import (
 )
 
 
-def get_overall_performance():
-    return np.random.randint(1, 11)
-
-
 def generate_goals():
     goals = [
         "Improve coding skills",
@@ -57,17 +53,9 @@ def generate_performance_trend():
 
 def ic_perf_and_career_dashboard():
     st.title("Employee Performance and Career Dashboard")
+    st.subheader("John Doe - Software Engineer")
 
-    col1, col2 = st.columns([3, 1])
-
-    with col1:
-        st.subheader("John Doe - Software Engineer")
-
-    with col2:
-        overall_performance = get_overall_performance()
-        create_styled_metric("Overall Performance", f"{overall_performance}/10", "🌟")
-
-    tab_labels = ["Goals", "Feedback", "Performance", "Career"]
+    tab_labels = ["Goals", "Feedback", "Performance"]
     tabs = create_styled_tabs(tab_labels)
 
     with tabs[0]:
@@ -163,44 +151,6 @@ def ic_perf_and_career_dashboard():
                 ],
                 "Achievements",
             )
-
-    with tabs[3]:
-        st.header("Career Trajectory and Gaps")
-        col1, col2 = st.columns(2)
-
-        with col1:
-            create_styled_bullet_list(
-                [
-                    "Current Position: Software Engineer",
-                    "Target Position: Senior Software Engineer",
-                ],
-                "Career Path",
-            )
-
-        with col2:
-            create_styled_bullet_list(
-                [
-                    "Advanced system design",
-                    "Project management",
-                    "Machine learning fundamentals",
-                ],
-                "Skills to Develop",
-            )
-
-        if st.button("What are my gaps?"):
-            gaps = [
-                "Need more experience leading large-scale projects",
-                "Improve mentoring and leadership skills",
-                "Deepen knowledge in cloud architecture",
-                "Enhance cross-functional collaboration skills",
-            ]
-            create_styled_bullet_list(gaps, "Identified Gaps")
-
-        st.header("Self Appraisal")
-        last_appraisal = datetime.now() - timedelta(days=180)
-        st.write(f"Last submitted: {last_appraisal.strftime('%B %d, %Y')}")
-        if st.button("Generate Self Appraisal"):
-            st.success("Self Appraisal form generated and sent to your email.")
 
 
 if __name__ == "__main__":
