@@ -3,7 +3,7 @@ from typing import Any, Dict, List
 
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import generate_cicd_events, get_sample_data
+from model.events_data_generator import generate_cicd_events, generate_all_data
 from model.sdlc_events import (
     BuildMode,
     DatabaseManager,
@@ -18,15 +18,8 @@ from model.sdlc_events import (
     create_pull_request,
     create_sprint,
     create_sprint_jira_associations,
-    db_manager,
     db_name,
     server_connection_string,
-)
-from model.validators import (
-    validate_bug_build_association,
-    validate_bug_data,
-    validate_cicd_event_timeline,
-    validate_cicd_relationships,
 )
 
 # Create an engine for the server connection
@@ -50,7 +43,7 @@ def create_database_if_not_exists():
             print(f"Database {db_name} created successfully")
 
 
-def initialize_db_manager():
+def initialize_db():
     # Create the DatabaseManager instance and initialize the database
     db_manager = DatabaseManager(connection_string)
     try:
@@ -58,18 +51,15 @@ def initialize_db_manager():
         print("Schemas created successfully.")
     except Exception as e:
         print(f"Error creating schemas: {e}")
-    return db_manager
-
 
 def load_cicd_events(all_data) -> None:
     """Load CICD events into the database"""
-    print("\nGenerating CICD events...")
-
     # Extract project IDs from the projects data
     project_ids = [project["id"] for project in all_data["projects"]]
     pull_requests = all_data["pull_requests"]
 
     cicd_events = generate_cicd_events(pull_requests, project_ids)
+    # cicd_events = all_data["cicd_events"]
 
     print(f"Generated {len(cicd_events)} CICD events")
     print(
@@ -79,30 +69,6 @@ def load_cicd_events(all_data) -> None:
         f"- Manual builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.MANUAL.value)}"
     )
 
-    # Validate CICD events before loading
-    with db_manager.get_session() as session:
-        # Validate timeline constraints
-        timeline_errors = validate_cicd_event_timeline(session)
-        if timeline_errors:
-            print("CICD timeline validation errors:")
-            for error in timeline_errors:
-                print(f"  - {error}")
-            raise ValueError("CICD timeline validation failed")
-
-        # Validate relationships
-        relationship_errors = validate_cicd_relationships(
-            {
-                "cicd_events": cicd_events,
-                "pull_requests": pull_requests,
-                "projects": all_data["projects"],
-            }
-        )
-        if relationship_errors:
-            print("CICD relationship validation errors:")
-            for error in relationship_errors:
-                print(f"  - {error}")
-            raise ValueError("CICD relationship validation failed")
-
     # Create events in the database if validation passes
     for event in cicd_events:
         create_cicd_event(event)
@@ -110,41 +76,16 @@ def load_cicd_events(all_data) -> None:
 
 def load_bugs(all_data):
     bugs = all_data["bugs"]
-    # Validate bugs before loading
-    validation_errors = []
-    for bug in bugs:
-        errors = validate_bug_data(bug)
-        validation_errors.extend(errors)
-    build_association_errors = validate_bug_build_association(
-        bugs, all_data["cicd_events"]
-    )
-    validation_errors.extend(build_association_errors)
-    if validation_errors:
-        raise ValueError(f"Bug validation failed:\n" + "\n".join(validation_errors))
-    # Load validated bugs
     for bug in bugs:
         create_bug(bug)
-    print(f"Generated and loaded {len(bugs)} P0 bugs")
 
 
 def load_pull_requests(all_data):
-    pr_count = 0
-    merged_count = 0
     for pr in all_data["pull_requests"]:
         create_pull_request(pr)
-        pr_count += 1
-        if (
-            isinstance(pr["status"], str)
-            and pr["status"] == "MERGED"
-            or isinstance(pr["status"], PRStatus)
-            and pr["status"] == PRStatus.MERGED
-        ):
-            merged_count += 1
-    print(f"Loaded {pr_count} pull requests ({merged_count} merged)")
 
 
 def load_project_data(all_data):
-    print("Loading projects...")
     base_project_data = {}
     for project in all_data["projects"]:
         base_project_data[project["id"]] = project.copy()
@@ -168,11 +109,11 @@ def load_data(all_data: Dict[str, Any]):
     """Load data into the database handling all relationships and dependencies"""
     try:
         # Store original project data for reference
-        print("\nPhase 1: Loading base entities...")
+        print("\nPhase 1: Loading projects...")
         load_project_data(all_data)
 
         # Group Jira items by type for ordered loading
-        print("\nPhase 2: Loading Jira hierarchy...")
+        print("\nPhase 2: Loading Jiras...")
         for jira in all_data["jira_items"]:
             create_jira_item(jira)
 
@@ -202,8 +143,6 @@ def load_data(all_data: Dict[str, Any]):
         print("\nPhase 8: Generating and loading P0 bugs...")
         load_bugs(all_data)
 
-        print("\nData loading completed successfully")
-
     except Exception as e:
         print(f"Error loading data: {e}")
         raise
@@ -215,15 +154,15 @@ def load_sample_data_into_timeseries_db():
         # Create database if it doesn't exist
         create_database_if_not_exists()
 
-        # Initialize the DatabaseManager
-        db_manager = initialize_db_manager()
+        # Initialize the Database
+        initialize_db()
 
         # Get sample data once
-        print("Getting sample data...")
-        sample_data = get_sample_data()
+        print("Generating synthetic data...")
+        all_data = generate_all_data()
 
         # Load the data
-        load_data(sample_data)
+        load_data(all_data)
         print("Data has been loaded into the sdlc_timeseries schema.")
 
     except Exception as e:

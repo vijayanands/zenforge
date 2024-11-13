@@ -1272,64 +1272,6 @@ def generate_all_data() -> Dict[str, Any]:
         raise
 
 
-def get_sample_data() -> Dict[str, Any]:
-    """Get sample data with validation"""
-    try:
-        print("Starting sample data generation...")
-
-        # Generate data using the enhanced generate_all_data function
-        all_data = generate_all_data()
-
-        print("Performing final validation checks...")
-
-        # Verify required keys exist
-        required_keys = {
-            "projects",
-            "design_events",
-            "jira_items",
-            "commits",
-            "sprints",
-            "relationships",
-            "cicd_events",
-            "bugs",
-        }
-        missing_keys = required_keys - set(all_data.keys())
-        if missing_keys:
-            raise ValueError(f"Missing required data sections: {missing_keys}")
-
-        # Verify relationships structure
-        required_relationships = {
-            "sprint_jira_associations",  # Removed cicd_commit_associations
-        }
-        missing_relationships = required_relationships - set(
-            all_data["relationships"].keys()
-        )
-        if missing_relationships:
-            raise ValueError(
-                f"Missing required relationship maps: {missing_relationships}"
-            )
-
-        # Verify data types
-        type_checks = {
-            "projects": list,
-            "commits": list,
-            "relationships": dict,
-            "bugs": list,
-        }
-        for key, expected_type in type_checks.items():
-            if not isinstance(all_data[key], expected_type):
-                raise TypeError(
-                    f"Invalid type for {key}: expected {expected_type}, got {type(all_data[key])}"
-                )
-
-        print("Sample data generation and validation completed successfully")
-        return all_data
-
-    except Exception as e:
-        print(f"Error in get_sample_data: {str(e)}")
-        raise
-
-
 def enforce_design_sprint_timeline(
     projects: Dict[str, Dict[str, Any]]
 ) -> Dict[str, datetime]:
