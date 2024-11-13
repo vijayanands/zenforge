@@ -27,23 +27,45 @@ PERSONA_NAVIGATION = {
     "Individual Contributor": [
         "Productivity",
         "Performance & Career",
-        "SDLC Timeline",  # Added SDLC Timeline option
+        "SDLC Timeline",
     ],
     "First Line Manager": [
         "Productivity",
         "Performance & Career",
-        "SDLC Timeline",  # Added SDLC Timeline option
+        "SDLC Timeline",
     ],
     "Second Line Manager/Director": [
         "Productivity",
         "Performance",
         "Projects and Portfolio",
-        "SDLC Timeline",  # Added SDLC Timeline option
+        "SDLC Timeline",
     ],
 }
 
 
+def initialize_synthetic_data():
+    """Initialize synthetic data if not already loaded"""
+    if 'synthetic_data_loaded' not in st.session_state:
+        should_load_synthetic = os.getenv("LOAD_SYNTHETIC_DATA", "false").lower() in [
+            "true",
+            "1",
+            "yes",
+            "t",
+        ]
+        
+        if should_load_synthetic:
+            try:
+                load_sample_data_into_timeseries_db()
+                st.session_state.synthetic_data_loaded = True
+            except Exception as e:
+                st.error(f"Failed to load synthetic data: {str(e)}")
+                st.session_state.synthetic_data_loaded = False
+
+
 def zenforge_dashboard():
+    # Initialize synthetic data first
+    initialize_synthetic_data()
+    
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
 
     # Add the title bar
@@ -77,47 +99,5 @@ def zenforge_dashboard():
         st.write(UNIMPLEMENTED_MESSAGE.format(persona))
 
 
-def create_end_to_end_timechart_for_project(project: str):
-    print(f"Displaying end to end view of project {project}")
-    print(
-        "\n"
-        "    This will be the pseudo code for this\n"
-        "    \n"
-        "    jira_list <= get list of jiras for project\n"
-        "    Let us first find the events in the design phase\n"
-        "    design_jiras <= filter for type=Design in jira_list\n"
-        "    create a list of dictionaries that contain the following\n"
-        "        jira_id\n"
-        "        title\n"
-        "        status\n"
-        "        start_time\n"
-        "        end_time\n"
-        "        assigned_to\n"
-        "        estimated_hours\n"
-        "        actual_hours\n"
-        "    \n"
-        "    Now let us get the sprints related stats\n"
-        "    sprint_list <= get the list of sprints for project\n"
-        "    for each sprint in the project create a list of dictionary that contains the following\n"
-        "        start_date\n"
-        "        end_date\n"
-        "        \n"
-        "    \n"
-        "    "
-    )
-
-
 if __name__ == "__main__":
-    # Check LOAD_SYNTHETIC_DATA environment variable
-    should_load_synthetic = os.getenv("LOAD_SYNTHETIC_DATA", "false").lower() in [
-        "true",
-        "1",
-        "yes",
-        "t",
-    ]
-
-    # Load synthetic data only if the environment variable is set to true
-    if should_load_synthetic:
-        load_sample_data_into_timeseries_db()
-
     zenforge_dashboard()
