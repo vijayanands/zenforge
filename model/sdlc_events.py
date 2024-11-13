@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from operator import and_
 from typing import Any, Dict, List, Optional, Type
 
@@ -91,6 +91,58 @@ class BugStatus(enum.Enum):
     BLOCKED = "BLOCKED"
 
 
+class ProjectComplexity(enum.Enum):
+    VERY_HIGH = "VERY_HIGH"
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class ProjectPriority(enum.Enum):
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
+class ProjectStatus(enum.Enum):
+    NOT_STARTED = "NOT_STARTED"
+    DESIGN_PHASE_COMPLETE = "DESIGN_PHASE_COMPLETE"
+    IN_PROGRESS = "IN_PROGRESS"
+    CODE_COMPLETE = "CODE_COMPLETE"
+    RELEASED = "RELEASED"
+    END_OF_LIFE = "EOL"
+
+
+class ProjectDesignPhase(enum.Enum):
+    REQUIREMENT = "requirements"
+    UX_DESIGN = "ux_design"
+    ARCHITECTURE = "architecture"
+    DATABASE_DESIGN = "database_design"
+    API_DESIGN = "api_design"
+    SECURITY_REVIEW = "security_review"
+
+
+class JiraStatus(enum.Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    BLOCKED = "BLOCKED"
+    FIXED = "FIXED"
+    CLOSED = "CLOSED"
+
+
+class SprintStatus(enum.Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    BLOCKED = "BLOCKED"
+    COMPLETE = "COMPLETE"
+
+
+class JiraType(enum.Enum):
+    EPIC = "EPIC"
+    STORY = "STORY"
+    TASK = "TASK"
+
+
 # Regular tables
 class CICDEvent(Base):
     __tablename__ = "cicd_events"
@@ -123,12 +175,11 @@ class Project(Base):
     title = Column(String, nullable=False)
     description = Column(Text)
     start_date = Column(DateTime, nullable=False)
-    status = Column(String)
-    complexity = Column(String)
-    team_size = Column(Integer)
+    end_date = Column(DateTime)
+    status = Column(SQLEnum(ProjectStatus), nullable=False)
+    complexity = Column(SQLEnum(ProjectComplexity), nullable=False)
     estimated_duration_weeks = Column(Integer)
-    budget_allocated = Column(Float)
-    priority = Column(String)
+    priority = Column(SQLEnum(ProjectPriority), nullable=False)
     total_commits = Column(Integer)
     avg_code_coverage = Column(Float)
     total_p0_bugs = Column(Integer)
@@ -141,15 +192,13 @@ class JiraItem(Base):
     id = Column(String, primary_key=True)
     event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     parent_id = Column(String, nullable=True)
-    type = Column(String, nullable=False)
+    type = Column(SQLEnum(JiraType), nullable=False)
     title = Column(String, nullable=False)
-    status = Column(String)
+    status = Column(SQLEnum(JiraStatus), nullable=False)
     created_date = Column(DateTime, nullable=False)
     completed_date = Column(DateTime)
     priority = Column(String)
     story_points = Column(Integer)
-    assigned_team = Column(String)
-    assigned_developer = Column(String)
     estimated_hours = Column(Integer)
     actual_hours = Column(Integer)
 
@@ -163,20 +212,8 @@ class Sprint(Base):
     __table_args__ = {"schema": "sdlc_timeseries"}
 
     id = Column(String, primary_key=True)
-    event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     start_date = Column(DateTime, nullable=False)
     end_date = Column(DateTime)
-    planned_story_points = Column(Integer)
-    completed_story_points = Column(Integer)
-    planned_stories = Column(Integer)
-    completed_stories = Column(Integer)
-    team_velocity = Column(Float)
-    burndown_efficiency = Column(Float)
-    sprint_goals = Column(Text)
-    retrospective_summary = Column(Text)
-    blockers_encountered = Column(Integer)
-    team_satisfaction_score = Column(Float)
-    status = Column(String)
 
     jira_items = relationship(
         "JiraItem", secondary=sprint_jira_association, back_populates="sprints"
@@ -223,12 +260,11 @@ class DesignEvent(Base):
     id = Column(String)
     event_id = Column(String, ForeignKey("sdlc_timeseries.projects.id"))
     timestamp = Column(DateTime, nullable=False)
-    design_type = Column(String, nullable=False)
+    design_type = Column(SQLEnum(ProjectDesignPhase), nullable=False)
     stage = Column(Enum(StageType), nullable=False)
     author = Column(String)
     jira = Column(String, ForeignKey("sdlc_timeseries.jira_items.id"), nullable=True)
     stakeholders = Column(String)
-    review_status = Column(String)
 
 
 class PullRequest(Base):
@@ -384,28 +420,33 @@ JIRA Related CRUD
 
 
 def create_jira_item(jira_data: Dict[str, Any]) -> JiraItem:
+    """Create a new jira item with proper data type handling"""
     with db_manager.get_session() as session:
-        jira = JiraItem(**jira_data)
+        # Copy the data to avoid modifying the original
+        processed_data = jira_data.copy()
+
+        # Convert timedelta to hours if actual_hours is a timedelta
+        if isinstance(processed_data.get("actual_hours"), timedelta):
+            processed_data["actual_hours"] = int(
+                processed_data["actual_hours"].total_seconds() / 3600
+            )
+
+        # Handle JiraStatus enum
+        if isinstance(processed_data.get("status"), str):
+            processed_data["status"] = JiraStatus(processed_data["status"])
+
+        jira = JiraItem(**processed_data)
         session.add(jira)
         session.commit()
         return jira
 
 
-def get_jira_items(
-    event_id: str, item_type: Optional[str] = None
-) -> list[Type[JiraItem]]:
-    with db_manager.get_session() as session:
-        query = session.query(JiraItem).filter(JiraItem.event_id == event_id)
-        if item_type:
-            query = query.filter(JiraItem.type == item_type)
-        return query.order_by(JiraItem.created_date).all()
-
-
 def update_jira_status(
     jira_id: str, new_status: str, completion_date: Optional[datetime] = None
 ) -> bool:
+    """Update jira status with better type handling"""
     with db_manager.get_session() as session:
-        update_data = {"status": new_status}
+        update_data = {"status": JiraStatus(new_status)}
         if completion_date:
             update_data["completed_date"] = completion_date
         result = (
@@ -413,6 +454,17 @@ def update_jira_status(
         )
         session.commit()
         return result > 0
+
+
+def get_jira_items(
+    event_id: str, item_type: Optional[str] = None
+) -> list[Type[JiraItem]]:
+    """Get jira items with proper type handling"""
+    with db_manager.get_session() as session:
+        query = session.query(JiraItem).filter(JiraItem.event_id == event_id)
+        if item_type:
+            query = query.filter(JiraItem.type == item_type)
+        return query.order_by(JiraItem.created_date).all()
 
 
 """

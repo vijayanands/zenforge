@@ -72,27 +72,6 @@ def get_design_phase_data(project_id):
     return safe_read_sql(query, engine, params={"project_id": project_id})
 
 
-def get_sprint_data(project_id):
-    engine = get_database_connection()
-    query = """
-    SELECT 
-        id,
-        start_date,
-        end_date,
-        planned_story_points,
-        completed_story_points,
-        planned_stories,
-        completed_stories,
-        team_velocity,
-        burndown_efficiency,
-        status
-    FROM sdlc_timeseries.sprints
-    WHERE event_id = %(project_id)s
-    ORDER BY start_date
-    """
-    return safe_read_sql(query, engine, params={"project_id": project_id})
-
-
 def get_commit_data(project_id):
     engine = get_database_connection()
     query = """
@@ -229,7 +208,6 @@ def get_release_bug_correlation(project_id):
 
 def create_timeline_visualization(
     design_data,
-    sprint_data,
     commit_data,
     pr_data,
     cicd_data,
@@ -268,31 +246,6 @@ def create_timeline_visualization(
                 row=1,
                 col=1,
             )
-
-    # Sprint Progress
-    if not sprint_data.empty:
-        fig.add_trace(
-            go.Scatter(
-                x=sprint_data["end_date"],
-                y=sprint_data["completed_story_points"],
-                mode="lines+markers",
-                name="Completed Story Points",
-                line=dict(color="green"),
-            ),
-            row=2,
-            col=1,
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=sprint_data["end_date"],
-                y=sprint_data["planned_story_points"],
-                mode="lines+markers",
-                name="Planned Story Points",
-                line=dict(color="blue"),
-            ),
-            row=2,
-            col=1,
-        )
 
     # Add JIRA Resolution Times (row 3)
     if not jira_data.empty:
@@ -440,7 +393,7 @@ def create_timeline_visualization(
     return fig
 
 
-def create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_data):
+def create_timeline_gantt(design_data, commit_data, pr_data, cicd_data):
     """Create a Gantt chart showing the timeline of different phases"""
     # Collect all timeline data
     timeline_data = []
@@ -455,19 +408,6 @@ def create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_d
                     "Finish": row["end_time"],
                     "Phase": "Design",
                     "Details": f"Authors: {row['authors']}\nStakeholders: {row['stakeholders']}",
-                }
-            )
-
-    # Add Sprints
-    if not sprint_data.empty:
-        for _, row in sprint_data.iterrows():
-            timeline_data.append(
-                {
-                    "Task": f"Sprint: {row['id']}",
-                    "Start": row["start_date"],
-                    "Finish": row["end_date"],
-                    "Phase": "Sprint",
-                    "Details": f"Completed: {row['completed_story_points']}/{row['planned_story_points']} points",
                 }
             )
 
@@ -552,39 +492,11 @@ def create_timeline_gantt(design_data, sprint_data, commit_data, pr_data, cicd_d
     return fig
 
 
-def create_metrics_dashboard(sprint_data, commit_data):
+def create_metrics_dashboard(commit_data):
     """Create a dashboard of key metrics"""
     # Initialize figures as None
     sprint_fig = None
     commit_fig = None
-
-    # Handle sprint data visualization
-    if sprint_data is not None and not sprint_data.empty:
-        sprint_fig = go.Figure()
-        sprint_fig.add_trace(
-            go.Scatter(
-                x=sprint_data["end_date"],
-                y=sprint_data["completed_story_points"],
-                name="Completed Points",
-                mode="lines+markers",
-                line=dict(color="green"),
-            )
-        )
-        sprint_fig.add_trace(
-            go.Scatter(
-                x=sprint_data["end_date"],
-                y=sprint_data["planned_story_points"],
-                name="Planned Points",
-                mode="lines+markers",
-                line=dict(color="blue", dash="dash"),
-            )
-        )
-        sprint_fig.update_layout(
-            title="Sprint Burndown",
-            xaxis_title="Sprint End Date",
-            yaxis_title="Story Points",
-            height=300,
-        )
 
     # Handle commit data visualization
     if commit_data is not None and not commit_data.empty:
@@ -766,70 +678,6 @@ def display_design_phase_tab(design_data):
         st.info("No design phase data available")
 
 
-def display_sprint_progress_tab(sprint_data):
-    """Display sprint progress metrics and charts"""
-    st.subheader("Sprint Progress")
-
-    if sprint_data is None or sprint_data.empty:
-        st.info("No sprint data available")
-        return
-
-    # Create and display sprint burndown chart
-    sprint_fig, _ = create_metrics_dashboard(sprint_data, None)
-    if sprint_fig:
-        st.plotly_chart(sprint_fig, use_container_width=True)
-
-    # Display metrics
-    try:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            velocity = (
-                sprint_data["team_velocity"].mean()
-                if "team_velocity" in sprint_data
-                else 0
-            )
-            create_metric_card(
-                "Average Velocity",
-                f"{velocity:.1f}",
-                help_text="Points completed per sprint",
-            )
-        with col2:
-            if all(
-                col in sprint_data for col in ["completed_stories", "planned_stories"]
-            ):
-                completion_rate = (
-                    sprint_data["completed_stories"].sum()
-                    / sprint_data["planned_stories"].sum()
-                    * 100
-                    if sprint_data["planned_stories"].sum() > 0
-                    else 0
-                )
-                create_metric_card(
-                    "Completion Rate",
-                    f"{completion_rate:.1f}%",
-                    help_text="Stories completed vs planned",
-                )
-            else:
-                create_metric_card(
-                    "Completion Rate",
-                    "N/A",
-                    help_text="Data not available",
-                )
-        with col3:
-            points = (
-                sprint_data["completed_story_points"].sum()
-                if "completed_story_points" in sprint_data
-                else 0
-            )
-            create_metric_card(
-                "Total Story Points",
-                f"{points}",
-                help_text="Completed across all sprints",
-            )
-    except Exception as e:
-        st.error(f"Error calculating sprint metrics: {str(e)}")
-
-
 def display_development_tab(commit_data):
     """Display development metrics and charts"""
     st.subheader("Development Activity")
@@ -839,7 +687,7 @@ def display_development_tab(commit_data):
         return
 
     # Create and display commit activity chart
-    _, commit_fig = create_metrics_dashboard(None, commit_data)
+    _, commit_fig = create_metrics_dashboard(commit_data)
     if commit_fig:
         st.plotly_chart(commit_fig, use_container_width=True)
 
@@ -1004,17 +852,12 @@ def display_quality_tab(bug_data, release_bug_data):
         st.info("No quality data available")
 
 
-def display_project_timeline_tab(
-    design_data, sprint_data, commit_data, pr_data, cicd_data
-):
+def display_project_timeline_tab(design_data, commit_data, pr_data, cicd_data):
     """Display project timeline visualization"""
     st.subheader("Project Timeline")
-    if all(
-        data is not None
-        for data in [design_data, sprint_data, commit_data, pr_data, cicd_data]
-    ):
+    if all(data is not None for data in [design_data, commit_data, pr_data, cicd_data]):
         timeline_fig = create_timeline_gantt(
-            design_data, sprint_data, commit_data, pr_data, cicd_data
+            design_data, commit_data, pr_data, cicd_data
         )
         st.plotly_chart(timeline_fig, use_container_width=True)
     else:
@@ -1069,7 +912,6 @@ def main():
             with st.spinner("Loading project data..."):
                 try:
                     design_data = get_design_phase_data(selected_project)
-                    sprint_data = get_sprint_data(selected_project)
                     commit_data = get_commit_data(selected_project)
                     pr_data = get_pr_data(selected_project)
                     cicd_data = get_cicd_data(selected_project)
@@ -1081,11 +923,10 @@ def main():
                     return
 
             # Create tabs
-            tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
                 [
                     "Project Timeline",
                     "Design",
-                    "Sprint Progress",
                     "Development",
                     "JIRA Metrics",
                     "CI/CD",
@@ -1096,25 +937,22 @@ def main():
             try:
                 with tab1:
                     display_project_timeline_tab(
-                        design_data, sprint_data, commit_data, pr_data, cicd_data
+                        design_data, commit_data, pr_data, cicd_data
                     )
 
                 with tab2:
                     display_design_phase_tab(design_data)
 
                 with tab3:
-                    display_sprint_progress_tab(sprint_data)
-
-                with tab4:
                     display_development_tab(commit_data)
 
-                with tab5:
+                with tab4:
                     display_jira_metrics_tab(jira_data)
 
-                with tab6:
+                with tab5:
                     display_cicd_tab(cicd_data)
 
-                with tab7:
+                with tab6:
                     display_quality_tab(bug_data, release_bug_data)
 
             except Exception as e:

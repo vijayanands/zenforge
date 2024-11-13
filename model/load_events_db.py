@@ -147,7 +147,6 @@ def load_project_data(all_data):
     print("Loading projects...")
     base_project_data = {}
     for project in all_data["projects"]:
-        # Store the full project data including completion_state
         base_project_data[project["id"]] = project.copy()
 
         # Create project record with database fields only
@@ -158,9 +157,7 @@ def load_project_data(all_data):
             "start_date": project["start_date"],
             "status": project["status"],
             "complexity": project["complexity"],
-            "team_size": project["team_size"],
             "estimated_duration_weeks": project.get("estimated_duration_weeks"),
-            "budget_allocated": project.get("budget_allocated"),
             "priority": project.get("priority"),
         }
         create_project(db_project)
@@ -176,12 +173,8 @@ def load_data(all_data: Dict[str, Any]):
 
         # Group Jira items by type for ordered loading
         print("\nPhase 2: Loading Jira hierarchy...")
-        jira_types = ["Design", "Epic", "Story", "Task"]
-        for jira_type in jira_types:
-            print(f"Loading {jira_type} items...")
-            type_jiras = [j for j in all_data["jira_items"] if j["type"] == jira_type]
-            for jira in type_jiras:
-                create_jira_item(jira)
+        for jira in all_data["jira_items"]:
+            create_jira_item(jira)
 
         print("\nPhase 3: Loading design events...")
         for design_event in all_data["design_events"]:
