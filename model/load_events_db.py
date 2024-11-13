@@ -1,5 +1,4 @@
-# load_events_db.py
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from sqlalchemy import create_engine, text
 
@@ -7,7 +6,6 @@ from model.events_data_generator import generate_cicd_events, generate_all_data
 from model.sdlc_events import (
     BuildMode,
     DatabaseManager,
-    PRStatus,
     connection_string,
     create_bug,
     create_cicd_event,
@@ -52,24 +50,9 @@ def initialize_db():
     except Exception as e:
         print(f"Error creating schemas: {e}")
 
+
 def load_cicd_events(all_data) -> None:
-    """Load CICD events into the database"""
-    # Extract project IDs from the projects data
-    project_ids = [project["id"] for project in all_data["projects"]]
-    pull_requests = all_data["pull_requests"]
-
-    cicd_events = generate_cicd_events(pull_requests, project_ids)
-    # cicd_events = all_data["cicd_events"]
-
-    print(f"Generated {len(cicd_events)} CICD events")
-    print(
-        f"- Automatic builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.AUTOMATIC.value)}"
-    )
-    print(
-        f"- Manual builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.MANUAL.value)}"
-    )
-
-    # Create events in the database if validation passes
+    cicd_events = all_data["cicd_events"]
     for event in cicd_events:
         create_cicd_event(event)
 
@@ -102,45 +85,43 @@ def load_project_data(all_data):
             "priority": project.get("priority"),
         }
         create_project(db_project)
-    print(f"Stored {len(base_project_data)} projects with completion states")
 
 
 def load_data(all_data: Dict[str, Any]):
     """Load data into the database handling all relationships and dependencies"""
     try:
         # Store original project data for reference
-        print("\nPhase 1: Loading projects...")
+        print("Phase 1: Loading projects...")
         load_project_data(all_data)
 
         # Group Jira items by type for ordered loading
-        print("\nPhase 2: Loading Jiras...")
+        print("Phase 2: Loading Jiras...")
         for jira in all_data["jira_items"]:
             create_jira_item(jira)
 
-        print("\nPhase 3: Loading design events...")
+        print("Phase 3: Loading design events...")
         for design_event in all_data["design_events"]:
             create_design_event(design_event)
 
-        print("\nPhase 4: Loading sprints and associations...")
+        print("Phase 4: Loading sprints and associations...")
         for sprint in all_data["sprints"]:
             create_sprint(sprint)
-
         for sprint_id, jira_ids in all_data["relationships"][
             "sprint_jira_associations"
         ].items():
             create_sprint_jira_associations(sprint_id, jira_ids)
 
-        print("\nPhase 5: Loading commits...")
+        print("Phase 5: Loading commits...")
         for commit in all_data["commits"]:
             create_commit(commit)
 
-        print("\nPhase 6: Loading pull requests...")
+        print("Phase 6: Loading pull requests...")
         load_pull_requests(all_data)
 
-        print("\nPhase 7: Loading CICD events...")
+        print("Phase 7: Loading CICD events...")
         load_cicd_events(all_data)
 
-        print("\nPhase 8: Generating and loading P0 bugs...")
+        print("Phase 8: Loading Bugs...")
         load_bugs(all_data)
 
     except Exception as e:
@@ -151,6 +132,7 @@ def load_data(all_data: Dict[str, Any]):
 def load_sample_data_into_timeseries_db():
     """Load sample data into the timeseries database"""
     try:
+        print("\nCreate Database and Initialize DB...")
         # Create database if it doesn't exist
         create_database_if_not_exists()
 
@@ -158,12 +140,13 @@ def load_sample_data_into_timeseries_db():
         initialize_db()
 
         # Get sample data once
-        print("Generating synthetic data...")
+        print("\nGenerating synthetic data...")
         all_data = generate_all_data()
 
         # Load the data
+        print("\nLoad synthetic data to Timeseries DB...")
         load_data(all_data)
-        print("Data has been loaded into the sdlc_timeseries schema.")
+        print("\nBootstapping Complete.")
 
     except Exception as e:
         print(f"Failed to load sample data: {e}")

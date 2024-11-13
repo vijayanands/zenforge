@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from operator import and_
 from typing import Any, Dict, List, Optional, Type
 
-from sqlalchemy import Boolean, Column, DateTime
+from sqlalchemy import Column, DateTime
 from sqlalchemy import Enum
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import (
@@ -333,28 +333,6 @@ def create_cicd_event(event_data: Dict[str, Any]) -> CICDEvent:
         return event
 
 
-def get_cicd_events(
-    event_id: Optional[str] = None,
-    environment: Optional[Environment] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-) -> List[CICDEvent]:
-    """Get CICD events with optional filters"""
-    with db_manager.get_session() as session:
-        query = session.query(CICDEvent)
-
-        if event_id:
-            query = query.filter(CICDEvent.event_id == event_id)
-        if environment:
-            query = query.filter(CICDEvent.environment == environment)
-        if start_date:
-            query = query.filter(CICDEvent.timestamp >= start_date)
-        if end_date:
-            query = query.filter(CICDEvent.timestamp <= end_date)
-
-        return query.order_by(CICDEvent.timestamp).all()
-
-
 """
 Project Related CRUD
 """
@@ -514,14 +492,6 @@ def create_sprint(sprint_data: Dict[str, Any]) -> Sprint:
         return sprint
 
 
-def get_sprints(event_id: str, status: Optional[str] = None) -> list[Type[Sprint]]:
-    with db_manager.get_session() as session:
-        query = session.query(Sprint).filter(Sprint.event_id == event_id)
-        if status:
-            query = query.filter(Sprint.status == status)
-        return query.order_by(Sprint.start_date).all()
-
-
 def create_sprint_jira_associations(sprint_id: str, jira_ids: List[str]) -> bool:
     with db_manager.get_session() as session:
         try:
@@ -613,26 +583,6 @@ def get_bug(bug_id: str) -> Optional[Bug]:
     """Retrieve a bug by ID"""
     with db_manager.get_session() as session:
         return session.query(Bug).filter(Bug.id == bug_id).first()
-
-
-def get_bugs_by_project(
-    project_id: str,
-    status: Optional[BugStatus] = None,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
-) -> List[Bug]:
-    """Get bugs for a project with optional filters"""
-    with db_manager.get_session() as session:
-        query = session.query(Bug).filter(Bug.project_id == project_id)
-
-        if status:
-            query = query.filter(Bug.status == status)
-        if start_date:
-            query = query.filter(Bug.created_date >= start_date)
-        if end_date:
-            query = query.filter(Bug.created_date <= end_date)
-
-        return query.order_by(Bug.created_date).all()
 
 
 def update_bug_status(

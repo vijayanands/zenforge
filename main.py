@@ -45,14 +45,14 @@ PERSONA_NAVIGATION = {
 
 def initialize_synthetic_data():
     """Initialize synthetic data if not already loaded"""
-    if 'synthetic_data_loaded' not in st.session_state:
+    if "synthetic_data_loaded" not in st.session_state:
         should_load_synthetic = os.getenv("LOAD_SYNTHETIC_DATA", "false").lower() in [
             "true",
             "1",
             "yes",
             "t",
         ]
-        
+
         if should_load_synthetic:
             try:
                 load_sample_data_into_timeseries_db()
@@ -65,7 +65,7 @@ def initialize_synthetic_data():
 def zenforge_dashboard():
     # Initialize synthetic data first
     initialize_synthetic_data()
-    
+
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
 
     # Add the title bar

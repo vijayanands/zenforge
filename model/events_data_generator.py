@@ -189,18 +189,6 @@ class DataGenerator:
             )
         return project_details
 
-    def generate_stakeholders(self) -> str:
-        """Generate random stakeholder combination"""
-        stakeholder_groups = [
-            "Product,Dev,QA",
-            "Dev,Arch",
-            "UX,Dev,Product",
-            "Dev,Security",
-            "Product,QA,Security",
-            "Arch,Security,Dev",
-        ]
-        return np.random.choice(stakeholder_groups)
-
     @staticmethod
     def generate_date_sequence(
         start_date: datetime,
@@ -342,62 +330,6 @@ class DataGenerator:
                     )
 
         return sprint_jira_map
-
-    def generate_metrics(self, metric_type: str) -> Dict[str, Any]:
-        """Generate metrics based on type"""
-        if metric_type == "build":
-            return {
-                "test_coverage": np.random.uniform(80, 95),
-                "failed_tests": np.random.randint(0, 10),
-                "warnings": np.random.randint(0, 20),
-                "security_issues": np.random.randint(0, 5),
-            }
-        elif metric_type == "deployment":
-            return {
-                "startup_time": np.random.uniform(5, 30),
-                "memory_usage": np.random.randint(512, 2048),
-                "cpu_usage": np.random.uniform(20, 80),
-                "response_time": np.random.uniform(100, 500),
-            }
-        return {}
-
-    @staticmethod
-    def get_sequential_story_points(num_items: int, total_points: int) -> List[int]:
-        """Generate a sequence of story points that sum to total_points"""
-        points = []
-        remaining_points = total_points
-        remaining_items = num_items
-
-        for i in range(num_items - 1):
-            max_points = remaining_points - remaining_items + 1
-            min_points = 1
-            points_for_item = np.random.randint(
-                min_points, max(min_points + 1, max_points)
-            )
-            points.append(points_for_item)
-            remaining_points -= points_for_item
-            remaining_items -= 1
-
-        points.append(remaining_points)
-        return points
-
-    @staticmethod
-    def calculate_project_progress(
-        completion_state: str, elapsed_days: int, total_days: int
-    ) -> float:
-        """Calculate project progress percentage based on state and time"""
-        time_progress = min(1.0, elapsed_days / total_days)
-
-        if completion_state == "all_complete":
-            return 1.0
-        elif completion_state == "pre_release":
-            return min(1.0, time_progress * 1.1)
-        elif completion_state == "design_and_sprint":
-            return min(0.9, time_progress * 1.05)
-        elif completion_state == "design_only":
-            return min(0.7, time_progress * 0.9)
-        else:  # mixed or mixed_all
-            return min(0.8, time_progress)
 
 
 data_generator = DataGenerator()
@@ -802,44 +734,6 @@ def generate_jira_items(
     return all_jiras
 
 
-def adjust_commit_dates(
-    commits: List[Dict[str, Any]], jira_items: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    """
-    Adjust commit dates to ensure they happen after their associated Jira item's completion date.
-    If a Jira isn't completed, the commit won't be generated.
-
-    Args:
-        commits (List[Dict[str, Any]]): List of commit dictionaries
-        jira_items (List[Dict[str, Any]]): List of Jira item dictionaries
-
-    Returns:
-        List[Dict[str, Any]]: List of adjusted commits with proper timestamps
-    """
-    # Create a map of Jira completion times
-    jira_completion_times = {
-        j["id"]: j.get("completed_date")
-        for j in jira_items
-        if j.get("completed_date") is not None
-    }
-
-    # Filter and adjust commits
-    adjusted_commits = []
-    for commit in commits:
-        jira_completion = jira_completion_times.get(commit["jira_id"])
-
-        if jira_completion:
-            # Set commit timestamp to jira completion time plus random minutes (5-60)
-            adjusted_commit = commit.copy()
-            adjusted_commit["timestamp"] = jira_completion + timedelta(
-                minutes=randint(5, 60)
-            )
-            adjusted_commits.append(adjusted_commit)
-
-    # Sort adjusted commits by timestamp
-    return sorted(adjusted_commits, key=lambda x: x["timestamp"])
-
-
 def generate_commits(
     projects: Dict[str, Dict[str, Any]], jira_items: List[Dict[str, Any]]
 ) -> List[Dict[str, Any]]:
@@ -915,30 +809,6 @@ def generate_commits(
 
     # Sort all commits by timestamp
     return sorted(commits, key=lambda x: x["timestamp"])
-
-
-def fetch_valid_prs(session):
-    """Fetch all valid PRs from the database with their creation and merge times"""
-    result = session.execute(
-        text(
-            """
-        SELECT id, created_at, merged_at, project_id, branch_to, status
-        FROM sdlc_timeseries.pull_requests
-        WHERE status = 'MERGED' AND merged_at IS NOT NULL
-        ORDER BY merged_at
-    """
-        )
-    )
-
-    valid_prs = {}
-    for row in result:
-        valid_prs[row.id] = {
-            "created_at": row.created_at,
-            "merged_at": row.merged_at,
-            "project_id": row.project_id,
-            "branch_to": row.branch_to,
-        }
-    return valid_prs
 
 
 def generate_sprints():
@@ -1051,17 +921,17 @@ def generate_pull_requests(
         if not project:
             continue
 
-        completion_state = project.get("completion_state", "mixed")
+        project_status = project.get("status", ProjectStatus.IN_PROGRESS)
 
         # Determine merge probability based on project state
         merge_probability = {
-            "all_complete": 0.9,
-            "pre_release": 0.8,
-            "design_and_sprint": 0.7,
-            "mixed_all": 0.6,
-            "mixed": 0.5,
-            "design_only": 0.4,
-        }.get(completion_state, 0.5)
+            ProjectStatus.END_OF_LIFE: 1.0,
+            ProjectStatus.RELEASED: 0.9,
+            ProjectStatus.CODE_COMPLETE: 0.8,
+            ProjectStatus.DESIGN_PHASE_COMPLETE: 0.6,
+            ProjectStatus.IN_PROGRESS: 0.4,
+            ProjectStatus.NOT_STARTED: 0.2,
+        }.get(project_status, 0.5)
 
         # Create PRs for eligible commits
         for commit in feature_commits:
@@ -1078,7 +948,7 @@ def generate_pull_requests(
                 # Determine PR status with higher merge rate
                 if branch_to == "main":
                     status = np.random.choice(
-                        ["MERGED", "BLOCKED", "OPEN"],
+                        [PRStatus.MERGED, PRStatus.BLOCKED, PRStatus.OPEN],
                         p=[
                             merge_probability,
                             (1 - merge_probability) / 2,
@@ -1087,7 +957,7 @@ def generate_pull_requests(
                     )
                 else:
                     status = np.random.choice(
-                        ["MERGED", "BLOCKED", "OPEN"],
+                        [PRStatus.MERGED, PRStatus.BLOCKED, PRStatus.OPEN],
                         p=[
                             merge_probability * 0.8,
                             (1 - merge_probability * 0.8) / 2,
@@ -1096,7 +966,7 @@ def generate_pull_requests(
                     )
 
                 merged_at = None
-                if status == "MERGED":
+                if status == PRStatus.MERGED:
                     merged_at = created_at + timedelta(days=randint(1, 3))
 
                 # Create PR
@@ -1127,7 +997,7 @@ def generate_pull_requests(
                     if merged_at and comment_time > merged_at:
                         break
     print(
-        f"Generated {len(pull_requests)} pull requests, {sum(1 for pr in pull_requests if pr['status'] == 'MERGED')} merged"
+        f"Generated {len(pull_requests)} pull requests, {sum(1 for pr in pull_requests if pr['status'] == PRStatus.MERGED)} merged"
     )
     return pull_requests
 
@@ -1223,86 +1093,6 @@ def generate_projects():
     jira_items = generate_jira_items(projects, design_jiras)
     jira_items = update_epic_and_store_completion_dates(jira_items)
     return design_events, jira_items, project_details, projects
-
-
-def generate_all_data() -> Dict[str, Any]:
-    """Generate all data for the application with comprehensive validation and timeline constraints"""
-    try:
-        design_events, jira_items, project_details, projects = generate_projects()
-
-        print("Generating sprints...")
-        sprints = generate_sprints()
-
-        print("Associating Jiras with sprints...")
-        sprint_jira_map = assign_jiras_to_sprints(jira_items)
-
-        print("Generating commits...")
-        commits = generate_commits(projects, jira_items)
-
-        print("Generating pull requests...")
-        pull_requests = generate_pull_requests(project_details, commits)
-
-        print("Generating CICD events...")
-        project_ids = list(projects.keys())
-        cicd_events = generate_cicd_events(pull_requests, project_ids)
-
-        print("Generating P0 bugs...")
-        bugs = generate_bugs_for_builds(cicd_events)
-
-        # Combine all data
-        all_data = {
-            "projects": project_details,
-            "design_events": design_events,
-            "jira_items": jira_items,
-            "commits": commits,
-            "sprints": sprints,
-            "pull_requests": pull_requests,
-            "cicd_events": cicd_events,
-            "bugs": bugs,
-            "relationships": {
-                "sprint_jira_associations": sprint_jira_map,
-            },
-        }
-
-        print("Data generation completed successfully")
-        return all_data
-
-    except Exception as e:
-        print(f"Error generating data: {str(e)}")
-        raise
-
-
-def enforce_design_sprint_timeline(
-    projects: Dict[str, Dict[str, Any]]
-) -> Dict[str, datetime]:
-    """Calculate and enforce design phase completion times for each project"""
-    design_completion_times = {}
-
-    for proj_id, details in projects.items():
-        # Set design phase to complete in first 2-3 weeks
-        design_duration = DataGenerator.get_total_design_time(details["complexity"])
-        design_completion_times[proj_id] = details["start_date"] + design_duration
-
-    return design_completion_times
-
-
-def adjust_pr_dates(
-    pull_requests: List[Dict[str, Any]], commits: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
-    """Adjust PR dates to ensure they start after commits"""
-    commit_times = {(c["id"], c["timestamp"]): c["timestamp"] for c in commits}
-
-    adjusted_prs = []
-    for pr in pull_requests:
-        commit_time = commit_times.get((pr["commit_id"], pr["commit_timestamp"]))
-        if commit_time:
-            # Set PR creation time to commit time plus random minutes
-            pr["created_at"] = commit_time + timedelta(minutes=randint(5, 30))
-            if pr["status"] == PRStatus.MERGED:
-                pr["merged_at"] = pr["created_at"] + timedelta(hours=randint(1, 24))
-        adjusted_prs.append(pr)
-
-    return adjusted_prs
 
 
 def generate_cicd_events(
@@ -1422,6 +1212,14 @@ def generate_cicd_events(
 
     # Sort all events by timestamp
     cicd_events.sort(key=lambda x: x["timestamp"])
+    print(f"Generated {len(cicd_events)} CICD events")
+    print(
+        f"- Automatic builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.AUTOMATIC.value)}"
+    )
+    print(
+        f"- Manual builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.MANUAL.value)}"
+    )
+
     return cicd_events
 
 
@@ -1548,3 +1346,50 @@ def generate_bugs_for_builds(cicd_events: List[Dict[str, Any]]) -> List[Dict[str
             all_bugs.extend(bugs)
 
     return all_bugs
+
+
+def generate_all_data() -> Dict[str, Any]:
+    """Generate all data for the application with comprehensive validation and timeline constraints"""
+    try:
+        design_events, jira_items, project_details, projects = generate_projects()
+
+        print("Generating sprints...")
+        sprints = generate_sprints()
+
+        print("Associating Jiras with sprints...")
+        sprint_jira_map = assign_jiras_to_sprints(jira_items)
+
+        print("Generating commits...")
+        commits = generate_commits(projects, jira_items)
+
+        print("Generating pull requests...")
+        pull_requests = generate_pull_requests(project_details, commits)
+
+        print("Generating CICD events...")
+        project_ids = list(projects.keys())
+        cicd_events = generate_cicd_events(pull_requests, project_ids)
+
+        print("Generating P0 bugs...")
+        bugs = generate_bugs_for_builds(cicd_events)
+
+        # Combine all data
+        all_data = {
+            "projects": project_details,
+            "design_events": design_events,
+            "jira_items": jira_items,
+            "commits": commits,
+            "sprints": sprints,
+            "pull_requests": pull_requests,
+            "cicd_events": cicd_events,
+            "bugs": bugs,
+            "relationships": {
+                "sprint_jira_associations": sprint_jira_map,
+            },
+        }
+
+        print("Data generation completed successfully")
+        return all_data
+
+    except Exception as e:
+        print(f"Error generating data: {str(e)}")
+        raise
