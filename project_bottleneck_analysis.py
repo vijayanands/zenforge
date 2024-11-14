@@ -1,10 +1,11 @@
-import streamlit as st
+from datetime import datetime, timedelta
+from typing import Any, Dict, List
+
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import numpy as np
-from typing import Dict, List, Any
+import streamlit as st
 
 from model.events_data_generator import get_sample_data
 

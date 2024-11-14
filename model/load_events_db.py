@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import generate_cicd_events, generate_all_data
+from model.events_data_generator import generate_all_data, generate_cicd_events
 from model.sdlc_events import (
     BuildMode,
     DatabaseManager,

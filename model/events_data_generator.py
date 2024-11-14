@@ -15,14 +15,14 @@ from model.sdlc_events import (
     BuildStatus,
     Environment,
     ImpactArea,
-    PRStatus,
-    StageType,
-    ProjectComplexity,
-    ProjectPriority,
-    ProjectStatus,
-    ProjectDesignPhase,
     JiraStatus,
     JiraType,
+    ProjectComplexity,
+    ProjectDesignPhase,
+    ProjectPriority,
+    ProjectStatus,
+    PRStatus,
+    StageType,
 )
 
 BASE_START_DATE = datetime(2024, 1, 1)
@@ -1099,126 +1099,190 @@ def generate_cicd_events(
     pull_requests: List[Dict[str, Any]], project_ids: List[str]
 ) -> List[Dict[str, Any]]:
     """
-    Generate CICD events based on pull requests and manual triggers
-
-    Args:
-        pull_requests: List of pull request dictionaries
-        project_ids: List of valid project IDs for manual builds
+    Generate CICD events based on pull requests and manual triggers.
+    Ensures completed projects have at least one successful build chain on main branch.
     """
     cicd_events = []
 
     # Helper function to generate release version
-    def generate_release_version(env: str) -> str:
+    def generate_release_version() -> str:
         major = random.randint(1, 3)
         minor = random.randint(0, 9)
         patch = random.randint(0, 99)
-        return f"{env}:{major}.{minor}.{patch}"
+        return f"{major}.{minor}.{patch}"
 
     # Helper function to generate build duration
     def generate_build_duration() -> int:
         return random.randint(300, 1800)  # 5-30 minutes in seconds
 
-    # Generate automatic builds for merged PRs
+    # Environment sequence for promotion
+    env_sequence = [
+        Environment.DEV,
+        Environment.QA,
+        Environment.STAGING,
+        Environment.PRODUCTION,
+    ]
+
+    # Create events for pull requests
     for pr in pull_requests:
         if pr["status"] == PRStatus.MERGED and pr["merged_at"]:
             # For each merged PR, create builds for different environments
             prev_timestamp = pr["merged_at"]
+            build_success = True
+            build_version = generate_release_version()
 
-            for env in Environment:
-                # Skip some environments randomly
-                if (
-                    env in [Environment.UAT, Environment.PRODUCTION]
-                    and random.random() < 0.3
-                ):
-                    continue
+            # Create sequential builds through environments
+            for env in env_sequence:
+                if not build_success:
+                    break
 
-                build_id = f"build-{uuid.uuid4().hex[:8]}"
                 # Add some time after the previous event
                 timestamp = prev_timestamp + timedelta(minutes=random.randint(5, 15))
 
-                # Determine build status (higher success rate for lower environments)
+                # Higher success rate for builds
                 success_rate = {
-                    Environment.DEV: 0.9,
-                    Environment.QA: 0.85,
-                    Environment.STAGING: 0.8,
-                    Environment.UAT: 0.75,
-                    Environment.PRODUCTION: 0.7,
-                }
+                    Environment.DEV: 0.95,
+                    Environment.QA: 0.90,
+                    Environment.STAGING: 0.85,
+                    Environment.PRODUCTION: 0.80,
+                }[env]
 
                 status = (
                     BuildStatus.SUCCESS
-                    if random.random() < success_rate[env]
+                    if random.random() < success_rate
                     else BuildStatus.FAILURE
                 )
 
-                cicd_events.append(
-                    {
-                        "event_id": pr["id"],
-                        "timestamp": timestamp,
-                        "project_id": pr["project_id"],  # Add project_id from PR
-                        "environment": env.value,
-                        "event_type": "build",
-                        "build_id": build_id,
-                        "status": status.value,
-                        "duration_seconds": generate_build_duration(),
-                        "branch": pr["branch_to"],
-                        "tag": None,
-                        "mode": BuildMode.AUTOMATIC.value,
-                        "release_version": generate_release_version(env.value),
-                    }
-                )
+                build_id = f"build-{uuid.uuid4().hex[:8]}"
 
+                cicd_event = {
+                    "event_id": pr["id"],
+                    "timestamp": timestamp,
+                    "project_id": pr["project_id"],
+                    "environment": env.value,
+                    "event_type": "build",
+                    "build_id": build_id,
+                    "status": status.value,
+                    "duration_seconds": generate_build_duration(),
+                    "branch": pr["branch_to"],
+                    "tag": None,
+                    "mode": BuildMode.AUTOMATIC.value,
+                    "release_version": build_version,
+                }
+
+                cicd_events.append(cicd_event)
+
+                # Update success flag for next environment
+                build_success = status == BuildStatus.SUCCESS
                 prev_timestamp = timestamp
 
-    # Generate manual builds (not associated with PRs)
-    num_manual_builds = (
-        len(pull_requests) // 2
-    )  # Create manual builds for about half the number of PRs
+    # Get list of completed projects
+    completed_projects = [
+        proj_id
+        for proj_id in project_ids
+        if any(
+            pr["project_id"] == proj_id and pr["status"] == PRStatus.MERGED
+            for pr in pull_requests
+        )
+    ]
 
-    branches = ["main", "develop", "staging", "feature/xyz", "hotfix/abc"]
-    tags = [None, "v1.0.0", "v1.1.0", "v2.0.0"]
+    # Ensure each completed project has at least one successful build chain
+    for project_id in completed_projects:
+        # Check if project already has a successful build chain
+        has_successful_chain = False
+        for env in env_sequence:
+            env_success = any(
+                event["project_id"] == project_id
+                and event["environment"] == env.value
+                and event["status"] == BuildStatus.SUCCESS.value
+                and event["branch"] == "main"
+                and event["mode"] == BuildMode.AUTOMATIC.value
+                for event in cicd_events
+            )
+            if not env_success:
+                has_successful_chain = False
+                break
+            has_successful_chain = True
 
+        # If no successful chain exists, create one
+        if not has_successful_chain:
+            timestamp = datetime(2024, 1, 1) + timedelta(days=random.randint(1, 90))
+            build_version = generate_release_version()
+
+            for env in env_sequence:
+                build_id = f"build-{uuid.uuid4().hex[:8]}"
+
+                cicd_event = {
+                    "event_id": f"auto-{uuid.uuid4().hex[:8]}",
+                    "timestamp": timestamp,
+                    "project_id": project_id,
+                    "environment": env.value,
+                    "event_type": "build",
+                    "build_id": build_id,
+                    "status": BuildStatus.SUCCESS.value,
+                    "duration_seconds": generate_build_duration(),
+                    "branch": "main",
+                    "tag": None,
+                    "mode": BuildMode.AUTOMATIC.value,
+                    "release_version": build_version,
+                }
+
+                cicd_events.append(cicd_event)
+                timestamp += timedelta(minutes=random.randint(5, 15))
+
+    # Generate some manual builds (not associated with PRs)
+    num_manual_builds = len(pull_requests) // 4  # Reduce number of manual builds
     base_timestamp = datetime(2024, 1, 1)
+    branches = ["main", "develop", "staging", "feature/xyz", "hotfix/abc"]
 
     for _ in range(num_manual_builds):
         branch = random.choice(branches)
-        env = random.choice(list(Environment))
-        tag = random.choice(tags)
-
+        env = random.choice(env_sequence)
         timestamp = base_timestamp + timedelta(
             days=random.randint(0, 90),
             hours=random.randint(0, 23),
             minutes=random.randint(0, 59),
         )
 
+        build_id = f"manual-build-{uuid.uuid4().hex[:8]}"
+
         cicd_events.append(
             {
                 "event_id": f"manual-{uuid.uuid4().hex[:8]}",
-                "project_id": random.choice(
-                    project_ids
-                ),  # Randomly select a project_id
+                "project_id": random.choice(project_ids),
                 "timestamp": timestamp,
                 "environment": env.value,
                 "event_type": "build",
-                "build_id": f"build-{uuid.uuid4().hex[:8]}",
-                "status": random.choice(list(BuildStatus)).value,
+                "build_id": build_id,
+                "status": random.choice([status for status in BuildStatus]).value,
                 "duration_seconds": generate_build_duration(),
                 "branch": branch,
-                "tag": tag,
+                "tag": None,
                 "mode": BuildMode.MANUAL.value,
-                "release_version": generate_release_version(env.value),
+                "release_version": generate_release_version(),
             }
         )
 
     # Sort all events by timestamp
     cicd_events.sort(key=lambda x: x["timestamp"])
+
+    # Print statistics
+    automatic_builds = sum(
+        1 for e in cicd_events if e["mode"] == BuildMode.AUTOMATIC.value
+    )
+    manual_builds = sum(1 for e in cicd_events if e["mode"] == BuildMode.MANUAL.value)
+    successful_builds = sum(
+        1 for e in cicd_events if e["status"] == BuildStatus.SUCCESS.value
+    )
+    failed_builds = sum(
+        1 for e in cicd_events if e["status"] == BuildStatus.FAILURE.value
+    )
+
     print(f"Generated {len(cicd_events)} CICD events")
-    print(
-        f"- Automatic builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.AUTOMATIC.value)}"
-    )
-    print(
-        f"- Manual builds: {sum(1 for e in cicd_events if e['mode'] == BuildMode.MANUAL.value)}"
-    )
+    print(f"- Automatic builds: {automatic_builds}")
+    print(f"- Manual builds: {manual_builds}")
+    print(f"- Successful builds: {successful_builds}")
+    print(f"- Failed builds: {failed_builds}")
 
     return cicd_events
 

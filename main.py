@@ -1,6 +1,7 @@
+import os
+
 import streamlit as st
 from dotenv import load_dotenv
-import os
 
 from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
 from demo_code.ic.dashboard import show_ic_dashboard
