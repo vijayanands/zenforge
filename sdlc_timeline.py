@@ -108,22 +108,79 @@ def get_pr_data(project_id):
 
 
 def get_cicd_data(project_id):
+    """
+    Get CICD event data with proper handling of enums and timestamps.
+
+    Args:
+        project_id (str): Project identifier
+
+    Returns:
+        DataFrame with CICD metrics including build counts, durations, and status by environment
+    """
     engine = get_database_connection()
     query = """
+    WITH event_metrics AS (
+        SELECT 
+            DATE(timestamp) as deployment_date,
+            environment::text as environment,
+            status::text as status,
+            mode::text as mode,
+            COUNT(*) as event_count,
+            AVG(duration_seconds) as avg_duration,
+            MIN(duration_seconds) as min_duration,
+            MAX(duration_seconds) as max_duration,
+            COUNT(CASE WHEN status::text = 'success' THEN 1 END) as successful_builds,
+            COUNT(CASE WHEN status::text = 'failure' THEN 1 END) as failed_builds
+        FROM sdlc_timeseries.cicd_events
+        WHERE project_id = %(project_id)s
+        GROUP BY 
+            DATE(timestamp),
+            environment::text,
+            status::text,
+            mode::text
+        ORDER BY 
+            DATE(timestamp)
+    ),
+    daily_totals AS (
+        SELECT 
+            deployment_date,
+            environment,
+            SUM(event_count) as total_daily_builds
+        FROM event_metrics
+        GROUP BY deployment_date, environment
+    )
     SELECT 
-        DATE(timestamp) as deployment_date,
-        environment,
-        event_type,
-        status,
-        COUNT(*) as event_count,
-        AVG(duration_seconds) as avg_duration
-    FROM sdlc_timeseries.cicd_events
-    WHERE event_id = %(project_id)s
-    GROUP BY DATE(timestamp), environment, event_type, status
-    ORDER BY deployment_date
+        e.*,
+        t.total_daily_builds,
+        ROUND(CAST(e.event_count AS DECIMAL) / t.total_daily_builds * 100, 2) as percentage_of_daily_builds
+    FROM event_metrics e
+    JOIN daily_totals t 
+        ON e.deployment_date = t.deployment_date 
+        AND e.environment = t.environment
+    ORDER BY 
+        e.deployment_date,
+        e.environment,
+        e.status
     """
-    return safe_read_sql(query, engine, params={"project_id": project_id})
 
+    try:
+        df = safe_read_sql(query, engine, params={"project_id": project_id})
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # Convert environment and status to proper case for display
+        df['environment'] = df['environment'].str.upper()
+        df['status'] = df['status'].str.upper()
+
+        # Calculate success rate
+        df['success_rate'] = (df['successful_builds'] / df['event_count'] * 100).round(2)
+
+        return df
+
+    except Exception as e:
+        st.error(f"Error fetching CICD data: {str(e)}")
+        return pd.DataFrame()
 
 def get_bug_data(project_id):
     engine = get_database_connection()
@@ -765,30 +822,173 @@ def display_jira_metrics_tab(jira_data):
 
 
 def display_cicd_tab(cicd_data):
-    """Display CI/CD metrics"""
-    if cicd_data is None:
-        cicd_data = pd.DataFrame()
-
-    if not cicd_data.empty:
-        col1, col2 = st.columns(2)
-        with col1:
-            success_rate = (
-                len(cicd_data[cicd_data["status"] == "success"]) / len(cicd_data) * 100
-            )
-            create_metric_card(
-                "Build Success Rate",
-                f"{success_rate:.1f}%",
-                help_text="Successful builds percentage",
-            )
-        with col2:
-            create_metric_card(
-                "Average Build Duration",
-                f"{cicd_data['avg_duration'].mean():.0f}s",
-                help_text="Average build time in seconds",
-            )
-    else:
+    """Display comprehensive CI/CD metrics and visualizations"""
+    if cicd_data is None or cicd_data.empty:
         st.info("No CI/CD data available")
+        return
 
+    # Calculate high-level metrics
+    total_builds = cicd_data['event_count'].sum()
+    total_successful = cicd_data['successful_builds'].sum()
+    total_failed = cicd_data['failed_builds'].sum()
+    overall_success_rate = (total_successful / total_builds * 100) if total_builds > 0 else 0
+
+    # Display summary metrics
+    st.subheader("Overall Build Statistics")
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        create_metric_card(
+            "Total Builds",
+            f"{total_builds:,}",
+            help_text="Across all environments"
+        )
+    with col2:
+        create_metric_card(
+            "Success Rate",
+            f"{overall_success_rate:.1f}%",
+            help_text=f"Successful: {total_successful:,} | Failed: {total_failed:,}"
+        )
+    with col3:
+        avg_duration = cicd_data['avg_duration'].mean()
+        create_metric_card(
+            "Avg Duration",
+            f"{avg_duration:.1f}s",
+            help_text="Average build time"
+        )
+    with col4:
+        create_metric_card(
+            "Max Duration",
+            f"{cicd_data['max_duration'].max():.1f}s",
+            help_text="Longest build time"
+        )
+
+    # Environment-wise breakdown
+    st.subheader("Build Statistics by Environment")
+
+    for env in sorted(cicd_data['environment'].unique()):
+        env_data = cicd_data[cicd_data['environment'] == env]
+        env_success_rate = (
+                env_data['successful_builds'].sum() / env_data['event_count'].sum() * 100
+        ) if env_data['event_count'].sum() > 0 else 0
+
+        with st.expander(f"Environment: {env}"):
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                create_metric_card(
+                    "Total Builds",
+                    f"{env_data['event_count'].sum():,}",
+                    help_text=f"In {env} environment"
+                )
+            with col2:
+                create_metric_card(
+                    "Success Rate",
+                    f"{env_success_rate:.1f}%",
+                    help_text=f"Successful: {env_data['successful_builds'].sum():,}"
+                )
+            with col3:
+                create_metric_card(
+                    "Avg Duration",
+                    f"{env_data['avg_duration'].mean():.1f}s",
+                    help_text=f"Min: {env_data['min_duration'].min():.1f}s | Max: {env_data['max_duration'].max():.1f}s"
+                )
+
+            # Create build trend visualization for this environment
+            fig = make_subplots(rows=1, cols=2,
+                                subplot_titles=("Build Counts by Status", "Build Durations"),
+                                specs=[[{"type": "bar"}, {"type": "box"}]])
+
+            # Add build count bars
+            status_data = env_data.groupby('status')['event_count'].sum()
+            fig.add_trace(
+                go.Bar(
+                    x=status_data.index,
+                    y=status_data.values,
+                    name="Build Count",
+                    text=status_data.values,
+                    textposition='auto',
+                    marker_color=['green' if x == 'SUCCESS' else 'red' for x in status_data.index]
+                ),
+                row=1, col=1
+            )
+
+            # Add duration box plot
+            fig.add_trace(
+                go.Box(
+                    y=env_data['avg_duration'],
+                    name="Duration",
+                    boxpoints='all',
+                    jitter=0.3,
+                    pointpos=-1.8
+                ),
+                row=1, col=2
+            )
+
+            fig.update_layout(
+                height=400,
+                showlegend=False,
+                template='plotly_white'
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Overall trend visualization
+    st.subheader("Build Trends Over Time")
+    fig = make_subplots(rows=2, cols=1,
+                        subplot_titles=("Daily Build Counts", "Average Build Duration"),
+                        vertical_spacing=0.2)
+
+    # Group by date and environment for the trend
+    daily_builds = cicd_data.groupby(['deployment_date', 'environment', 'status'])[
+        'event_count'].sum().reset_index()
+
+    # Plot builds by status for each environment
+    for env in sorted(daily_builds['environment'].unique()):
+        env_data = daily_builds[daily_builds['environment'] == env]
+        for status in ['SUCCESS', 'FAILURE']:
+            status_data = env_data[env_data['status'] == status]
+            fig.add_trace(
+                go.Scatter(
+                    x=status_data['deployment_date'],
+                    y=status_data['event_count'],
+                    name=f"{env} - {status}",
+                    mode='lines+markers',
+                    line=dict(
+                        color='green' if status == 'SUCCESS' else 'red',
+                        dash='solid' if env == 'PRODUCTION' else 'dash'
+                    )
+                ),
+                row=1, col=1
+            )
+
+    # Plot average duration trend
+    duration_trend = cicd_data.groupby(['deployment_date', 'environment'])[
+        'avg_duration'].mean().reset_index()
+
+    for env in sorted(duration_trend['environment'].unique()):
+        env_data = duration_trend[duration_trend['environment'] == env]
+        fig.add_trace(
+            go.Scatter(
+                x=env_data['deployment_date'],
+                y=env_data['avg_duration'],
+                name=f"{env} Duration",
+                mode='lines+markers',
+                line=dict(dash='solid' if env == 'PRODUCTION' else 'dash')
+            ),
+            row=2, col=1
+        )
+
+    fig.update_layout(
+        height=800,
+        template='plotly_white',
+        hovermode='x unified'
+    )
+    fig.update_xaxes(title_text="Date", row=2, col=1)
+    fig.update_yaxes(title_text="Number of Builds", row=1, col=1)
+    fig.update_yaxes(title_text="Duration (seconds)", row=2, col=1)
+
+    st.plotly_chart(fig, use_container_width=True)
 
 def display_quality_tab(bug_data, release_bug_data):
     """Display quality metrics and release-bug correlation"""
