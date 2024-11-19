@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Streamlit Debug",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/vijay/workspace/zenforge/.venv/bin/streamlit",
+            "args": [
+                "run",
+                "/home/vijay/workspace/zenforge/main.py"
+            ],
+            "console": "integratedTerminal"
+        }
+    ]
+}

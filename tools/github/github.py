@@ -369,7 +369,7 @@ if __name__ == "__main__":
     print(json_data)
 
     # Save the JSON data to a file
-    output_file = "github_data_output.json"
+    output_file = "../github_data_output.json"
     with open(output_file, "w") as f:
         f.write(json_data)
 

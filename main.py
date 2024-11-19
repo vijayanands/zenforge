@@ -1,4 +1,5 @@
 import os
+import sys
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ from model.load_events_db import load_sample_data_into_timeseries_db
 from sdlc_timeline import main as show_sdlc_timeline
 
 load_dotenv()
+sys.path.append("/home/vijay/workspace/zenforge")
 
 # Constants
 PAGE_TITLE = "Pathforge ZenForge"

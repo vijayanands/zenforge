@@ -168,6 +168,15 @@ def generate_code_data():
     }
 
 
+# Dummy functions for actions
+def create_weekly_report():
+    pass  # Placeholder for the actual implementation
+
+
+def create_self_appraisal():
+    pass  # Placeholder for the actual implementation
+
+
 def ic_productivity_dashboard():
     set_custom_css()
 
@@ -229,6 +238,13 @@ def ic_productivity_dashboard():
             st.header("Weekly Task Completion Rate")
             weekly_completion = generate_weekly_task_completion()
             create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
+
+        # Call to action buttons
+        st.subheader("Actions")
+        if st.button("Create Weekly Report"):
+            create_weekly_report()
+        if st.button("Create Self Appraisal"):
+            create_self_appraisal()
 
     # Tab 2: Code
     with tabs[1]:
