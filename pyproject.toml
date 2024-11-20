@@ -4,6 +4,11 @@ version = "0.1.0"
 description = ""
 authors = ["Vijay Sankarasubramanian <vijayanands@gmail.com>"]
 readme = "README.md"
+packages = [
+    { include = "tools" },
+    { include = "demo_code" },
+    { include = "model" }
+]
 
 [tool.poetry.dependencies]
 python = "^3.12"

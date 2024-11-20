@@ -1,5 +1,4 @@
 import base64
-import os
 from typing import Dict
 
 
@@ -35,10 +34,3 @@ def get_headers(username: str, api_token: str) -> Dict[str, str]:
     return headers
 
 
-def get_github_auth_header() -> Dict[str, str]:
-    headers = {
-        "Authorization": f"token {os.getenv('GITHUB_TOKEN')}",
-        "Accept": "application/vnd.github.v3+json",
-    }
-
-    return headers

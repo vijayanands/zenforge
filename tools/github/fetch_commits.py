@@ -1,5 +1,6 @@
 import sys
 from datetime import datetime
+import json
 
 import requests
 
@@ -79,9 +80,17 @@ def main():
         sha = commit["sha"]
         message = commit["commit"]["message"].split("\n")[0]
         author = commit["commit"]["author"]["name"]
+        if commit["author"] is not None:
+            author_login = commit["author"]["login"]
+        else:
+            print("---------------------------------------------------")
+            print(json.dumps(commit, indent=4))
+            author_login = None
+            exit(1)
         date = commit["commit"]["author"]["date"]
         url = commit["html_url"]
         print(f"Commit {sha[:7]} - {message}")
+        print(f"  Author Login: {author_login}")
         print(f"  Author: {author} on {date}")
         print(f"  URL: {url}\n")
 

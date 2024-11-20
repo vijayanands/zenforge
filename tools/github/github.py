@@ -2,24 +2,14 @@ import json
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, DefaultDict, Dict, List, Optional
 
-# from tools.fetch_commit_comments import fetch_commit_comments
-from fetch_commit_comments import fetch_commit_comments
-
-# from tools.fetch_commits import fetch_commits
-from fetch_commits import fetch_commits
-
-# from tools.fetch_pr_comments import fetch_pr_comments
-from fetch_pr_comments import fetch_pr_comments
-
-# from tools.fetch_prs import fetch_pull_requests
-from fetch_prs import fetch_pull_requests
-from github_client import GitHubAPIClient
-from pinecone.control.langchain_import_warnings import GITHUB_REPO
-
-# from tools.github_client import GitHubAPIClient
+from tools.github.fetch_commit_comments import fetch_commit_comments
+from tools.github.fetch_commits import fetch_commits
+from tools.github.fetch_pr_comments import fetch_pr_comments
+from tools.github.fetch_prs import fetch_pull_requests
+from tools.github.github_client import GitHubAPIClient
 
 client = GitHubAPIClient()
 owner = client.get_github_owner()
@@ -27,6 +17,7 @@ repo = client.get_github_repo()
 token = os.getenv("GITHUB_TOKEN")
 
 github_data: Dict[str, Dict[str, Any]] = DefaultDict[str, Dict[str, Any]]()
+user_info: Dict[str, Dict[str, str]] = {}
 
 
 def _extract_pr_info(pr: Dict[str, Any]) -> Dict[str, Any]:
@@ -200,30 +191,48 @@ def aggregate_github_data(
 
     for pr in prs:
         author = pr["user"]["login"]
+        if author not in user_info.keys():
+            user_info[author] = {"name": None}
         pr_info = _extract_pr_info(pr)
+        github_data[author].setdefault("total_pull_requests", 0)
+        github_data[author]["total_pull_requests"] += 1
         github_data[author]["pull_requests"].append(pr_info)
 
     for pr_comment in pr_comments:
         author = pr_comment["user"]["login"]
+        if author not in user_info.keys():
+            user_info[author] = {"name": None}
         pr_comment_info = _extract_pr_comment_info(pr_comment)
+        github_data[author].setdefault("total_pull_request_comments", 0)
+        github_data[author]["total_pull_request_comments"] += 1
         github_data[author]["pull_request_comments"].append(pr_comment_info)
 
     for commit in commits:
-        author = commit["author"]["login"]
+        author = commit["commit"]["author"]["email"]
+        name = commit["commit"]["author"]["name"]
+        if author not in user_info.keys():
+            user_info[author] = {"name": name}
+        else:
+            user_info[author]["name"] = name
         commit_info = _extract_commit_info(commit)
+        github_data[author].setdefault("total_commits", 0)
+        github_data[author]["total_commits"] += 1
         github_data[author]["commits"].append(commit_info)
 
     for commit_comment in commit_comments:
         author = commit_comment["user"]["login"]
+        if author not in user_info.keys():
+            user_info[author] = {"name": None}
         commit_comment_info = _extract_commit_comment_info(commit_comment)
+        github_data[author].setdefault("total_commit_comments", 0)
+        github_data[author]["total_commit_comments"] += 1
         github_data[author]["commit_comments"].append(commit_comment_info)
+
 
     return dict(github_data)
 
 
 def get_commits(start_date: str, end_date: Optional[str] = None):
-    # Validate date format
-    # Validate date format
     try:
         datetime.strptime(start_date, "%Y-%m-%d")
         if end_date:
@@ -344,25 +353,8 @@ def _pretty_print_dict(dictionary, indent=0):
             print(str(value))
 
 
-def pull_github_data(
-    start_date: str, end_date: Optional[str] = None
-) -> Dict[str, Dict[str, Any]]:
-    prs = get_PRs(start_date=start_date, end_date=end_date)
-    pr_comments = get_PR_comments(start_date=start_date, end_date=end_date)
-    commits = get_commits(start_date=start_date, end_date=end_date)
-    commit_comments = get_commit_comments(start_date=start_date, end_date=end_date)
-
-    return aggregate_github_data(prs, pr_comments, commits, commit_comments)
-
-
-if __name__ == "__main__":
-    import json
-
-    start_date = "2024-10-20"
-    end_date = None
-    github_data = pull_github_data(start_date, end_date)
-
-    # Convert github_data to JSON
+def print_github_data(github_data):
+        # Convert github_data to JSON
     json_data = json.dumps(github_data, indent=2, default=str)
 
     # Print the JSON data
@@ -374,3 +366,28 @@ if __name__ == "__main__":
         f.write(json_data)
 
     print(f"\nJSON data has been saved to {output_file}")
+
+def set_user_name_to_email(user_info: Dict[str, Dict[str, str]]) -> None:
+    for email, info in user_info.items():
+        if info["name"] is None:
+            info["name"] = email
+
+def pull_github_data(
+    start_date: str, end_date: Optional[str] = None
+) -> Dict[str, Dict[str, Any]]:
+    prs = get_PRs(start_date=start_date, end_date=end_date)
+    pr_comments = get_PR_comments(start_date=start_date, end_date=end_date)
+    commits = get_commits(start_date=start_date, end_date=end_date)
+    commit_comments = get_commit_comments(start_date=start_date, end_date=end_date)
+
+    github_data = aggregate_github_data(prs, pr_comments, commits, commit_comments)
+    set_user_name_to_email(user_info)
+    print_github_data(github_data)
+    return github_data, user_info
+
+
+if __name__ == "__main__":
+    start_date = "2024-10-01"
+    end_date = None
+    github_data, user_info = pull_github_data(start_date, end_date)
+

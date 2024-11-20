@@ -4,10 +4,18 @@ from datetime import datetime
 from typing import Any, DefaultDict, Dict, List, Optional
 
 import requests
-from auth import get_github_auth_header
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def get_github_auth_header() -> Dict[str, str]:
+    headers = {
+        "Authorization": f"token {os.getenv('GITHUB_TOKEN')}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+
+    return headers
 headers = get_github_auth_header()
 
 

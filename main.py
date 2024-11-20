@@ -1,5 +1,18 @@
 import os
 import sys
+from pathlib import Path
+import datetime
+
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.absolute()
+
+# Add project root and subdirectories to Python path
+sys.path.extend([
+    str(PROJECT_ROOT),
+    str(PROJECT_ROOT / "tools"),
+    str(PROJECT_ROOT / "demo_code"),
+    str(PROJECT_ROOT / "model")
+])
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -10,9 +23,9 @@ from demo_code.second_line_manager_or_director.dashboard import show_director_da
 from demo_code.ui.title_bar import set_title_bar
 from model.load_events_db import load_sample_data_into_timeseries_db
 from sdlc_timeline import main as show_sdlc_timeline
+from tools.github.github import pull_github_data  # Adjust the import based on your structure
 
 load_dotenv()
-sys.path.append("/home/vijay/workspace/zenforge")
 
 # Constants
 PAGE_TITLE = "Pathforge ZenForge"
@@ -88,6 +101,31 @@ def zenforge_dashboard():
             nav_option = st.radio("Navigation", PERSONA_NAVIGATION[persona])
         else:
             nav_option = None
+
+    # Add a new tab for individual contributor visualization
+    st.sidebar.title("Navigation")
+    tab = st.sidebar.selectbox("Select a page", ["Home", "Contributor Data"])
+
+    if tab == "Contributor Data":
+        st.title("Individual Contributor Data")
+
+        # Get the start and end dates from the user
+        start_date = st.date_input("Start Date", value=datetime.datetime.today())
+        end_date = st.date_input("End Date", value=datetime.datetime.today())
+
+        if st.button("Fetch Data"):
+            github_data, user_info = pull_github_data(start_date=start_date.strftime("%Y-%m-%d"), end_date=end_date.strftime("%Y-%m-%d"))
+
+            # Visualize the data
+            if github_data:
+                for author, data in github_data.items():
+                    st.subheader(f"Contributor: {user_info[author]['name']}")
+                    if "total_commits" in data.keys():
+                        st.write(f"Total Commits: {data.get('total_commits', 0)}")
+                    if "total_pull_requests" in data.keys():
+                        st.write(f"Total Pull Requests: {data.get('total_pull_requests', 0)}")
+            else:
+                st.write("No data found for the selected dates.")
 
     # Display appropriate dashboard based on persona and navigation option
     if nav_option == "SDLC Timeline":
