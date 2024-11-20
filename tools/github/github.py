@@ -19,6 +19,23 @@ token = os.getenv("GITHUB_TOKEN")
 github_data: Dict[str, Dict[str, Any]] = DefaultDict[str, Dict[str, Any]]()
 user_info: Dict[str, Dict[str, str]] = {}
 
+# Add these global variables to track data cache
+_cached_github_data = None
+_cached_user_info = None
+_cached_start_date = None
+_cached_end_date = None
+
+def _is_date_range_subset(new_start: str, new_end: str, cached_start: str, cached_end: str) -> bool:
+    """Check if new date range is a subset of cached date range"""
+    if not all([new_start, new_end, cached_start, cached_end]):
+        return False
+        
+    new_start_date = datetime.strptime(new_start, "%Y-%m-%d")
+    new_end_date = datetime.strptime(new_end, "%Y-%m-%d")
+    cached_start_date = datetime.strptime(cached_start, "%Y-%m-%d")
+    cached_end_date = datetime.strptime(cached_end, "%Y-%m-%d")
+    
+    return new_start_date >= cached_start_date and new_end_date <= cached_end_date
 
 def _extract_pr_info(pr: Dict[str, Any]) -> Dict[str, Any]:
     milestone = pr.get("milestone", {})
@@ -375,6 +392,17 @@ def set_user_name_to_email(user_info: Dict[str, Dict[str, str]]) -> None:
 def pull_github_data(
     start_date: str, end_date: Optional[str] = None
 ) -> Dict[str, Dict[str, Any]]:
+    """Pull GitHub data with caching"""
+    global _cached_github_data, _cached_user_info, _cached_start_date, _cached_end_date
+    
+    # If we have cached data and the new date range is a subset of cached range
+    if (_cached_github_data is not None and _cached_user_info is not None and
+        _is_date_range_subset(start_date, end_date, _cached_start_date, _cached_end_date)):
+        print(f"Using cached GitHub data from {_cached_start_date} to {_cached_end_date}")
+        return _cached_github_data, _cached_user_info
+    
+    # If we need to fetch new data
+    print(f"Fetching new GitHub data from {start_date} to {end_date}")
     prs = get_PRs(start_date=start_date, end_date=end_date)
     pr_comments = get_PR_comments(start_date=start_date, end_date=end_date)
     commits = get_commits(start_date=start_date, end_date=end_date)
@@ -382,6 +410,13 @@ def pull_github_data(
 
     github_data = aggregate_github_data(prs, pr_comments, commits, commit_comments)
     set_user_name_to_email(user_info)
+    
+    # Cache the new data
+    _cached_github_data = github_data
+    _cached_user_info = user_info
+    _cached_start_date = start_date
+    _cached_end_date = end_date
+    
     print_github_data(github_data)
     return github_data, user_info
 

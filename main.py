@@ -102,31 +102,6 @@ def zenforge_dashboard():
         else:
             nav_option = None
 
-    # Add a new tab for individual contributor visualization
-    st.sidebar.title("Navigation")
-    tab = st.sidebar.selectbox("Select a page", ["Home", "Contributor Data"])
-
-    if tab == "Contributor Data":
-        st.title("Individual Contributor Data")
-
-        # Get the start and end dates from the user
-        start_date = st.date_input("Start Date", value=datetime.datetime.today())
-        end_date = st.date_input("End Date", value=datetime.datetime.today())
-
-        if st.button("Fetch Data"):
-            github_data, user_info = pull_github_data(start_date=start_date.strftime("%Y-%m-%d"), end_date=end_date.strftime("%Y-%m-%d"))
-
-            # Visualize the data
-            if github_data:
-                for author, data in github_data.items():
-                    st.subheader(f"Contributor: {user_info[author]['name']}")
-                    if "total_commits" in data.keys():
-                        st.write(f"Total Commits: {data.get('total_commits', 0)}")
-                    if "total_pull_requests" in data.keys():
-                        st.write(f"Total Pull Requests: {data.get('total_pull_requests', 0)}")
-            else:
-                st.write("No data found for the selected dates.")
-
     # Display appropriate dashboard based on persona and navigation option
     if nav_option == "SDLC Timeline":
         show_sdlc_timeline()

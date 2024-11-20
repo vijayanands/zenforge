@@ -15,6 +15,8 @@ from demo_code.ui.style import (
     display_pie_chart,
 )
 
+from tools.github.github import pull_github_data
+
 
 def set_custom_css():
     st.markdown(
@@ -59,8 +61,13 @@ def set_custom_css():
 
 
 # Helper functions to generate dummy data (unchanged)
-def generate_employee_list():
-    return ["John Doe", "Jane Smith", "Bob Johnson", "Alice Brown", "Charlie Davis"]
+def generate_employee_list(user_info):
+    """Get list of employees from user_info with their emails"""
+    # Create a list of tuples (name, email) for employees with names
+    employee_list = [(info["name"], email) for email, info in user_info.items() if info["name"]]
+    # Sort by name for better display
+    employee_list.sort(key=lambda x: x[0])
+    return employee_list
 
 
 def generate_employee_position(employee):
@@ -153,18 +160,52 @@ def generate_learning_data():
     }
 
 
-def generate_code_data():
+def generate_code_data(selected_employee=None):
+    if not selected_employee:
+        return {
+            "quality_score": round(random.uniform(1, 10), 1),
+            "peer_reviews": random.randint(5, 20),
+            "bugs_fixed": {
+                "low": random.randint(5, 15),
+                "medium": random.randint(3, 10),
+                "high": random.randint(1, 5),
+                "critical": random.randint(0, 3),
+            },
+            "git_commits": random.randint(20, 100),
+            "bug_fix_rate": round(random.uniform(0.5, 5), 1),
+        }
+    
+    # Get GitHub data for the last 30 days
+    end_date = datetime.today()
+    start_date = end_date - timedelta(days=30)
+    github_data, user_info = pull_github_data(
+        start_date=start_date.strftime("%Y-%m-%d"),
+        end_date=end_date.strftime("%Y-%m-%d")
+    )
+    
+    # Find the employee's email/login from user_info
+    employee_id = None
+    for email, info in user_info.items():
+        if info["name"] == selected_employee:
+            employee_id = email
+            break
+    
+    if not employee_id or employee_id not in github_data:
+        return generate_code_data()  # Fallback to random data
+    
+    employee_data = github_data[employee_id]
+    
     return {
-        "quality_score": round(random.uniform(1, 10), 1),
-        "peer_reviews": random.randint(5, 20),
-        "bugs_fixed": {
+        "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
+        "peer_reviews": employee_data.get("total_pull_requests", 0),
+        "bugs_fixed": {  # Keep random for now
             "low": random.randint(5, 15),
             "medium": random.randint(3, 10),
             "high": random.randint(1, 5),
             "critical": random.randint(0, 3),
         },
-        "git_commits": random.randint(20, 100),
-        "bug_fix_rate": round(random.uniform(0.5, 5), 1),
+        "git_commits": employee_data.get("total_commits", 0),
+        "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
     }
 
 
@@ -182,16 +223,34 @@ def ic_productivity_dashboard():
 
     st.title("Employee Productivity Dashboard")
 
-    # Generate a random employee for demonstration
-    employees = generate_employee_list()
-    selected_employee = random.choice(employees)
+    # Initialize session state for GitHub data
+    if 'github_data' not in st.session_state:
+        st.session_state.github_data = None
+    if 'user_info' not in st.session_state:
+        st.session_state.user_info = None
+    if 'github_data_start_date' not in st.session_state:
+        st.session_state.github_data_start_date = None
+    if 'github_data_end_date' not in st.session_state:
+        st.session_state.github_data_end_date = None
 
-    # Display employee info and productivity score
-    employee_position = generate_employee_position(selected_employee)
+    # Get list of employees from GitHub data
+    employees = generate_employee_list(st.session_state.user_info) if st.session_state.user_info else []
+    
+    # Create a list of names for the selectbox
+    employee_names = [name for name, _ in employees] if employees else ["No data available"]
+    
+    # Create a dict to map names to emails
+    name_to_email = dict(employees) if employees else {}
+    
+    selected_name = st.selectbox("Select Employee", employee_names)
+    selected_email = name_to_email.get(selected_name)
+
+    # Display employee info
+    employee_position = generate_employee_position(selected_name)
 
     col1, col2 = st.columns(2)
     with col1:
-        st.info(f"**Employee:** {selected_employee}")
+        st.info(f"**Employee:** {selected_name}")
     with col2:
         st.info(f"**Position:** {employee_position}")
 
@@ -248,8 +307,75 @@ def ic_productivity_dashboard():
 
     # Tab 2: Code
     with tabs[1]:
-        code_data = generate_code_data()
+        # Get GitHub data for the last 30 days
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=30)
+        
+        # Convert dates to string format
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
+        
+        # Check if we need to fetch new data
+        need_new_data = (
+            st.session_state.github_data is None or
+            st.session_state.user_info is None or
+            st.session_state.github_data_start_date is None or
+            st.session_state.github_data_end_date is None or
+            start_date_str < st.session_state.github_data_start_date or
+            end_date_str > st.session_state.github_data_end_date
+        )
+        
+        if need_new_data:
+            with st.spinner('Fetching GitHub data... This may take a few moments.'):
+                github_data, user_info = pull_github_data(
+                    start_date=start_date_str,
+                    end_date=end_date_str
+                )
+                
+                # Update session state
+                st.session_state.github_data = github_data
+                st.session_state.user_info = user_info
+                st.session_state.github_data_start_date = start_date_str
+                st.session_state.github_data_end_date = end_date_str
+                
+                # Show success message
+                st.success('GitHub data successfully loaded!')
+        else:
+            # Use cached data
+            github_data = st.session_state.github_data
+            user_info = st.session_state.user_info
 
+        # Use the selected_email to find the employee's data
+        if selected_email and selected_email in github_data:
+            employee_data = github_data[selected_email]
+            code_data = {
+                "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
+                "peer_reviews": employee_data.get("total_pull_requests", 0),
+                "git_commits": employee_data.get("total_commits", 0),
+                "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
+                "bugs_fixed": {  # Keep random for now
+                    "low": random.randint(5, 15),
+                    "medium": random.randint(3, 10),
+                    "high": random.randint(1, 5),
+                    "critical": random.randint(0, 3),
+                }
+            }
+        else:
+            # Fallback to random data if employee not found
+            code_data = {
+                "quality_score": round(random.uniform(1, 10), 1),
+                "peer_reviews": random.randint(5, 20),
+                "git_commits": random.randint(20, 100),
+                "bug_fix_rate": round(random.uniform(0.5, 5), 1),
+                "bugs_fixed": {
+                    "low": random.randint(5, 15),
+                    "medium": random.randint(3, 10),
+                    "high": random.randint(1, 5),
+                    "critical": random.randint(0, 3),
+                }
+            }
+
+        # Display metrics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             create_styled_metric(
