@@ -43,16 +43,19 @@ PERSONA_NAVIGATION = {
     "Individual Contributor": [
         "Productivity",
         "Performance & Career",
+        "Engineering Metrics",
         "SDLC Timeline",
     ],
     "First Line Manager": [
         "Productivity",
         "Performance & Career",
+        "Engineering Metrics",
         "SDLC Timeline",
     ],
     "Second Line Manager/Director": [
         "Productivity",
         "Performance",
+        "Engineering Metrics",
         "Projects and Portfolio",
         "SDLC Timeline",
     ],

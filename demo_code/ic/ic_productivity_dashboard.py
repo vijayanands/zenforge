@@ -223,6 +223,26 @@ def ic_productivity_dashboard():
 
     st.title("Employee Productivity Dashboard")
 
+    # Add date range selector at the top
+    col1, col2 = st.columns(2)
+    with col1:
+        start_date = st.date_input(
+            "Start Date",
+            value=datetime.today() - timedelta(days=30),
+            max_value=datetime.today(),
+        )
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=datetime.today(),
+            min_value=start_date,
+            max_value=datetime.today(),
+        )
+
+    # Convert dates to string format for GitHub API
+    start_date_str = start_date.strftime("%Y-%m-%d")
+    end_date_str = end_date.strftime("%Y-%m-%d")
+
     # Initialize session state for GitHub data
     if 'github_data' not in st.session_state:
         st.session_state.github_data = None
@@ -254,9 +274,8 @@ def ic_productivity_dashboard():
     with col2:
         st.info(f"**Position:** {employee_position}")
 
-    # Tabs
-    tab_labels = ["Tasks", "Code", "Knowledge", "Meetings"]
-    tabs = create_styled_tabs(tab_labels)
+    # Create tabs
+    tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
 
     # Tab 1: Tasks
     with tabs[0]:
@@ -307,14 +326,6 @@ def ic_productivity_dashboard():
 
     # Tab 2: Code
     with tabs[1]:
-        # Get GitHub data for the last 30 days
-        end_date = datetime.today()
-        start_date = end_date - timedelta(days=30)
-        
-        # Convert dates to string format
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
-        
         # Check if we need to fetch new data
         need_new_data = (
             st.session_state.github_data is None or
@@ -434,7 +445,7 @@ def ic_productivity_dashboard():
             )
         with col3:
             create_styled_metric(
-                "Training Sessions", knowledge_data["training_sessions"], "👨‍🏫"
+                "Training Sessions", knowledge_data["training_sessions"], "🎓"
             )
         with col4:
             create_styled_metric(
@@ -442,7 +453,7 @@ def ic_productivity_dashboard():
             )
         with col5:
             create_styled_metric(
-                "Documentation Edits",
+                "Doc Contributions",
                 knowledge_data["documentation_contributions"],
                 "📚",
             )
