@@ -3,6 +3,7 @@ import uuid
 from datetime import datetime, timedelta
 from random import randint
 from typing import Any, Dict, List, Tuple
+from collections import defaultdict
 
 import numpy as np
 from soupsieve.css_match import DAYS_IN_WEEK
@@ -902,28 +903,25 @@ def generate_pull_requests(
     # Create a map of projects for easier lookup
     projects_map = {project["id"]: project for project in projects}
 
-    # Group commits by project
-    project_commits = {}
+    # Group commits by project and branch
+    project_branch_commits = {}
     for commit in commits:
         if not commit["branch"].lower().startswith(("main", "master", "release")):
             proj_id = commit["event_id"]
-            if proj_id not in project_commits:
-                project_commits[proj_id] = []
-            project_commits[proj_id].append(commit)
+            branch = commit["branch"]
+            if proj_id not in project_branch_commits:
+                project_branch_commits[proj_id] = {}
+            if branch not in project_branch_commits[proj_id]:
+                project_branch_commits[proj_id][branch] = []
+            project_branch_commits[proj_id][branch].append(commit)
 
-    # Sort commits in each project by timestamp
-    for proj_commits in project_commits.values():
-        proj_commits.sort(key=lambda x: x["timestamp"])
-
-    # Generate PRs for each project
-    for proj_id, feature_commits in project_commits.items():
+    # Generate PRs for each project and branch
+    for proj_id, branch_commits in project_branch_commits.items():
         project = projects_map.get(proj_id)
         if not project:
             continue
 
         project_status = project.get("status", ProjectStatus.IN_PROGRESS)
-
-        # Determine merge probability based on project state
         merge_probability = {
             ProjectStatus.END_OF_LIFE: 1.0,
             ProjectStatus.RELEASED: 0.9,
@@ -933,13 +931,16 @@ def generate_pull_requests(
             ProjectStatus.NOT_STARTED: 0.2,
         }.get(project_status, 0.5)
 
-        # Create PRs for eligible commits
-        for commit in feature_commits:
-            # Higher percentage of commits get PRs
-            if randint(1, 100) > 40:  # 60% of feature commits get PRs
-                pr_id = f"PR-{commit['id']}"
-                created_at = commit["timestamp"] + timedelta(minutes=randint(5, 30))
+        # Create PRs for each feature branch
+        for branch, branch_commits in branch_commits.items():
+            if randint(1, 100) > 40:  # 60% of feature branches get PRs
+                # Sort commits by timestamp
+                branch_commits.sort(key=lambda x: x["timestamp"])
+                first_commit = branch_commits[0]
+                last_commit = branch_commits[-1]
 
+                pr_created = last_commit["timestamp"] + timedelta(minutes=randint(5, 30))
+                
                 # Select target branch based on weights
                 branch_to = np.random.choice(
                     list(target_branches.keys()), p=list(target_branches.values())
@@ -965,37 +966,50 @@ def generate_pull_requests(
                         ],
                     )
 
-                merged_at = None
-                if status == PRStatus.MERGED:
-                    merged_at = created_at + timedelta(days=randint(1, 3))
+                # Generate review data
+                review_started = pr_created + timedelta(hours=randint(1, 24))
+                merged_at = review_started + timedelta(hours=randint(2, 48)) if status == PRStatus.MERGED else None
 
-                # Create PR
-                pull_requests.append(
-                    {
-                        "id": pr_id,
-                        "created_at": created_at,
-                        "project_id": proj_id,
-                        "title": f"Feature: {commit['commit_type']} - {commit['repository']}",
-                        "description": f"Implementing changes for {project['title']}",
-                        "branch_from": commit["branch"],
-                        "branch_to": branch_to,
-                        "author": commit["author"],
-                        "status": status,
-                        "merged_at": merged_at,
-                        "commit_id": commit["id"],
-                        "commit_timestamp": commit["timestamp"],
-                    }
-                )
+                # Calculate additions and deletions
+                additions = sum(commit.get("lines_added", 0) for commit in branch_commits)
+                deletions = sum(commit.get("lines_removed", 0) for commit in branch_commits)
 
-                # Generate comments for the PR
+                pr_data = {
+                    "id": f"PR-{uuid.uuid4().hex[:8]}",
+                    "created_at": pr_created.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "project_id": proj_id,
+                    "title": f"Feature: {first_commit['commit_type']} - {first_commit['repository']}",
+                    "description": f"Implementing changes for {project['title']}",
+                    "branch_from": branch,
+                    "branch_to": branch_to,
+                    "author": first_commit["author"],
+                    "status": status,
+                    "merged_at": merged_at.strftime("%Y-%m-%dT%H:%M:%SZ") if merged_at else None,
+                    "commits": [commit["id"] for commit in branch_commits],
+                    "additions": additions,
+                    "deletions": deletions,
+                    "review_started_at": review_started.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "first_commit_date": first_commit["timestamp"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "last_commit_date": last_commit["timestamp"].strftime("%Y-%m-%dT%H:%M:%SZ"),
+                }
+
+                pull_requests.append(pr_data)
+
+                # Generate review comments
                 num_comments = randint(2, 8)
-                comment_time = created_at
-
-                # Generate comments...
+                comment_time = review_started
                 for _ in range(num_comments):
                     comment_time += timedelta(hours=randint(1, 8))
                     if merged_at and comment_time > merged_at:
                         break
+                    
+                    pr_data.setdefault("review_comments", []).append({
+                        "id": f"comment-{uuid.uuid4().hex[:8]}",
+                        "created_at": comment_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "author": random.choice([dev for dev in DEVELOPER_NAMES if dev != pr_data["author"]]),
+                        "body": f"Review comment {_ + 1}",
+                    })
+
     print(
         f"Generated {len(pull_requests)} pull requests, {sum(1 for pr in pull_requests if pr['status'] == PRStatus.MERGED)} merged"
     )

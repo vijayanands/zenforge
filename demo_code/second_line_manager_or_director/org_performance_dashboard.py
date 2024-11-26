@@ -180,90 +180,16 @@ def director_performance_dashboard():
     # Use styled tabs
     tabs = create_styled_tabs(
         [
-            "Performance Overview",
             "Goal Achievement",
             "Employee Performance",
-            "Training Impact",
         ]
     )
 
     with tabs[0]:
-        performance_overview_tab(filtered_performance_ratings, performance_trends)
-
-    with tabs[1]:
         goal_achievement_tab(filtered_goals)
 
-    with tabs[2]:
+    with tabs[1]:
         employee_performance_tab(filtered_performers)
-
-    with tabs[3]:
-        training_impact_tab(filtered_performance_vs_training)
-
-
-def performance_overview_tab(filtered_performance_ratings, performance_trends):
-    st.header("Performance Ratings Distribution")
-
-    # Use styled metrics for alerts
-    worst_dept = filtered_performance_ratings.loc[
-        filtered_performance_ratings["avg_performance"].idxmin()
-    ]
-    create_styled_metric(
-        "Lowest Performing Department",
-        f"{worst_dept['department']} ({worst_dept['avg_performance']:.2f})",
-        "⚠️",
-    )
-
-    # Use styled pie chart for ratings distribution
-    ratings_data = filtered_performance_ratings.melt(
-        id_vars=["department", "total_employees"],
-        value_vars=[
-            "exceptional",
-            "exceedsExpectations",
-            "meetsExpectations",
-            "needsImprovement",
-            "unsatisfactory",
-        ],
-        var_name="rating",
-        value_name="count",
-    )
-    ratings_data["percentage"] = (
-        ratings_data["count"] / ratings_data["total_employees"] * 100
-    )
-
-    # Map ratings to numeric values and labels
-    rating_map = {
-        "exceptional": (5, "Exceptional (5)"),
-        "exceedsExpectations": (4, "Exceeds Expectations (4)"),
-        "meetsExpectations": (3, "Meets Expectations (3)"),
-        "needsImprovement": (2, "Needs Improvement (2)"),
-        "unsatisfactory": (1, "Unsatisfactory (1)"),
-    }
-    ratings_data["rating_value"] = ratings_data["rating"].map(
-        lambda x: rating_map[x][0]
-    )
-    ratings_data["rating_label"] = ratings_data["rating"].map(
-        lambda x: rating_map[x][1]
-    )
-
-    # Use a custom color sequence instead of RdYlGn
-    custom_colors = ["#d7191c", "#fdae61", "#ffffbf", "#a6d96a", "#1a9641"]
-
-    fig_ratings = create_pie_chart(
-        ratings_data,
-        names="rating_label",
-        values="percentage",
-        title="Performance Ratings Distribution",
-        color_sequence=custom_colors[::-1],  # Reverse the color sequence
-        hole=0.3,
-    )
-    display_pie_chart(fig_ratings)
-
-    # Use styled line chart for performance trends
-    st.subheader("Performance Trends")
-    for department in performance_trends.columns[1:]:
-        create_styled_line_chart(
-            performance_trends[department], "Month", f"{department} Performance Rating"
-        )
 
 
 def goal_achievement_tab(filtered_goals):
@@ -317,100 +243,6 @@ def employee_performance_tab(filtered_performers):
         ]
         for item in list:
             st.write(f"• {item}")
-
-
-def training_impact_tab(filtered_performance_vs_training):
-    st.header("Training Impact")
-
-    # Create a more intuitive visualization for training impact
-    fig_training = px.scatter(
-        filtered_performance_vs_training,
-        x="trainingHours",
-        y="avgPerformance",
-        size="employees",
-        color="department",
-        hover_name="department",
-        title="Training Hours vs Average Performance",
-        labels={
-            "trainingHours": "Training Hours",
-            "avgPerformance": "Average Performance",
-            "employees": "Number of Employees",
-        },
-    )
-    st.plotly_chart(fig_training, use_container_width=True)
-
-    # Add insights
-    st.subheader("Insights")
-
-    # Overall correlation
-    overall_correlation = filtered_performance_vs_training["trainingHours"].corr(
-        filtered_performance_vs_training["avgPerformance"]
-    )
-
-    # Create three columns for a better layout
-    col1, col2, col3 = st.columns([1, 1, 1])
-
-    with col1:
-        create_styled_metric("Overall Correlation", f"{overall_correlation:.2f}", "📊")
-        st.write(
-            "A correlation close to 1 indicates a strong positive relationship between training hours and performance."
-        )
-
-    with col2:
-        max_performance = filtered_performance_vs_training.loc[
-            filtered_performance_vs_training["avgPerformance"].idxmax()
-        ]
-        create_styled_metric(
-            "Highest Avg Performance",
-            f"{max_performance['avgPerformance']:.2f}",
-            f"{max_performance['department']}",
-        )
-
-    with col3:
-        max_training = filtered_performance_vs_training.loc[
-            filtered_performance_vs_training["trainingHours"].idxmax()
-        ]
-        create_styled_metric(
-            "Most Training Hours",
-            f"{max_training['trainingHours']}",
-            f"{max_training['department']}",
-        )
-
-    # Interpretation of correlations
-    st.subheader("Interpretation")
-    list = [
-        "A positive correlation indicates that as training hours increase, average performance tends to increase.",
-        "A negative correlation suggests that as training hours increase, average performance tends to decrease.",
-        "A correlation close to 0 indicates little to no linear relationship between training hours and performance.",
-        "The strength of the relationship increases as the absolute value of the correlation approaches 1.",
-    ]
-    for item in list:
-        st.write(f"• {item}")
-
-    # Summary statistics
-    st.subheader("Summary Statistics")
-    summary_stats = (
-        filtered_performance_vs_training.groupby("department")
-        .agg(
-            {
-                "trainingHours": ["mean", "min", "max"],
-                "avgPerformance": ["mean", "min", "max"],
-                "employees": "sum",
-            }
-        )
-        .reset_index()
-    )
-    summary_stats.columns = [
-        "Department",
-        "Avg Training Hours",
-        "Min Training Hours",
-        "Max Training Hours",
-        "Avg Performance",
-        "Min Performance",
-        "Max Performance",
-        "Total Employees",
-    ]
-    st.dataframe(summary_stats.round(2), use_container_width=True)
 
 
 if __name__ == "__main__":
