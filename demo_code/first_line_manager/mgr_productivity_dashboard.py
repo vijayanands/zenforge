@@ -278,11 +278,8 @@ def productivity_dashboard():
     apply_styled_dropdown_css()
     st.title("Productivity Dashboard")
 
-    # Main tabs
-    main_tabs = create_styled_tabs(["Employee View"])
-
-    with main_tabs[0]:
-        employee_productivity_dashboard()
+    # Directly call the employee productivity dashboard without tabs
+    employee_productivity_dashboard()
 
 def employee_productivity_dashboard():
     st.header("Employee Productivity Dashboard")
