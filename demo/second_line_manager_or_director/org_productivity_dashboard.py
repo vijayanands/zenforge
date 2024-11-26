@@ -6,7 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from demo_code.ui.style import (
+from demo.ui.style import (
     apply_styled_dropdown_css,
     create_pie_chart,
     create_styled_bar_chart,

@@ -1,9 +1,9 @@
 import streamlit as st
 
-from demo_code.second_line_manager_or_director.org_productivity_dashboard import (
+from demo.second_line_manager_or_director.org_productivity_dashboard import (
     org_productivity_dashboard,
 )
-from demo_code.second_line_manager_or_director.org_project_and_portfolio_dashboard import (
+from demo.second_line_manager_or_director.org_project_and_portfolio_dashboard import (
     director_project_portfolio_dashboard,
 )
 

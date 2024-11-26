@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from demo_code.ui.style import (
+from demo.ui.style import (
     apply_styled_dropdown_css,
     create_styled_bar_chart,
     create_styled_line_chart,

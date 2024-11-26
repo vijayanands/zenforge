@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-from demo_code.ui.style import (
+from demo.ui.style import (
     create_pie_chart,
     create_styled_bar_chart,
     create_styled_bullet_list,

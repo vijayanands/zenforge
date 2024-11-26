@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from demo_code.ui.style import (
+from demo.ui.style import (
     apply_styled_dropdown_css,
     create_pie_chart,
     create_progress_bar,

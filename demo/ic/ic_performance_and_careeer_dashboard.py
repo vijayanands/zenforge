@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from demo_code.ui.style import (
+from demo.ui.style import (
     create_progress_bar,
     create_styled_metric,
     create_styled_tabs,

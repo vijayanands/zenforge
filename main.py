@@ -1,9 +1,8 @@
 import os
 import sys
 from pathlib import Path
-import datetime
 
-from demo_code.metrics.engineering_metrics_dashboard import engineering_metrics_dashboard
+from demo.metrics.engineering_metrics_dashboard import engineering_metrics_dashboard
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
@@ -12,20 +11,19 @@ PROJECT_ROOT = Path(__file__).parent.absolute()
 sys.path.extend([
     str(PROJECT_ROOT),
     str(PROJECT_ROOT / "tools"),
-    str(PROJECT_ROOT / "demo_code"),
+    str(PROJECT_ROOT / "demo"),
     str(PROJECT_ROOT / "model")
 ])
 
 import streamlit as st
 from dotenv import load_dotenv
 
-from demo_code.first_line_manager.dashboard import show_first_line_manager_dashboard
-from demo_code.ic.dashboard import show_ic_dashboard
-from demo_code.second_line_manager_or_director.dashboard import show_director_dashboard
-from demo_code.ui.title_bar import set_title_bar
+from demo.first_line_manager.dashboard import show_first_line_manager_dashboard
+from demo.ic.dashboard import show_ic_dashboard
+from demo.second_line_manager_or_director.dashboard import show_director_dashboard
+from demo.ui.title_bar import set_title_bar
 from model.load_events_db import load_sample_data_into_timeseries_db
-from sdlc_timeline import main as show_sdlc_timeline
-from tools.github.github import pull_github_data  # Adjust the import based on your structure
+from demo.metrics.sdlc_timeline import main as show_sdlc_timeline
 
 load_dotenv()
 
@@ -83,7 +81,7 @@ def zenforge_dashboard():
     st.set_page_config(page_title=PAGE_TITLE, layout="wide")
 
     # Add the title bar
-    logo_path = "demo_code/ui/pathforge-logo-final.png"
+    logo_path = "demo/ui/pathforge-logo-final.png"
     set_title_bar(logo_path)
 
     # Create a sidebar
