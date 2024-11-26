@@ -10,7 +10,7 @@ from demo_code.ui.style import (
 )
 from demo_code.metrics.engineering_metrics import calculate_metrics_from_timescale
 
-def ic_engineering_metrics_dashboard():
+def engineering_metrics_dashboard():
     st.title("Engineering Metrics Dashboard")
 
     # Date range selector

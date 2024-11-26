@@ -3,6 +3,8 @@ import sys
 from pathlib import Path
 import datetime
 
+from demo_code.metrics.engineering_metrics_dashboard import engineering_metrics_dashboard
+
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
 
@@ -43,20 +45,14 @@ PERSONA_NAVIGATION = {
     "Individual Contributor": [
         "Productivity",
         "Performance & Career",
-        "Engineering Metrics",
-        "SDLC Timeline",
     ],
     "First Line Manager": [
         "Productivity",
         "Performance & Career",
-        "Engineering Metrics",
-        "SDLC Timeline",
     ],
     "Second Line Manager/Director": [
         "Productivity",
-        "Engineering Metrics",
         "Projects and Portfolio",
-        "SDLC Timeline",
     ],
 }
 
@@ -92,30 +88,44 @@ def zenforge_dashboard():
 
     # Create a sidebar
     with st.sidebar:
-        persona = st.selectbox(
-            PERSONA_SELECTION_LABEL,
-            PERSONA_OPTIONS,
-            index=DEFAULT_PERSONA_INDEX,
-        )
+        # Main navigation options
+        main_option = st.radio("Select Navigation", ["Productivity and Performance", "SDLC Timeline", "Engineering Metrics"])
 
-        # Add navigation options based on selected persona
-        if persona in PERSONA_NAVIGATION:
-            nav_option = st.radio("Navigation", PERSONA_NAVIGATION[persona])
+        if main_option == "Productivity and Performance":
+            # Section for persona selection
+            persona = st.selectbox(
+                PERSONA_SELECTION_LABEL,
+                PERSONA_OPTIONS,
+                index=DEFAULT_PERSONA_INDEX,
+            )
+
+            # Section for persona-based navigation
+            nav_options = PERSONA_NAVIGATION.get(persona, [])
+            nav_option = st.radio("Persona Navigation", nav_options)
+
+        elif main_option == "SDLC Timeline":
+            st.write("Displaying SDLC Timeline")
+        elif main_option == "Engineering Metrics":
+            st.write("Displaying Engineering Metrics")
+
+    # Main content area
+    if main_option == "Productivity and Performance":
+        # Display appropriate dashboard based on persona and navigation option
+        if nav_option:
+            if persona == PERSONA_OPTIONS[0]:  # Individual Contributor
+                show_ic_dashboard(nav_option)
+            elif persona == PERSONA_OPTIONS[1]:  # First Line Manager
+                show_first_line_manager_dashboard(nav_option)
+            elif persona == PERSONA_OPTIONS[2]:  # Second Line Manager
+                show_director_dashboard(nav_option)
         else:
-            nav_option = None
-
-    # Display appropriate dashboard based on persona and navigation option
-    if nav_option == "SDLC Timeline":
+            st.write(UNIMPLEMENTED_MESSAGE.format(persona))
+    elif main_option == "SDLC Timeline":
         show_sdlc_timeline()
-    elif persona == PERSONA_OPTIONS[0]:  # Individual Contributor
-        show_ic_dashboard(nav_option)
-    elif persona == PERSONA_OPTIONS[1]:  # First Line Manager
-        show_first_line_manager_dashboard(nav_option)
-    elif persona == PERSONA_OPTIONS[2]:  # Second Line Manager
-        show_director_dashboard(nav_option)
+    elif main_option == "Engineering Metrics":
+        engineering_metrics_dashboard()
     else:
-        st.write(UNIMPLEMENTED_MESSAGE.format(persona))
-
+        st.write("Invalid Option")
 
 if __name__ == "__main__":
     zenforge_dashboard()
