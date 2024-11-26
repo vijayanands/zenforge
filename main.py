@@ -54,7 +54,6 @@ PERSONA_NAVIGATION = {
     ],
     "Second Line Manager/Director": [
         "Productivity",
-        "Performance",
         "Engineering Metrics",
         "Projects and Portfolio",
         "SDLC Timeline",
