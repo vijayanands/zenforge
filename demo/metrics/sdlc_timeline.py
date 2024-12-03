@@ -268,7 +268,7 @@ def get_release_timeline_data(project_id, release_version):
     }
 
 
-def display_release_timeline(project_id, releases_df, selected_release):
+def display_release_timeline(project_id, selected_release):
     """Display timeline for selected release"""
     # First show the raw CICD events for the selected release
     engine = get_database_connection()
@@ -546,9 +546,7 @@ def main():
 
             # Display release timeline
             if selected_release:
-                display_release_timeline(
-                    selected_project, releases_df, selected_release
-                )
+                display_release_timeline(selected_project, selected_release)
 
         else:
             st.info("Please select a project to view its timeline and metrics.")
