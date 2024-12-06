@@ -4,6 +4,15 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from model.sdlc_events import Project, Environment
 import psycopg2
+import matplotlib.pyplot as plt
+import os  # Make sure to import os at the top of your file
+from dotenv import load_dotenv  # Import load_dotenv
+
+# Load environment variables from a .env file
+load_dotenv()
+
+# Set DEBUG_MODE based on the environment variable
+DEBUG_MODE = os.getenv('DEBUG_MODE') is not None
 
 def get_database_connection():
     try:
@@ -333,6 +342,10 @@ def display_development_cycle_metrics(project_id, releases, commits, prs):
 def main():
     st.title("Development Cycle Metrics")
     
+    # Initialize session states
+    if 'active_tab' not in st.session_state:
+        st.session_state.active_tab = 0
+        
     # Move project selector to main window
     projects_df = get_projects()
     
@@ -369,8 +382,15 @@ def main():
     selected_release = st.selectbox(
         "Select Release",
         options=[""] + list(release_options.keys()),
-        format_func=lambda x: "Select a release..." if x == "" else release_options[x]
+        format_func=lambda x: "Select a release..." if x == "" else release_options[x],
+        key="release_selector"
     )
+    
+    # Reset tab when release changes
+    if selected_release != st.session_state.get('last_release'):
+        st.session_state.active_tab = 0
+        st.session_state.last_release = selected_release
+        st.rerun()
     
     if not selected_release:
         st.info("Please select a release to view metrics.")
@@ -379,25 +399,17 @@ def main():
     # Step 3: Display Metrics
     commits, prs = get_data_for_display(project_id)
     
-    # Create tabs for different metric views
-    tabs = st.tabs(["Overview", "Commits", "Pull Requests", "Build Timeline"])
+    # Create tabs
+    tab1, tab2, tab3 = st.tabs(["Build Timeline", "Commits", "Pull Requests"])
     
-    with tabs[0]:
-        display_release_overview(project_id, selected_release, commits, prs)
-    
-    with tabs[1]:
-        display_commit_metrics(commits, selected_release)
-    
-    with tabs[2]:
-        display_pr_metrics(prs, selected_release)
-    
-    with tabs[3]:
+    # Display content in respective tabs
+    with tab1:
         display_build_timeline(project_id, selected_release)
+    with tab2:
+        display_commit_metrics(commits, selected_release)
+    with tab3:
+        display_pr_metrics(prs, selected_release)
 
-def display_release_overview(project_id, release_version, commits, prs):
-    """Display overview metrics for the selected release"""
-    st.subheader("Release Overview")
-    # Implementation to follow...
 
 def display_commit_metrics(commits, release_version):
     """Display commit metrics for the selected release"""
@@ -412,7 +424,68 @@ def display_pr_metrics(prs, release_version):
 def display_build_timeline(project_id, release_version):
     """Display build timeline for the selected release"""
     st.subheader("Build Timeline")
-    # Implementation to follow...
+    env_durations = get_env_durations(project_id, release_version)
+    if not env_durations:
+        st.warning("No environment duration data found for this release.")
+        return
+
+    # Update environment names to uppercase
+    envs = ['DEV', 'QA', 'STAGING', 'PRODUCTION']
+    # Ensure that we are correctly mapping the environment names to their durations
+    durations = [env_durations.get(env, 0) for env in envs]
+
+    # Debugging: Display the durations only if DEBUG_MODE is set
+    if DEBUG_MODE:
+        st.write("Durations:", durations)
+
+    # Check for valid duration values
+    if any(duration < 0 for duration in durations):
+        st.warning("One or more duration values are negative. Please check the data.")
+        return
+
+    # Set colors for the bars
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # Custom colors for each environment
+
+    fig, ax = plt.subplots()
+    ax.bar(envs, durations, color=colors)  # Apply colors to the bars
+    ax.set_title('Environment Duration Comparison')
+    ax.set_xlabel('Environment')
+    ax.set_ylabel('Duration (seconds)')
+
+    # Debugging: Check if the figure is created
+    if DEBUG_MODE:
+        st.write("Figure created, ready to display.")
+    
+    st.pyplot(fig)    # Implementation to follow...
+
+def get_env_durations(project_id, release_version):
+    """Get build durations for each environment in a release"""
+    query = """
+        SELECT 
+            environment::text as env,
+            SUM(duration_seconds) as total_duration
+        FROM sdlc_timeseries.cicd_events
+        WHERE project_id = :project_id
+        AND release_version = :release_version
+        GROUP BY environment
+        ORDER BY environment;
+    """
+    
+    engine = get_database_connection()
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text(query), 
+                {"project_id": project_id, "release_version": release_version}
+            )
+            durations = {row.env: row.total_duration for row in result}
+            # Debugging: Log the retrieved durations only if DEBUG_MODE is set
+            if DEBUG_MODE:
+                st.write("Retrieved durations:", durations)
+            return durations
+    except Exception as e:
+        st.error(f"Query execution failed: {str(e)}")
+        return None
 
 if __name__ == "__main__":
     main() 
