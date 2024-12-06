@@ -339,6 +339,36 @@ def display_development_cycle_metrics(project_id, releases, commits, prs):
             else:
                 st.info("No builds found for this release")
 
+def get_commit_record(commit_id):
+    """Get the commit record for the given commit hash"""
+    query = """
+        SELECT 
+            commit_hash,
+            commit_type,
+            author,
+            timestamp,
+            files_changed,
+            lines_added,
+            lines_removed,
+            code_coverage,
+            lint_score,
+            review_time_minutes,
+            comments_count
+        FROM sdlc_timeseries.code_commits
+        WHERE id = :commit_id
+        LIMIT 1;
+    """
+    
+    engine = get_database_connection()
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(query), {"commit_id": commit_id})
+            row = result.fetchone()
+            return dict(row._mapping) if row else None
+    except Exception as e:
+        st.error(f"Query execution failed: {str(e)}")
+        return None
+
 def main():
     st.title("Development Cycle Metrics")
     
@@ -400,26 +430,133 @@ def main():
     commits, prs = get_data_for_display(project_id)
     
     # Create tabs
-    tab1, tab2, tab3 = st.tabs(["Build Timeline", "Commits", "Pull Requests"])
+    tab1, tab2, tab3 = st.tabs(["Build Timeline", "Pull Requests", "Commits"])
     
     # Display content in respective tabs
     with tab1:
         display_build_timeline(project_id, selected_release)
     with tab2:
-        display_commit_metrics(commits, selected_release)
+        display_pr_metrics(project_id, selected_release)
     with tab3:
-        display_pr_metrics(prs, selected_release)
+        display_commit_metrics(project_id,selected_release)
 
 
-def display_commit_metrics(commits, release_version):
+def display_commit_metrics(project_id, release_version):
     """Display commit metrics for the selected release"""
     st.subheader("Commit Analysis")
-    # Implementation to follow...
+    pr_metrics = get_pr_metrics_for_display(project_id, release_version)
+    commit_ids = set(pr['commit_id'] for pr in pr_metrics)
+    commit_records = [get_commit_record(commit_id) for commit_id in commit_ids if get_commit_record(commit_id)]
+    if commit_records:
+        st.dataframe(pd.DataFrame(commit_records))
 
-def display_pr_metrics(prs, release_version):
+
+def get_cicd_record(release_version):
+    """Get the cicd record for the given release version"""
+    query = """
+        SELECT 
+            event_id
+        FROM sdlc_timeseries.cicd_events
+        WHERE release_version = :release_version
+        LIMIT 1;
+    """
+    result = db.execute(query, release_version=release_version)
+    return result.fetchone()
+
+def get_pr_record(pr_id):
+    """Get the pull request record for the given pull request id"""
+    query = """
+        SELECT 
+            title,
+            description,
+            created_at,
+            merged_at,
+            author,
+            commit_id
+        FROM sdlc_timeseries.pull_requests
+        WHERE id = :pr_id
+        LIMIT 1;
+    """
+    
+    engine = get_database_connection()
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(query), {"pr_id": pr_id})
+            row = result.fetchone()
+            return dict(row._mapping) if row else None
+    except Exception as e:
+        st.error(f"Query execution failed: {str(e)}")
+        return None
+
+def get_pr_metrics_for_display(project_id, release_version):
+    builds = get_builds_for_release(project_id, release_version)
+    prs = get_prs_that_triggered(builds)
+    return prs
+
+def get_prs_that_triggered(builds):
+    """Get the pull requests that triggered the builds"""
+    pr_metrics = []
+    for build in builds:
+        pr_record = get_pr_record(build['event_id'])
+        if pr_record:
+            pr_duration = (pr_record['merged_at'] - pr_record['created_at']).total_seconds()
+            pr_metrics.append({
+                'pr_id': build['event_id'],
+                'environment': build['environment'],
+                'build_time': build['duration_seconds'],
+                'title': pr_record['title'],
+                'author': pr_record['author'],
+                'created_at': pr_record['created_at'],
+                'merged_at': pr_record['merged_at'],
+                'commit_id': pr_record['commit_id'],
+                'pr_duration': pr_duration
+            })
+    return pr_metrics
+   
+def get_builds_for_release(project_id, release_version):
+    """Get the cicd records for the given project and release version"""
+    query = """
+        SELECT 
+            event_id,
+            environment,
+            status,
+            duration_seconds,
+            build_id
+        FROM sdlc_timeseries.cicd_events
+        WHERE project_id = :project_id
+        AND release_version = :release_version;
+    """
+    
+    engine = get_database_connection()
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(
+                text(query), 
+                {"project_id": project_id, "release_version": release_version}
+            )
+            return [dict(row._mapping) for row in result]
+    except Exception as e:
+        st.error(f"Query execution failed: {str(e)}")
+        return []
+
+
+
+def display_pr_metrics(project_id, release_version):
     """Display PR metrics for the selected release"""
     st.subheader("Pull Request Analysis")
-    # Implementation to follow...
+    
+    pr_metrics = get_pr_metrics_for_display(project_id, release_version)
+    if not pr_metrics:
+        st.info("No pull requests found for builds in this release")
+        return
+    prs_df = pd.DataFrame(pr_metrics)
+    # Convert 'pr_duration' from seconds to hours, minutes, and seconds
+    prs_df['pr_duration'] = prs_df['pr_duration'].apply(lambda x: f"{x//3600}h {x%3600//60}m {x%60}s")
+    # Selecting specific columns to display including the formatted 'pr_duration'
+    selected_columns = ['pr_id', 'environment', 'title', 'author', 'pr_duration', 'created_at', 'merged_at', 'commit_id']
+    st.dataframe(prs_df[selected_columns])
+
+
 
 def display_build_timeline(project_id, release_version):
     """Display build timeline for the selected release"""
@@ -486,6 +623,7 @@ def get_env_durations(project_id, release_version):
     except Exception as e:
         st.error(f"Query execution failed: {str(e)}")
         return None
+
 
 if __name__ == "__main__":
     main() 
