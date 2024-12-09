@@ -87,7 +87,10 @@ def zenforge_dashboard():
     # Create a sidebar
     with st.sidebar:
         # Main navigation options
-        main_option = st.radio("Select Navigation", ["Productivity and Performance", "Development Cycle Metrics", "Engineering Metrics"])
+        main_option = st.radio(
+            "Select Navigation", 
+            ["Productivity and Performance", "Development Cycle Metrics"]  # Removed Engineering Metrics
+        )
 
         if main_option == "Productivity and Performance":
             # Section for persona selection
@@ -99,6 +102,7 @@ def zenforge_dashboard():
 
             # Section for persona-based navigation
             nav_options = PERSONA_NAVIGATION.get(persona, [])
+            nav_options.append("Engineering Metrics")  # Add Engineering Metrics to navigation
             nav_option = st.radio("Persona Navigation", nav_options)
             
             # Add action buttons section if Productivity is selected
@@ -112,14 +116,14 @@ def zenforge_dashboard():
 
         elif main_option == "Development Cycle Metrics":
             st.write("Displaying Development Cycle Metrics")
-        elif main_option == "Engineering Metrics":
-            st.write("Displaying Engineering Metrics")
 
     # Main content area
     if main_option == "Productivity and Performance":
         # Display appropriate dashboard based on persona and navigation option
         if nav_option:
-            if persona == PERSONA_OPTIONS[0]:  # Individual Contributor
+            if nav_option == "Engineering Metrics":
+                engineering_metrics_dashboard()
+            elif persona == PERSONA_OPTIONS[0]:  # Individual Contributor
                 show_ic_dashboard(nav_option)
             elif persona == PERSONA_OPTIONS[1]:  # First Line Manager
                 show_first_line_manager_dashboard(nav_option)
@@ -144,8 +148,6 @@ def zenforge_dashboard():
             st.write(UNIMPLEMENTED_MESSAGE.format(persona))
     elif main_option == "Development Cycle Metrics":
         display_development_cycle_metrics()
-    elif main_option == "Engineering Metrics":
-        engineering_metrics_dashboard()
     else:
         st.write("Invalid Option")
 
