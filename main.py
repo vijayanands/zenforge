@@ -100,6 +100,15 @@ def zenforge_dashboard():
             # Section for persona-based navigation
             nav_options = PERSONA_NAVIGATION.get(persona, [])
             nav_option = st.radio("Persona Navigation", nav_options)
+            
+            # Add action buttons section if Productivity is selected
+            if nav_option == "Productivity":
+                st.markdown("---")  # Add a separator
+                st.markdown("### Actions")
+                if st.button("Create Self Appraisal"):
+                    st.session_state.show_self_appraisal = True
+                if st.button("Create Weekly Report"):
+                    st.session_state.show_weekly_report = True
 
         elif main_option == "Development Cycle Metrics":
             st.write("Displaying Development Cycle Metrics")
@@ -116,6 +125,21 @@ def zenforge_dashboard():
                 show_first_line_manager_dashboard(nav_option)
             elif persona == PERSONA_OPTIONS[2]:  # Second Line Manager
                 show_director_dashboard(nav_option)
+            
+            # Handle action button states
+            if st.session_state.get("show_self_appraisal", False):
+                with st.dialog("Self Appraisal"):
+                    st.write("Create your self appraisal")
+                    if st.button("Submit"):
+                        st.session_state.show_self_appraisal = False
+                        st.rerun()
+                        
+            if st.session_state.get("show_weekly_report", False):
+                with st.dialog("Weekly Report"):
+                    st.write("Create your weekly report")
+                    if st.button("Submit"):
+                        st.session_state.show_weekly_report = False
+                        st.rerun()
         else:
             st.write(UNIMPLEMENTED_MESSAGE.format(persona))
     elif main_option == "Development Cycle Metrics":

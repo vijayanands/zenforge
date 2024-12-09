@@ -317,13 +317,6 @@ def ic_productivity_dashboard():
             weekly_completion = generate_weekly_task_completion()
             create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
 
-        # Call to action buttons
-        st.subheader("Actions")
-        if st.button("Create Weekly Report"):
-            create_weekly_report()
-        if st.button("Create Self Appraisal"):
-            create_self_appraisal()
-
     # Tab 2: Code
     with tabs[1]:
         # Check if we need to fetch new data
