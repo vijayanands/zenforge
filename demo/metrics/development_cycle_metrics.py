@@ -369,7 +369,7 @@ def get_commit_record(commit_id):
         st.error(f"Query execution failed: {str(e)}")
         return None
 
-def main():
+def display_development_cycle_metrics():
     st.title("Development Cycle Metrics")
     
     # Initialize session states
@@ -568,32 +568,30 @@ def display_build_timeline(project_id, release_version):
 
     # Update environment names to uppercase
     envs = ['DEV', 'QA', 'STAGING', 'PRODUCTION']
-    # Ensure that we are correctly mapping the environment names to their durations
     durations = [env_durations.get(env, 0) for env in envs]
 
-    # Debugging: Display the durations only if DEBUG_MODE is set
     if DEBUG_MODE:
         st.write("Durations:", durations)
 
-    # Check for valid duration values
     if any(duration < 0 for duration in durations):
         st.warning("One or more duration values are negative. Please check the data.")
         return
 
     # Set colors for the bars
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # Custom colors for each environment
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']
 
-    fig, ax = plt.subplots()
-    ax.bar(envs, durations, color=colors)  # Apply colors to the bars
+    # Create smaller figure with specific dimensions
+    fig, ax = plt.subplots(figsize=(8, 4))  # Width: 8 inches, Height: 4 inches
+    ax.bar(envs, durations, color=colors)
     ax.set_title('Environment Duration Comparison')
     ax.set_xlabel('Environment')
     ax.set_ylabel('Duration (seconds)')
 
-    # Debugging: Check if the figure is created
     if DEBUG_MODE:
         st.write("Figure created, ready to display.")
     
-    st.pyplot(fig)    # Implementation to follow...
+    # Display with custom width
+    st.pyplot(fig, use_container_width=False)
 
 def get_env_durations(project_id, release_version):
     """Get build durations for each environment in a release"""
@@ -612,7 +610,7 @@ def get_env_durations(project_id, release_version):
     try:
         with engine.connect() as conn:
             result = conn.execute(
-                text(query), 
+                text(query),
                 {"project_id": project_id, "release_version": release_version}
             )
             durations = {row.env: row.total_duration for row in result}
@@ -626,4 +624,4 @@ def get_env_durations(project_id, release_version):
 
 
 if __name__ == "__main__":
-    main() 
+    display_development_cycle_metrics() 

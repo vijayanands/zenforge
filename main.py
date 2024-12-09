@@ -23,7 +23,7 @@ from demo.ic.dashboard import show_ic_dashboard
 from demo.second_line_manager_or_director.dashboard import show_director_dashboard
 from demo.ui.title_bar import set_title_bar
 from model.load_events_db import load_sample_data_into_timeseries_db
-from demo.metrics.sdlc_timeline import main as show_sdlc_timeline
+from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
 
 load_dotenv()
 
@@ -87,7 +87,7 @@ def zenforge_dashboard():
     # Create a sidebar
     with st.sidebar:
         # Main navigation options
-        main_option = st.radio("Select Navigation", ["Productivity and Performance", "SDLC Timeline", "Engineering Metrics"])
+        main_option = st.radio("Select Navigation", ["Productivity and Performance", "Development Cycle Metrics", "Engineering Metrics"])
 
         if main_option == "Productivity and Performance":
             # Section for persona selection
@@ -101,8 +101,8 @@ def zenforge_dashboard():
             nav_options = PERSONA_NAVIGATION.get(persona, [])
             nav_option = st.radio("Persona Navigation", nav_options)
 
-        elif main_option == "SDLC Timeline":
-            st.write("Displaying SDLC Timeline")
+        elif main_option == "Development Cycle Metrics":
+            st.write("Displaying Development Cycle Metrics")
         elif main_option == "Engineering Metrics":
             st.write("Displaying Engineering Metrics")
 
@@ -118,8 +118,8 @@ def zenforge_dashboard():
                 show_director_dashboard(nav_option)
         else:
             st.write(UNIMPLEMENTED_MESSAGE.format(persona))
-    elif main_option == "SDLC Timeline":
-        show_sdlc_timeline()
+    elif main_option == "Development Cycle Metrics":
+        display_development_cycle_metrics()
     elif main_option == "Engineering Metrics":
         engineering_metrics_dashboard()
     else:
