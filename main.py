@@ -74,6 +74,13 @@ def initialize_synthetic_data():
                 st.session_state.synthetic_data_loaded = False
 
 
+def generate_employee_list(user_info):
+    """Get list of employees from user_info with their emails"""
+    employee_list = [(info["name"], email) for email, info in user_info.items() if info["name"]]
+    employee_list.sort(key=lambda x: x[0])
+    return employee_list
+
+
 def zenforge_dashboard():
     # Initialize synthetic data first
     initialize_synthetic_data()
@@ -153,18 +160,88 @@ def zenforge_dashboard():
             
             # Handle action button states
             if st.session_state.get("show_self_appraisal", False):
-                with st.dialog("Self Appraisal"):
-                    st.write("Create your self appraisal")
-                    if st.button("Submit"):
-                        st.session_state.show_self_appraisal = False
-                        st.rerun()
+                with st.container():
+                    st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
+                    with st.container():
+                        st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+                        st.subheader("Self Appraisal")
                         
+                        # Initialize session state for appraisal flow
+                        if 'appraisal_step' not in st.session_state:
+                            st.session_state.appraisal_step = 'select_employee'
+                        if 'selected_appraisal_employee' not in st.session_state:
+                            st.session_state.selected_appraisal_employee = None
+
+                        if st.session_state.appraisal_step == 'select_employee':
+                            # Employee selection step
+                            employees = generate_employee_list(st.session_state.get('user_info', {}))
+                            employee_names = [name for name, _ in employees] if employees else ["No data available"]
+                            selected_name = st.selectbox("Select Employee", employee_names)
+                            
+                            if st.button("Create Appraisal"):
+                                st.session_state.selected_appraisal_employee = selected_name
+                                st.session_state.appraisal_step = 'show_dashboard'
+                                st.rerun()
+
+                        elif st.session_state.appraisal_step == 'show_dashboard':
+                            # Dashboard view
+                            st.title(f"Employee Appraisal for {st.session_state.selected_appraisal_employee}")
+                            st.info("Appraisal functionality not yet completed")
+                            
+                            if st.button("Back to Selection"):
+                                st.session_state.appraisal_step = 'select_employee'
+                                st.rerun()
+
+                        # Close button
+                        if st.button("Close", key="close_appraisal"):
+                            st.session_state.show_self_appraisal = False
+                            st.session_state.appraisal_step = 'select_employee'
+                            st.session_state.selected_appraisal_employee = None
+                            st.rerun()
+                        
+                        st.markdown('</div>', unsafe_allow_html=True)
+
             if st.session_state.get("show_weekly_report", False):
-                with st.dialog("Weekly Report"):
-                    st.write("Create your weekly report")
-                    if st.button("Submit"):
-                        st.session_state.show_weekly_report = False
-                        st.rerun()
+                with st.container():
+                    st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
+                    with st.container():
+                        st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+                        st.subheader("Weekly Report")
+                        
+                        # Initialize session state for report flow
+                        if 'report_step' not in st.session_state:
+                            st.session_state.report_step = 'select_employee'
+                        if 'selected_report_employee' not in st.session_state:
+                            st.session_state.selected_report_employee = None
+
+                        if st.session_state.report_step == 'select_employee':
+                            # Employee selection step
+                            employees = generate_employee_list(st.session_state.get('user_info', {}))
+                            employee_names = [name for name, _ in employees] if employees else ["No data available"]
+                            selected_name = st.selectbox("Select Employee", employee_names)
+                            
+                            if st.button("Create Report"):
+                                st.session_state.selected_report_employee = selected_name
+                                st.session_state.report_step = 'show_dashboard'
+                                st.rerun()
+
+                        elif st.session_state.report_step == 'show_dashboard':
+                            # Dashboard view
+                            st.title(f"Weekly Report for {st.session_state.selected_report_employee}")
+                            st.info("Weekly report functionality not yet completed")
+                            
+                            if st.button("Back to Selection"):
+                                st.session_state.report_step = 'select_employee'
+                                st.rerun()
+
+                        # Close button
+                        if st.button("Close", key="close_report"):
+                            st.session_state.show_weekly_report = False
+                            st.session_state.report_step = 'select_employee'
+                            st.session_state.selected_report_employee = None
+                            st.rerun()
+                        
+                        st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.write(UNIMPLEMENTED_MESSAGE.format(persona))
     elif main_option == "Development Cycle Metrics":
