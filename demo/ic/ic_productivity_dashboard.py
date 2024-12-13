@@ -238,7 +238,8 @@ def ic_productivity_dashboard():
 
     st.title("Employee Productivity Dashboard")
 
-    # Add date range selector at the top
+    # Time Range Selection Section
+    st.header("Time Range")
     col1, col2 = st.columns(2)
     with col1:
         start_date = st.date_input(
@@ -254,265 +255,273 @@ def ic_productivity_dashboard():
             max_value=datetime.today(),
         )
 
-    # Convert dates to string format for GitHub API
-    start_date_str = start_date.strftime("%Y-%m-%d")
-    end_date_str = end_date.strftime("%Y-%m-%d")
+    # Display Dashboard button
+    if st.button("Display Dashboard"):
+        # Convert dates to string format for GitHub API
+        start_date_str = start_date.strftime("%Y-%m-%d")
+        end_date_str = end_date.strftime("%Y-%m-%d")
 
-    # Initialize session state for GitHub data
-    if 'github_data' not in st.session_state:
-        st.session_state.github_data = None
-    if 'user_info' not in st.session_state:
-        st.session_state.user_info = None
-    if 'github_data_start_date' not in st.session_state:
-        st.session_state.github_data_start_date = None
-    if 'github_data_end_date' not in st.session_state:
-        st.session_state.github_data_end_date = None
-    if 'selected_employee' not in st.session_state:
-        st.session_state.selected_employee = None
-
-    # Check if we need to fetch new data
-    need_new_data = (
-        st.session_state.github_data is None or
-        st.session_state.user_info is None or
-        st.session_state.github_data_start_date is None or
-        st.session_state.github_data_end_date is None or
-        start_date_str < st.session_state.github_data_start_date or
-        end_date_str > st.session_state.github_data_end_date
-    )
-    
-    if need_new_data:
-        with st.spinner('Fetching GitHub data... This may take a few moments.'):
-            github_data, user_info = pull_github_data(
-                start_date=start_date_str,
-                end_date=end_date_str
-            )
-            
-            # Update session state
-            st.session_state.github_data = github_data
-            st.session_state.user_info = user_info
-            st.session_state.github_data_start_date = start_date_str
-            st.session_state.github_data_end_date = end_date_str
-            
-            # Reset selected employee when new data is fetched
+        # Initialize session state for GitHub data if not already done
+        if 'github_data' not in st.session_state:
+            st.session_state.github_data = None
+        if 'user_info' not in st.session_state:
+            st.session_state.user_info = None
+        if 'github_data_start_date' not in st.session_state:
+            st.session_state.github_data_start_date = None
+        if 'github_data_end_date' not in st.session_state:
+            st.session_state.github_data_end_date = None
+        if 'selected_employee' not in st.session_state:
             st.session_state.selected_employee = None
-            
-            # Show success message
-            st.success('GitHub data successfully loaded!')
-            # Force a rerun to update the UI with new data
+        if 'show_dashboard' not in st.session_state:
+            st.session_state.show_dashboard = False
+
+        # Check if we need to fetch new data
+        need_new_data = (
+            st.session_state.github_data is None or
+            st.session_state.user_info is None or
+            st.session_state.github_data_start_date != start_date_str or
+            st.session_state.github_data_end_date != end_date_str
+        )
+        
+        if need_new_data:
+            with st.spinner('Fetching GitHub data... This may take a few moments.'):
+                github_data, user_info = pull_github_data(
+                    start_date=start_date_str,
+                    end_date=end_date_str
+                )
+                
+                # Update session state
+                st.session_state.github_data = github_data
+                st.session_state.user_info = user_info
+                st.session_state.github_data_start_date = start_date_str
+                st.session_state.github_data_end_date = end_date_str
+                st.session_state.selected_employee = None
+                st.session_state.show_dashboard = True
+                
+                # Show success message and rerun
+                st.success('GitHub data successfully loaded!')
+                st.rerun()
+        else:
+            # Just show the dashboard with existing data
+            st.session_state.show_dashboard = True
             st.rerun()
-    else:
+
+    # Show dashboard only if data is loaded and show_dashboard is True
+    if st.session_state.get('show_dashboard', False):
+        st.markdown("---")  # Add a separator
+        
         # Use cached data
         github_data = st.session_state.github_data
         user_info = st.session_state.user_info
 
-    # Get list of employees from GitHub data
-    employees = generate_employee_list(user_info) if user_info else []
-    
-    # Create a list of names for the selectbox
-    employee_names = [name for name, _ in employees] if employees else ["No data available"]
-    
-    # Create a dict to map names to emails
-    name_to_email = dict(employees) if employees else {}
-    
-    # Use session state to maintain selection across reruns
-    index = 0
-    if st.session_state.selected_employee in employee_names:
-        index = employee_names.index(st.session_state.selected_employee)
-    
-    selected_name = st.selectbox("Select Employee", employee_names, index=index)
-    st.session_state.selected_employee = selected_name
-    selected_email = name_to_email.get(selected_name)
+        # Get list of employees from GitHub data
+        employees = generate_employee_list(user_info) if user_info else []
+        
+        # Create a list of names for the selectbox
+        employee_names = [name for name, _ in employees] if employees else ["No data available"]
+        
+        # Create a dict to map names to emails
+        name_to_email = dict(employees) if employees else {}
+        
+        # Use session state to maintain selection across reruns
+        index = 0
+        if st.session_state.selected_employee in employee_names:
+            index = employee_names.index(st.session_state.selected_employee)
+        
+        selected_name = st.selectbox("Select Employee", employee_names, index=index)
+        st.session_state.selected_employee = selected_name
+        selected_email = name_to_email.get(selected_name)
 
-    # Display employee info
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"**Employee:** {selected_name}")
-    with col2:
-        designation = get_employee_designation(selected_email, user_info) if selected_email else "Unknown"
-        st.info(f"**Position:** {designation}")
-
-    # Create tabs
-    tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
-
-    # Tab 1: Tasks
-    with tabs[0]:
-        total_tasks, completed, in_progress, on_track, overdue = generate_task_data()
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            create_styled_metric("Total Tasks", total_tasks, "📋")
-        with col2:
-            create_styled_metric("Completed", completed, "✅")
-        with col3:
-            create_styled_metric("In Progress", in_progress, "🔄")
-        with col4:
-            create_styled_metric("On Track", on_track, "🎯")
-        with col5:
-            create_styled_metric("Overdue", overdue, "⏰")
-
+        # Display employee info
         col1, col2 = st.columns(2)
         with col1:
-            st.header("Task Distribution")
-            task_data = pd.DataFrame(
-                {
-                    "Status": ["Completed", "On Track", "Overdue"],
-                    "Value": [completed, on_track, overdue],
-                }
-            )
-            fig = create_pie_chart(
-                task_data,
-                names="Status",
-                values="Value",
-                title="Task Distribution",
-                height=360,
-                width=360,
-            )
-            display_pie_chart(fig)
-
+            st.info(f"**Employee:** {selected_name}")
         with col2:
-            st.header("Weekly Task Completion Rate")
-            weekly_completion = generate_weekly_task_completion()
-            create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
+            designation = get_employee_designation(selected_email, user_info) if selected_email else "Unknown"
+            st.info(f"**Position:** {designation}")
 
-    # Tab 2: Code
-    with tabs[1]:
-        # Use the selected_email to find the employee's data
-        if selected_email and selected_email in github_data:
-            employee_data = github_data[selected_email]
-            code_data = {
-                "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
-                "peer_reviews": employee_data.get("total_pull_requests", 0),
-                "git_commits": employee_data.get("total_commits", 0),
-                "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
-                "bugs_fixed": {  # Keep random for now
-                    "low": random.randint(5, 15),
-                    "medium": random.randint(3, 10),
-                    "high": random.randint(1, 5),
-                    "critical": random.randint(0, 3),
-                }
-            }
-        else:
-            # Fallback to random data if employee not found
-            code_data = {
-                "quality_score": round(random.uniform(1, 10), 1),
-                "peer_reviews": random.randint(5, 20),
-                "git_commits": random.randint(20, 100),
-                "bug_fix_rate": round(random.uniform(0.5, 5), 1),
-                "bugs_fixed": {
-                    "low": random.randint(5, 15),
-                    "medium": random.randint(3, 10),
-                    "high": random.randint(1, 5),
-                    "critical": random.randint(0, 3),
-                }
-            }
+        # Create tabs
+        tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
 
-        # Display metrics
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            create_styled_metric(
-                "Code Quality", f"{code_data['quality_score']}/10", "🏆"
-            )
-        with col2:
-            create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
-        with col3:
-            create_styled_metric("Code Commits", code_data["git_commits"], "🔢")
-        with col4:
-            create_styled_metric(
-                "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
-            )
+        # Tab 1: Tasks
+        with tabs[0]:
+            total_tasks, completed, in_progress, on_track, overdue = generate_task_data()
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.header("Bugs Fixed by Criticality")
-            bugs_data = pd.DataFrame(
-                {
-                    "Criticality": code_data["bugs_fixed"].keys(),
-                    "Count": code_data["bugs_fixed"].values(),
-                }
-            )
-            fig = create_pie_chart(
-                bugs_data,
-                names="Criticality",
-                values="Count",
-                title="Bugs Fixed by Criticality",
-                height=360,
-                width=360,
-            )
-            display_pie_chart(fig)
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                create_styled_metric("Total Tasks", total_tasks, "📋")
+            with col2:
+                create_styled_metric("Completed", completed, "✅")
+            with col3:
+                create_styled_metric("In Progress", in_progress, "🔄")
+            with col4:
+                create_styled_metric("On Track", on_track, "🎯")
+            with col5:
+                create_styled_metric("Overdue", overdue, "⏰")
 
-        with col2:
-            st.header("Code Quality Trend")
-            code_quality_trend = [
-                random.uniform(
-                    code_data["quality_score"] - 1, code_data["quality_score"] + 1
+            col1, col2 = st.columns(2)
+            with col1:
+                st.header("Task Distribution")
+                task_data = pd.DataFrame(
+                    {
+                        "Status": ["Completed", "On Track", "Overdue"],
+                        "Value": [completed, on_track, overdue],
+                    }
                 )
-                for _ in range(12)
-            ]
-            create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
+                fig = create_pie_chart(
+                    task_data,
+                    names="Status",
+                    values="Value",
+                    title="Task Distribution",
+                    height=360,
+                    width=360,
+                )
+                display_pie_chart(fig)
 
-    # Tab 3: Knowledge
-    with tabs[2]:
-        knowledge_data = generate_knowledge_data()
+            with col2:
+                st.header("Weekly Task Completion Rate")
+                weekly_completion = generate_weekly_task_completion()
+                create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            create_styled_metric(
-                "Articles Written", knowledge_data["articles_written"], "📝"
-            )
-        with col2:
-            create_styled_metric(
-                "Articles Contributed", knowledge_data["articles_contributed"], "💬"
-            )
-        with col3:
-            create_styled_metric(
-                "Training Sessions", knowledge_data["training_sessions"], "🎓"
-            )
-        with col4:
-            create_styled_metric(
-                "Mentoring Hours", knowledge_data["mentoring_hours"], "🤝"
-            )
-        with col5:
-            create_styled_metric(
-                "Doc Contributions",
-                knowledge_data["documentation_contributions"],
-                "📚",
+        # Tab 2: Code
+        with tabs[1]:
+            # Use the selected_email to find the employee's data
+            if selected_email and selected_email in github_data:
+                employee_data = github_data[selected_email]
+                code_data = {
+                    "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
+                    "peer_reviews": employee_data.get("total_pull_requests", 0),
+                    "git_commits": employee_data.get("total_commits", 0),
+                    "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
+                    "bugs_fixed": {  # Keep random for now
+                        "low": random.randint(5, 15),
+                        "medium": random.randint(3, 10),
+                        "high": random.randint(1, 5),
+                        "critical": random.randint(0, 3),
+                    }
+                }
+            else:
+                # Fallback to random data if employee not found
+                code_data = {
+                    "quality_score": round(random.uniform(1, 10), 1),
+                    "peer_reviews": random.randint(5, 20),
+                    "git_commits": random.randint(20, 100),
+                    "bug_fix_rate": round(random.uniform(0.5, 5), 1),
+                    "bugs_fixed": {
+                        "low": random.randint(5, 15),
+                        "medium": random.randint(3, 10),
+                        "high": random.randint(1, 5),
+                        "critical": random.randint(0, 3),
+                    }
+                }
+
+            # Display metrics
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                create_styled_metric(
+                    "Code Quality", f"{code_data['quality_score']}/10", "🏆"
+                )
+            with col2:
+                create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
+            with col3:
+                create_styled_metric("Code Commits", code_data["git_commits"], "🔢")
+            with col4:
+                create_styled_metric(
+                    "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
+                )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                st.header("Bugs Fixed by Criticality")
+                bugs_data = pd.DataFrame(
+                    {
+                        "Criticality": code_data["bugs_fixed"].keys(),
+                        "Count": code_data["bugs_fixed"].values(),
+                    }
+                )
+                fig = create_pie_chart(
+                    bugs_data,
+                    names="Criticality",
+                    values="Count",
+                    title="Bugs Fixed by Criticality",
+                    height=360,
+                    width=360,
+                )
+                display_pie_chart(fig)
+
+            with col2:
+                st.header("Code Quality Trend")
+                code_quality_trend = [
+                    random.uniform(
+                        code_data["quality_score"] - 1, code_data["quality_score"] + 1
+                    )
+                    for _ in range(12)
+                ]
+                create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
+
+        # Tab 3: Knowledge
+        with tabs[2]:
+            knowledge_data = generate_knowledge_data()
+
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                create_styled_metric(
+                    "Articles Written", knowledge_data["articles_written"], "📝"
+                )
+            with col2:
+                create_styled_metric(
+                    "Articles Contributed", knowledge_data["articles_contributed"], "💬"
+                )
+            with col3:
+                create_styled_metric(
+                    "Training Sessions", knowledge_data["training_sessions"], "🎓"
+                )
+            with col4:
+                create_styled_metric(
+                    "Mentoring Hours", knowledge_data["mentoring_hours"], "🤝"
+                )
+            with col5:
+                create_styled_metric(
+                    "Doc Contributions",
+                    knowledge_data["documentation_contributions"],
+                    "📚",
+                )
+
+            create_styled_bullet_list(
+                [
+                    f"{contrib} - {date.strftime('%Y-%m-%d')}"
+                    for contrib, date in generate_recent_contributions()
+                ],
+                title="Recent Contributions",
             )
 
-        create_styled_bullet_list(
-            [
-                f"{contrib} - {date.strftime('%Y-%m-%d')}"
-                for contrib, date in generate_recent_contributions()
-            ],
-            title="Recent Contributions",
-        )
+        # Tab 4: Meetings
+        with tabs[3]:
+            meeting_data = generate_meeting_data()
 
-    # Tab 4: Meetings
-    with tabs[3]:
-        meeting_data = generate_meeting_data()
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                create_styled_metric("Organized", meeting_data["organized"], "📅")
+            with col2:
+                create_styled_metric("Attended", meeting_data["attended"], "👥")
+            with col3:
+                create_styled_metric(
+                    "Avg Duration", f"{meeting_data['avg_duration']} hours", "⏳"
+                )
+            with col4:
+                create_styled_metric(
+                    "Effectiveness", f"{meeting_data['effectiveness']}/10", "📊"
+                )
+            with col5:
+                create_styled_metric(
+                    "Weekly Time", f"{meeting_data['weekly_time_percentage']}%", "🕰️"
+                )
 
-        col1, col2, col3, col4, col5 = st.columns(5)
-        with col1:
-            create_styled_metric("Organized", meeting_data["organized"], "📅")
-        with col2:
-            create_styled_metric("Attended", meeting_data["attended"], "👥")
-        with col3:
-            create_styled_metric(
-                "Avg Duration", f"{meeting_data['avg_duration']} hours", "⏳"
+            st.header("Role in Meetings (RACI)")
+            raci_data = generate_raci_data()
+            create_styled_bar_chart(
+                list(raci_data.keys()), list(raci_data.values()), "Roles", "Count"
             )
-        with col4:
-            create_styled_metric(
-                "Effectiveness", f"{meeting_data['effectiveness']}/10", "📊"
-            )
-        with col5:
-            create_styled_metric(
-                "Weekly Time", f"{meeting_data['weekly_time_percentage']}%", "🕰️"
-            )
-
-        st.header("Role in Meetings (RACI)")
-        raci_data = generate_raci_data()
-        create_styled_bar_chart(
-            list(raci_data.keys()), list(raci_data.values()), "Roles", "Count"
-        )
 
 
 if __name__ == "__main__":

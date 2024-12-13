@@ -42,11 +42,11 @@ UNIMPLEMENTED_MESSAGE = "Dashboard for {} is not implemented yet."
 PERSONA_NAVIGATION = {
     "Individual Contributor": [
         "Productivity",
-        "Performance & Career",
+        "Performance",
     ],
     "First Line Manager": [
         "Productivity",
-        "Performance & Career",
+        "Performance",
     ],
     "Second Line Manager/Director": [
         "Productivity",
