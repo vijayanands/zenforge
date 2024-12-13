@@ -608,136 +608,48 @@ def update_bug_status(
 
 
 class DatabaseManager:
-    def __init__(self, connection_string: str):
+    def __init__(self, connection_string):
+        self.connection_string = connection_string
         self.engine = create_engine(connection_string)
-        self.Session = sessionmaker(bind=self.engine)
 
-    def _verify_timescaledb(self):
-        """Verify TimescaleDB is properly installed and enabled"""
-        with self.engine.connect() as connection:
-            try:
-                result = connection.execute(
-                    text(
-                        "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname = 'timescaledb')"
-                    )
-                ).scalar()
-
-                if not result:
-                    connection.execute(
-                        text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE")
-                    )
-                return True
-            except Exception as e:
-                print(f"Error verifying TimescaleDB: {e}")
-                return False
-
-    def _create_regular_indexes(self):
-        """Create indexes for non-hypertables"""
-        with self.engine.begin() as connection:
-            try:
-                # Create indexes for timestamp columns in regular tables
-                connection.execute(
-                    text(
-                        """
-                        CREATE INDEX IF NOT EXISTS idx_jira_items_created_date 
-                        ON sdlc_timeseries.jira_items (created_date);
-
-                        CREATE INDEX IF NOT EXISTS idx_sprints_start_date 
-                        ON sdlc_timeseries.sprints (start_date);
-                        """
-                    )
-                )
-
-                # Create indexes for sprint_jira_association only
-                connection.execute(
-                    text(
-                        """
-                        CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_sprint 
-                        ON sdlc_timeseries.sprint_jira_association (sprint_id);
-
-                        CREATE INDEX IF NOT EXISTS idx_sprint_jira_assoc_jira 
-                        ON sdlc_timeseries.sprint_jira_association (jira_id);
-                        """
-                    )
-                )
-
-                # Add bug-related indexes
-                connection.execute(
-                    text(
-                        """
-                        CREATE INDEX IF NOT EXISTS idx_bugs_created_date 
-                        ON sdlc_timeseries.bugs (created_date);
-
-                        CREATE INDEX IF NOT EXISTS idx_bugs_project_build 
-                        ON sdlc_timeseries.bugs (project_id, build_id);
-                        """
-                    )
-                )
-
-                print("Created regular indexes")
-            except Exception as e:
-                print(f"Error creating indexes: {e}")
-                raise
-
-    def _create_hypertables(self):
-        """Convert specific tables to hypertables"""
-        hypertables = [
-            ("design_events", "timestamp"),
-            ("code_commits", "timestamp"),
-            ("pull_requests", "created_at"),
-        ]
-
-        with self.engine.begin() as connection:
-            for table, time_column in hypertables:
-                try:
-                    # Create the hypertable without enforcing foreign key relationships
-                    connection.execute(
-                        text(
-                            f"""
-                            SELECT create_hypertable(
-                                'sdlc_timeseries.{table}',
-                                '{time_column}',
-                                if_not_exists => TRUE,
-                                migrate_data => TRUE,
-                                create_default_indexes => TRUE
-                            );
-                            """
-                        )
-                    )
-                    print(f"Created hypertable for {table}")
-                except Exception as e:
-                    print(f"Error creating hypertable for {table}: {e}")
-                    raise
+    def get_session(self):
+        Session = sessionmaker(bind=self.engine)
+        return Session()
 
     def init_db(self):
-        """Initialize the database schema"""
-        if not self._verify_timescaledb():
-            raise RuntimeError("TimescaleDB verification failed")
-
+        """Initialize the database by creating schemas and tables"""
         try:
-            # Drop and recreate schema
-            with self.engine.begin() as connection:
-                connection.execute(
-                    text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE")
-                )
-                connection.execute(text("CREATE SCHEMA sdlc_timeseries"))
-                connection.execute(text("COMMIT"))
+            # Create the schema if it doesn't exist
+            with self.engine.connect() as connection:
+                connection.execute(text("CREATE SCHEMA IF NOT EXISTS sdlc_timeseries;"))
+                connection.commit()
 
-            # Create all tables first
+            # Create all tables
+            Base.metadata.schema = "sdlc_timeseries"
             Base.metadata.create_all(self.engine)
-
-            # Create regular indexes
-            self._create_regular_indexes()
-
-            # Create hypertables
-            self._create_hypertables()
-
+            print("Database initialized successfully")
+            
         except Exception as e:
             print(f"Error initializing database: {e}")
             raise
 
-    def get_session(self):
-        return self.Session()
+    def drop_all_tables(self):
+        """Drop all tables and types in the sdlc_timeseries schema"""
+        try:
+            # Drop schema (which will cascade to all tables and types)
+            with self.engine.connect() as connection:
+                connection.execute(text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE;"))
+                connection.commit()
+                print("Schema and all objects dropped successfully")
+                
+                # Recreate the schema
+                connection.execute(text("CREATE SCHEMA sdlc_timeseries;"))
+                connection.commit()
+                print("Schema recreated")
+                
+        except Exception as e:
+            print(f"Error dropping schema and objects: {e}")
+            raise
 
 
 # Define your database connection details
@@ -860,3 +772,29 @@ def verify_pr_exists(session, pr_id: str, pr_created_at: datetime) -> bool:
         .first()
         is not None
     )
+
+
+class Designation(enum.Enum):
+    SOFTWARE_ENGINEER = "SOFTWARE_ENGINEER"
+    SR_SOFTWARE_ENGINEER = "SR_SOFTWARE_ENGINEER"
+    MANAGER = "MANAGER"
+    DIRECTOR = "DIRECTOR"
+    VICE_PRESIDENT = "VICE_PRESIDENT"
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = ({"schema": "sdlc_timeseries"})
+    
+    name = Column(String)
+    email = Column(String, primary_key=True)
+    designation = Column(SQLEnum(Designation))
+    supervisor = Column(String, ForeignKey("sdlc_timeseries.users.email"), nullable=True)
+
+
+class Team(Base):
+    __tablename__ = "teams"
+    __table_args__ = ({"schema": "sdlc_timeseries"})
+    
+    name = Column(String, primary_key=True)
+    manager_email = Column(String, ForeignKey("sdlc_timeseries.users.email"))

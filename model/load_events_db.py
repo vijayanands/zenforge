@@ -18,6 +18,9 @@ from model.sdlc_events import (
     create_sprint_jira_associations,
     db_name,
     server_connection_string,
+    User,
+    Team,
+    Designation,
 )
 
 # Create an engine for the server connection
@@ -87,6 +90,35 @@ def load_project_data(all_data):
         create_project(db_project)
 
 
+def create_user(user_data: Dict[str, Any]) -> None:
+    """Create a user record"""
+    try:
+        with DatabaseManager(connection_string).get_session() as session:
+            # Convert designation from Enum to value
+            if isinstance(user_data["designation"], Designation):
+                user_data = user_data.copy()
+                user_data["designation"] = user_data["designation"].value
+                
+            user = User(**user_data)
+            session.add(user)
+            session.commit()
+            print(f"Created user: {user_data['name']} ({user_data['email']})")
+    except Exception as e:
+        print(f"Error creating user {user_data.get('email')}: {e}")
+        raise
+
+def create_team(team_data: Dict[str, Any]) -> None:
+    """Create a team record"""
+    try:
+        with DatabaseManager(connection_string).get_session() as session:
+            team = Team(**team_data)
+            session.add(team)
+            session.commit()
+            print(f"Created team: {team_data['name']}")
+    except Exception as e:
+        print(f"Error creating team {team_data.get('name')}: {e}")
+        raise
+
 def load_data(all_data: Dict[str, Any]):
     """Load data into the database handling all relationships and dependencies"""
     try:
@@ -124,29 +156,68 @@ def load_data(all_data: Dict[str, Any]):
         print("Phase 8: Loading Bugs...")
         load_bugs(all_data)
 
+        print("Phase 9: Loading users...")
+        for user in all_data["users"]:
+            create_user(user)
+
+        print("Phase 10: Loading teams...")
+        for team in all_data["teams"]:
+            create_team(team)
+
     except Exception as e:
         print(f"Error loading data: {e}")
         raise
 
 
+def verify_data_loaded():
+    """Verify that data was properly loaded into the database"""
+    with DatabaseManager(connection_string).get_session() as session:
+        # Check users
+        user_count = session.query(User).count()
+        print(f"\nVerification Results:")
+        print(f"Users in database: {user_count}")
+        
+        # Check teams
+        team_count = session.query(Team).count()
+        print(f"Teams in database: {team_count}")
+        
+        if user_count == 0:
+            print("Warning: No users found in database!")
+        if team_count == 0:
+            print("Warning: No teams found in database!")
+            
+        # Sample user data
+        sample_user = session.query(User).first()
+        if sample_user:
+            print(f"\nSample user data:")
+            print(f"Name: {sample_user.name}")
+            print(f"Email: {sample_user.email}")
+            print(f"Designation: {sample_user.designation}")
+            print(f"Supervisor: {sample_user.supervisor}")
+
 def load_sample_data_into_timeseries_db():
     """Load sample data into the timeseries database"""
     try:
         print("\nCreate Database and Initialize DB...")
-        # Create database if it doesn't exist
         create_database_if_not_exists()
 
-        # Initialize the Database
-        initialize_db()
+        db_manager = DatabaseManager(connection_string)
+        print("\nDropping existing tables...")
+        db_manager.drop_all_tables()
+        
+        print("\nInitializing database...")
+        db_manager.init_db()
 
-        # Get sample data once
         print("\nGenerating synthetic data...")
         all_data = generate_all_data()
 
-        # Load the data
         print("\nLoad synthetic data to Timeseries DB...")
         load_data(all_data)
-        print("\nBootstapping Complete.")
+        
+        print("\nVerifying data loaded...")
+        verify_data_loaded()
+        
+        print("\nBootstrapping Complete.")
 
     except Exception as e:
         print(f"Failed to load sample data: {e}")
