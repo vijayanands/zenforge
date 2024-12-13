@@ -16,6 +16,7 @@ from demo.ui.style import (
 )
 
 from tools.github.github import pull_github_data
+from model.sdlc_events import User, DatabaseManager, connection_string
 
 
 def set_custom_css():
@@ -218,6 +219,20 @@ def create_self_appraisal():
     pass  # Placeholder for the actual implementation
 
 
+def get_employee_designation(email: str, user_info: dict) -> str:
+    """Get employee designation from user info"""
+    if not user_info or email not in user_info:
+        return "Unknown"
+    
+    # Get user from database using email
+    with DatabaseManager(connection_string).get_session() as session:
+        user = session.query(User).filter_by(email=email).first()
+        if user and user.designation:
+            # Convert enum value to display format
+            return user.designation.value.replace('_', ' ').title()
+    return "Unknown"
+
+
 def ic_productivity_dashboard():
     set_custom_css()
 
@@ -252,9 +267,46 @@ def ic_productivity_dashboard():
         st.session_state.github_data_start_date = None
     if 'github_data_end_date' not in st.session_state:
         st.session_state.github_data_end_date = None
+    if 'selected_employee' not in st.session_state:
+        st.session_state.selected_employee = None
+
+    # Check if we need to fetch new data
+    need_new_data = (
+        st.session_state.github_data is None or
+        st.session_state.user_info is None or
+        st.session_state.github_data_start_date is None or
+        st.session_state.github_data_end_date is None or
+        start_date_str < st.session_state.github_data_start_date or
+        end_date_str > st.session_state.github_data_end_date
+    )
+    
+    if need_new_data:
+        with st.spinner('Fetching GitHub data... This may take a few moments.'):
+            github_data, user_info = pull_github_data(
+                start_date=start_date_str,
+                end_date=end_date_str
+            )
+            
+            # Update session state
+            st.session_state.github_data = github_data
+            st.session_state.user_info = user_info
+            st.session_state.github_data_start_date = start_date_str
+            st.session_state.github_data_end_date = end_date_str
+            
+            # Reset selected employee when new data is fetched
+            st.session_state.selected_employee = None
+            
+            # Show success message
+            st.success('GitHub data successfully loaded!')
+            # Force a rerun to update the UI with new data
+            st.rerun()
+    else:
+        # Use cached data
+        github_data = st.session_state.github_data
+        user_info = st.session_state.user_info
 
     # Get list of employees from GitHub data
-    employees = generate_employee_list(st.session_state.user_info) if st.session_state.user_info else []
+    employees = generate_employee_list(user_info) if user_info else []
     
     # Create a list of names for the selectbox
     employee_names = [name for name, _ in employees] if employees else ["No data available"]
@@ -262,17 +314,22 @@ def ic_productivity_dashboard():
     # Create a dict to map names to emails
     name_to_email = dict(employees) if employees else {}
     
-    selected_name = st.selectbox("Select Employee", employee_names)
+    # Use session state to maintain selection across reruns
+    index = 0
+    if st.session_state.selected_employee in employee_names:
+        index = employee_names.index(st.session_state.selected_employee)
+    
+    selected_name = st.selectbox("Select Employee", employee_names, index=index)
+    st.session_state.selected_employee = selected_name
     selected_email = name_to_email.get(selected_name)
 
     # Display employee info
-    employee_position = generate_employee_position(selected_name)
-
     col1, col2 = st.columns(2)
     with col1:
         st.info(f"**Employee:** {selected_name}")
     with col2:
-        st.info(f"**Position:** {employee_position}")
+        designation = get_employee_designation(selected_email, user_info) if selected_email else "Unknown"
+        st.info(f"**Position:** {designation}")
 
     # Create tabs
     tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
@@ -319,36 +376,6 @@ def ic_productivity_dashboard():
 
     # Tab 2: Code
     with tabs[1]:
-        # Check if we need to fetch new data
-        need_new_data = (
-            st.session_state.github_data is None or
-            st.session_state.user_info is None or
-            st.session_state.github_data_start_date is None or
-            st.session_state.github_data_end_date is None or
-            start_date_str < st.session_state.github_data_start_date or
-            end_date_str > st.session_state.github_data_end_date
-        )
-        
-        if need_new_data:
-            with st.spinner('Fetching GitHub data... This may take a few moments.'):
-                github_data, user_info = pull_github_data(
-                    start_date=start_date_str,
-                    end_date=end_date_str
-                )
-                
-                # Update session state
-                st.session_state.github_data = github_data
-                st.session_state.user_info = user_info
-                st.session_state.github_data_start_date = start_date_str
-                st.session_state.github_data_end_date = end_date_str
-                
-                # Show success message
-                st.success('GitHub data successfully loaded!')
-        else:
-            # Use cached data
-            github_data = st.session_state.github_data
-            user_info = st.session_state.user_info
-
         # Use the selected_email to find the employee's data
         if selected_email and selected_email in github_data:
             employee_data = github_data[selected_email]
