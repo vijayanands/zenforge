@@ -21,6 +21,7 @@ from model.sdlc_events import (
     User,
     Team,
     Designation,
+    UserMapping,
 )
 
 # Create an engine for the server connection
@@ -181,6 +182,10 @@ def verify_data_loaded():
         team_count = session.query(Team).count()
         print(f"Teams in database: {team_count}")
         
+        # Check user mappings table
+        mapping_count = session.query(UserMapping).count()
+        print(f"User mappings in database: {mapping_count}")
+        
         if user_count == 0:
             print("Warning: No users found in database!")
         if team_count == 0:
@@ -206,7 +211,7 @@ def load_sample_data_into_timeseries_db():
         db_manager.drop_all_tables()
         
         print("\nInitializing database...")
-        db_manager.init_db()
+        db_manager.init_db()  # This will now create the user_mappings table along with other tables
 
         print("\nGenerating synthetic data...")
         all_data = generate_all_data()

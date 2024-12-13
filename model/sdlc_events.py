@@ -798,3 +798,12 @@ class Team(Base):
     
     name = Column(String, primary_key=True)
     manager_email = Column(String, ForeignKey("sdlc_timeseries.users.email"))
+
+
+class UserMapping(Base):
+    __tablename__ = "user_mappings"
+    __table_args__ = ({"schema": "sdlc_timeseries"})
+    
+    github_username = Column(String, primary_key=True)
+    email = Column(String, ForeignKey("sdlc_timeseries.users.email"))
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -4,12 +4,14 @@ import sys
 from collections import defaultdict
 from datetime import datetime
 from typing import Any, DefaultDict, Dict, List, Optional
+import random
 
 from tools.github.fetch_commit_comments import fetch_commit_comments
 from tools.github.fetch_commits import fetch_commits
 from tools.github.fetch_pr_comments import fetch_pr_comments
 from tools.github.fetch_prs import fetch_pull_requests
 from tools.github.github_client import GitHubAPIClient
+from model.sdlc_events import UserMapping, User, DatabaseManager, connection_string, Base
 
 client = GitHubAPIClient()
 owner = client.get_github_owner()
@@ -196,55 +198,161 @@ def get_github_contributions_by_author(
     }
 
 
+def get_user_mapping(github_username: str, session) -> Optional[str]:
+    """Get mapped user email from the mapping table"""
+    try:
+        session.rollback()  # Reset any failed transaction
+        mapping = session.query(UserMapping).filter_by(github_username=github_username).first()
+        return mapping.email if mapping else None
+    except Exception as e:
+        print(f"Error accessing user mappings: {e}")
+        session.rollback()  # Reset the failed transaction
+        try:
+            # Create the table if it doesn't exist
+            Base.metadata.create_all(session.bind)
+            session.commit()
+        except Exception as create_error:
+            print(f"Error creating table: {create_error}")
+            session.rollback()
+        return None
+
+def create_user_mapping(github_username: str, session) -> str:
+    """Create a new user mapping by randomly assigning to an existing user"""
+    try:
+        session.rollback()  # Reset any failed transaction
+        # Query all users from the timeseries db
+        users = session.query(User).all()
+        if not users:
+            raise ValueError("No users found in the system to map GitHub users")
+        
+        try:
+            # Try to get existing mappings
+            existing_mappings = session.query(UserMapping).all()
+        except Exception:
+            # If table doesn't exist, create it and start with empty mappings
+            Base.metadata.create_all(session.bind)
+            session.commit()
+            existing_mappings = []
+        
+        user_mapping_counts = defaultdict(int)
+        
+        # Count how many GitHub users are mapped to each system user
+        for mapping in existing_mappings:
+            user_mapping_counts[mapping.email] += 1
+        
+        # Find users with the least number of mappings
+        min_mappings = float('inf')
+        candidates = []
+        
+        for user in users:
+            mappings_count = user_mapping_counts[user.email]
+            if mappings_count < min_mappings:
+                min_mappings = mappings_count
+                candidates = [user]
+            elif mappings_count == min_mappings:
+                candidates.append(user)
+        
+        # Randomly select from the candidates with the least mappings
+        selected_user = random.choice(candidates)
+        
+        # Create and save the mapping
+        mapping = UserMapping(github_username=github_username, email=selected_user.email)
+        session.add(mapping)
+        session.commit()
+        
+        print(f"Mapped GitHub user '{github_username}' to system user '{selected_user.email}'")
+        return selected_user.email
+        
+    except Exception as e:
+        print(f"Error creating user mapping: {e}")
+        session.rollback()  # Reset the failed transaction
+        # If anything fails, return a default user
+        default_user = session.query(User).first()
+        if not default_user:
+            raise ValueError("No users available in the system")
+        return default_user.email
+
+def get_or_create_user_mapping(github_username: str, session) -> str:
+    """Get existing mapping or create new one"""
+    try:
+        session.rollback()  # Reset any failed transaction
+        mapped_email = get_user_mapping(github_username, session)
+        if not mapped_email:
+            mapped_email = create_user_mapping(github_username, session)
+        return mapped_email
+    except Exception as e:
+        print(f"Error in user mapping: {e}")
+        session.rollback()  # Reset the failed transaction
+        # Fallback to getting any user from the system
+        default_user = session.query(User).first()
+        if not default_user:
+            raise ValueError("No users available in the system")
+        return default_user.email
+
 def aggregate_github_data(
     prs: List[Dict[str, Any]],
     pr_comments: List[Dict[str, Any]],
     commits: List[Dict[str, Any]],
     commit_comments: List[Dict[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
-    github_data: DefaultDict[str, Dict[str, Any]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    github_data: DefaultDict[str, Dict[str, Any]] = defaultdict(lambda: defaultdict(list))
+    
+    with DatabaseManager(connection_string).get_session() as session:
+        # Process PRs
+        for pr in prs:
+            github_username = pr["user"]["login"]
+            mapped_email = get_or_create_user_mapping(github_username, session)
+            
+            if mapped_email not in user_info:
+                user = session.query(User).filter_by(email=mapped_email).first()
+                user_info[mapped_email] = {"name": user.name if user else None}
+            
+            pr_info = _extract_pr_info(pr)
+            github_data[mapped_email].setdefault("total_pull_requests", 0)
+            github_data[mapped_email]["total_pull_requests"] += 1
+            github_data[mapped_email]["pull_requests"].append(pr_info)
 
-    for pr in prs:
-        author = pr["user"]["login"]
-        if author not in user_info.keys():
-            user_info[author] = {"name": None}
-        pr_info = _extract_pr_info(pr)
-        github_data[author].setdefault("total_pull_requests", 0)
-        github_data[author]["total_pull_requests"] += 1
-        github_data[author]["pull_requests"].append(pr_info)
+        # Process PR comments
+        for pr_comment in pr_comments:
+            github_username = pr_comment["user"]["login"]
+            mapped_email = get_or_create_user_mapping(github_username, session)
+            
+            if mapped_email not in user_info:
+                user = session.query(User).filter_by(email=mapped_email).first()
+                user_info[mapped_email] = {"name": user.name if user else None}
+            
+            pr_comment_info = _extract_pr_comment_info(pr_comment)
+            github_data[mapped_email].setdefault("total_pull_request_comments", 0)
+            github_data[mapped_email]["total_pull_request_comments"] += 1
+            github_data[mapped_email]["pull_request_comments"].append(pr_comment_info)
 
-    for pr_comment in pr_comments:
-        author = pr_comment["user"]["login"]
-        if author not in user_info.keys():
-            user_info[author] = {"name": None}
-        pr_comment_info = _extract_pr_comment_info(pr_comment)
-        github_data[author].setdefault("total_pull_request_comments", 0)
-        github_data[author]["total_pull_request_comments"] += 1
-        github_data[author]["pull_request_comments"].append(pr_comment_info)
+        # Process commits
+        for commit in commits:
+            github_username = commit["commit"]["author"]["email"]
+            mapped_email = get_or_create_user_mapping(github_username, session)
+            
+            if mapped_email not in user_info:
+                user = session.query(User).filter_by(email=mapped_email).first()
+                user_info[mapped_email] = {"name": user.name if user else None}
+            
+            commit_info = _extract_commit_info(commit)
+            github_data[mapped_email].setdefault("total_commits", 0)
+            github_data[mapped_email]["total_commits"] += 1
+            github_data[mapped_email]["commits"].append(commit_info)
 
-    for commit in commits:
-        author = commit["commit"]["author"]["email"]
-        name = commit["commit"]["author"]["name"]
-        if author not in user_info.keys():
-            user_info[author] = {"name": name}
-        else:
-            user_info[author]["name"] = name
-        commit_info = _extract_commit_info(commit)
-        github_data[author].setdefault("total_commits", 0)
-        github_data[author]["total_commits"] += 1
-        github_data[author]["commits"].append(commit_info)
-
-    for commit_comment in commit_comments:
-        author = commit_comment["user"]["login"]
-        if author not in user_info.keys():
-            user_info[author] = {"name": None}
-        commit_comment_info = _extract_commit_comment_info(commit_comment)
-        github_data[author].setdefault("total_commit_comments", 0)
-        github_data[author]["total_commit_comments"] += 1
-        github_data[author]["commit_comments"].append(commit_comment_info)
-
+        # Process commit comments
+        for commit_comment in commit_comments:
+            github_username = commit_comment["user"]["login"]
+            mapped_email = get_or_create_user_mapping(github_username, session)
+            
+            if mapped_email not in user_info:
+                user = session.query(User).filter_by(email=mapped_email).first()
+                user_info[mapped_email] = {"name": user.name if user else None}
+            
+            commit_comment_info = _extract_commit_comment_info(commit_comment)
+            github_data[mapped_email].setdefault("total_commit_comments", 0)
+            github_data[mapped_email]["total_commit_comments"] += 1
+            github_data[mapped_email]["commit_comments"].append(commit_comment_info)
 
     return dict(github_data)
 
