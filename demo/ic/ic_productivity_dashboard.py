@@ -392,6 +392,7 @@ def ic_productivity_dashboard():
                     "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
                     "peer_reviews": employee_data.get("total_pull_requests", 0),
                     "git_commits": employee_data.get("total_commits", 0),
+                    "total_prs": employee_data.get("total_pull_requests", 0),  # Added total PRs
                     "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
                     "bugs_fixed": {  # Keep random for now
                         "low": random.randint(5, 15),
@@ -406,6 +407,7 @@ def ic_productivity_dashboard():
                     "quality_score": round(random.uniform(1, 10), 1),
                     "peer_reviews": random.randint(5, 20),
                     "git_commits": random.randint(20, 100),
+                    "total_prs": random.randint(5, 15),  # Added total PRs
                     "bug_fix_rate": round(random.uniform(0.5, 5), 1),
                     "bugs_fixed": {
                         "low": random.randint(5, 15),
@@ -416,7 +418,7 @@ def ic_productivity_dashboard():
                 }
 
             # Display metrics
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)  # Changed to 5 columns
             with col1:
                 create_styled_metric(
                     "Code Quality", f"{code_data['quality_score']}/10", "🏆"
@@ -426,6 +428,8 @@ def ic_productivity_dashboard():
             with col3:
                 create_styled_metric("Code Commits", code_data["git_commits"], "🔢")
             with col4:
+                create_styled_metric("Total PRs", code_data["total_prs"], "🔄")  # Added PR metric
+            with col5:
                 create_styled_metric(
                     "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
                 )
