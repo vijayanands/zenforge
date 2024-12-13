@@ -1,8 +1,18 @@
+import streamlit as st
+# Set page config first, before any other imports or st commands
+st.set_page_config(page_title="Pathforge ZenForge", layout="wide")
+
 import os
 import sys
 from pathlib import Path
-
+from dotenv import load_dotenv
 from demo.metrics.engineering_metrics_dashboard import engineering_metrics_dashboard
+from demo.first_line_manager.dashboard import show_first_line_manager_dashboard
+from demo.ic.dashboard import show_ic_dashboard
+from demo.second_line_manager_or_director.dashboard import show_director_dashboard
+from demo.ui.title_bar import set_title_bar
+from model.load_events_db import load_sample_data_into_timeseries_db
+from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
@@ -14,16 +24,6 @@ sys.path.extend([
     str(PROJECT_ROOT / "demo"),
     str(PROJECT_ROOT / "model")
 ])
-
-import streamlit as st
-from dotenv import load_dotenv
-
-from demo.first_line_manager.dashboard import show_first_line_manager_dashboard
-from demo.ic.dashboard import show_ic_dashboard
-from demo.second_line_manager_or_director.dashboard import show_director_dashboard
-from demo.ui.title_bar import set_title_bar
-from model.load_events_db import load_sample_data_into_timeseries_db
-from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
 
 load_dotenv()
 
@@ -78,7 +78,28 @@ def zenforge_dashboard():
     # Initialize synthetic data first
     initialize_synthetic_data()
 
-    st.set_page_config(page_title=PAGE_TITLE, layout="wide")
+    # Add custom CSS to ensure consistent button styling
+    st.markdown("""
+        <style>
+        /* Remove background color from all action buttons */
+        .stButton button {
+            background-color: transparent;
+            border: 1px solid #ccc;
+            color: inherit;
+        }
+        
+        /* Hover effect */
+        .stButton button:hover {
+            border-color: #4e8cff;
+            color: #4e8cff;
+        }
+        
+        /* Active state */
+        .stButton button:active {
+            background-color: rgba(78, 140, 255, 0.1);
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
     # Add the title bar
     logo_path = "demo/ui/pathforge-logo-final.png"
