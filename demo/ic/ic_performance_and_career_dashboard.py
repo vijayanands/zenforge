@@ -75,78 +75,34 @@ def display_goal_with_status(goal_data):
 def ic_perf_and_career_dashboard():
     st.title("Performance Dashboard")
 
-    # Time Range Selection Section
-    st.header("Time Range")
-    col1, col2 = st.columns(2)
-    with col1:
-        start_date = st.date_input(
-            "Start Date",
-            value=datetime.today() - timedelta(days=30),
-            max_value=datetime.today(),
-        )
-    with col2:
-        end_date = st.date_input(
-            "End Date",
-            value=datetime.today(),
-            min_value=start_date,
-            max_value=datetime.today(),
-        )
+    # Get GitHub data from session state
+    github_data = st.session_state.get('github_data')
+    user_info = st.session_state.get('user_info')
 
-    # Display Dashboard button
-    if st.button("Display Dashboard"):
-        # Convert dates to string format for GitHub API
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
-
-        # Initialize session state
-        if 'perf_github_data' not in st.session_state:
-            st.session_state.perf_github_data = None
-        if 'perf_user_info' not in st.session_state:
-            st.session_state.perf_user_info = None
-        if 'perf_selected_employee' not in st.session_state:
-            st.session_state.perf_selected_employee = None
-        if 'show_perf_dashboard' not in st.session_state:
-            st.session_state.show_perf_dashboard = False
-
-        # Fetch data if needed
-        with st.spinner('Loading employee data... Please wait.'):
-            github_data, user_info = pull_github_data(
-                start_date=start_date_str,
-                end_date=end_date_str
-            )
-            
-            # Update session state
-            st.session_state.perf_github_data = github_data
-            st.session_state.perf_user_info = user_info
-            st.session_state.show_perf_dashboard = True
-            
-            # Show success message and rerun
-            st.success('Data successfully loaded!')
-            st.rerun()
-
-    # Show dashboard only if data is loaded
-    if st.session_state.get('show_perf_dashboard', False):
-        st.markdown("---")  # Add a separator
-        
-        # Use cached data
-        user_info = st.session_state.perf_user_info
-
+    if github_data and user_info:
         # Get list of employees
-        employees = generate_employee_list(user_info) if user_info else []
-        employee_names = [name for name, _ in employees] if employees else ["No data available"]
+        employees = generate_employee_list(user_info)
+        
+        # Create a list of names for the selectbox, with default option
+        employee_names = ["Select an employee"] + [name for name, _ in employees] if employees else ["No data available"]
         name_to_email = dict(employees) if employees else {}
         
-        # Employee selection
-        index = 0
-        if st.session_state.perf_selected_employee in employee_names:
-            index = employee_names.index(st.session_state.perf_selected_employee)
+        # Use session state to maintain selection across reruns
+        if 'perf_selected_employee' not in st.session_state:
+            st.session_state.perf_selected_employee = "Select an employee"
+            
+        # Find the index of the selected employee
+        try:
+            selected_index = employee_names.index(st.session_state.perf_selected_employee)
+        except ValueError:
+            selected_index = 0  # Default to first option if not found
         
-        selected_name = st.selectbox("Select Employee", employee_names, index=index)
+        selected_name = st.selectbox("Select Employee", employee_names, index=selected_index)
         st.session_state.perf_selected_employee = selected_name
         selected_email = name_to_email.get(selected_name)
 
         # Display employee info
-        if selected_email:
+        if selected_email and selected_name != "Select an employee":
             col1, col2 = st.columns(2)
             with col1:
                 st.info(f"**Employee:** {selected_name}")
@@ -176,6 +132,8 @@ def ic_perf_and_career_dashboard():
             with tabs[1]:
                 st.write("Performance history will be displayed here")
                 # Add performance history visualization here
+    else:
+        st.info("Please select a time range and apply it using the sidebar to view the performance dashboard.")
 
 if __name__ == "__main__":
     ic_perf_and_career_dashboard() 
