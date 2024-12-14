@@ -632,13 +632,18 @@ class DatabaseManager:
             connection.execute(text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE;"))
             connection.commit()
             
-            # Recreate schema
-            connection.execute(text("CREATE SCHEMA sdlc_timeseries;"))
-            connection.commit()
-        
-        # Recreate all tables and types
-        Base.metadata.schema = "sdlc_timeseries"
-        Base.metadata.create_all(self.engine)
+            try:
+                # Recreate schema
+                connection.execute(text("CREATE SCHEMA sdlc_timeseries;"))
+                connection.commit()
+            except Exception as e:
+                # If schema already exists, just continue
+                if "already exists" not in str(e):
+                    raise
+            
+            # Recreate all tables and types
+            Base.metadata.schema = "sdlc_timeseries"
+            Base.metadata.create_all(self.engine)
 
 
 # Define your database connection details

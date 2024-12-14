@@ -1143,10 +1143,11 @@ def generate_projects():
 
 
 def generate_cicd_events(pull_requests: List[Dict[str, Any]], project_ids: List[str]) -> List[Dict[str, Any]]:
-    """Generate CICD events for pull requests"""
+    """Generate CICD events for pull requests and tags with proper environment progression"""
+    print("Generating CICD events...")
     cicd_events = []
     env_sequence = [Environment.DEV, Environment.QA, Environment.STAGING, Environment.PRODUCTION]
-
+    
     # Process each PR that was merged
     for pr in pull_requests:
         if pr["status"] != PRStatus.MERGED.value:
@@ -1155,42 +1156,111 @@ def generate_cicd_events(pull_requests: List[Dict[str, Any]], project_ids: List[
         # Convert string timestamp to datetime object
         base_timestamp = datetime.strptime(pr["merged_at"], "%Y-%m-%dT%H:%M:%SZ")
         timestamp = base_timestamp
-
-        # Generate builds for each environment
+        
+        # Determine if this build will be successful through all environments (80% chance)
+        is_successful_chain = random.random() < 0.8
+        
+        # Determine if this build will have a bottleneck (20% chance)
+        has_bottleneck = random.random() < 0.2
+        bottleneck_env = random.choice(env_sequence) if has_bottleneck else None
+        
+        # Track if we should continue to higher environments
+        continue_pipeline = True
+        
         for env in env_sequence:
+            if not continue_pipeline:
+                break
+                
             build_id = f"build-{uuid.uuid4().hex[:8]}"
+            
+            # Determine build status based on success chain
+            if is_successful_chain:
+                status = BuildStatus.SUCCESS
+            else:
+                # If not a successful chain, 80% chance of success for each env
+                status = BuildStatus.SUCCESS if random.random() < 0.8 else BuildStatus.FAILURE
+            
+            # If build fails, don't continue to higher environments
+            if status == BuildStatus.FAILURE:
+                continue_pipeline = False
+            
+            # Determine build duration
+            if has_bottleneck and env == bottleneck_env:
+                # Create a significant bottleneck
+                duration_seconds = random.randint(2400, 3600)  # 40-60 minutes
+            else:
+                duration_seconds = random.randint(200, 1200)  # 3-20 minutes
 
             cicd_event = {
                 "event_id": pr["id"],
                 "project_id": pr["project_id"],
-                "timestamp": timestamp,  # Use datetime object directly
+                "timestamp": timestamp,
                 "environment": env.value,
                 "event_type": "build",
                 "build_id": build_id,
-                "status": random.choice([status for status in BuildStatus]).value,
-                "duration_seconds": random.randint(300, 1800),  # 5-30 minutes
+                "status": status.value,
+                "duration_seconds": duration_seconds,
                 "branch": pr["branch_from"],
                 "tag": None,
                 "mode": BuildMode.AUTOMATIC.value,
-                "release_version": f"v{random.randint(1, 9)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
+                "release_version": f"v{random.randint(1, 9)}.{random.randint(0, 9)}.{random.randint(0, 9)}"
             }
-
+            
             cicd_events.append(cicd_event)
-            # Add timedelta to datetime object
-            timestamp = timestamp + timedelta(minutes=random.randint(5, 15))
+            # Add timedelta based on duration
+            timestamp = timestamp + timedelta(seconds=duration_seconds + random.randint(60, 300))  # Add 1-5 minutes between builds
+    
+    # Generate tag-based builds (about 20% of PR count)
+    num_tag_builds = max(1, len(pull_requests) // 5)
+    for i in range(num_tag_builds):
+        tag_name = f"tag-release-{random.randint(1, 100)}"
+        base_timestamp = datetime.now() - timedelta(days=random.randint(1, 30))
+        timestamp = base_timestamp
+        build_id = f"tag-build-{uuid.uuid4().hex[:8]}"
+        
+        # Tag builds always succeed in all environments
+        for env in env_sequence:
+            # Determine if this build will have a bottleneck (20% chance)
+            has_bottleneck = random.random() < 0.2
+            
+            if has_bottleneck and env == random.choice(env_sequence):
+                duration_seconds = random.randint(2400, 3600)  # 40-60 minutes
+            else:
+                duration_seconds = random.randint(200, 1200)  # 3-20 minutes
+                
+            cicd_event = {
+                "event_id": f"tag-{i}",
+                "project_id": random.choice(project_ids),
+                "timestamp": timestamp,
+                "environment": env.value,
+                "event_type": "build",
+                "build_id": build_id,
+                "status": BuildStatus.SUCCESS.value,  # Tag builds always succeed
+                "duration_seconds": duration_seconds,
+                "branch": "main",
+                "tag": tag_name,
+                "mode": BuildMode.AUTOMATIC.value,
+                "release_version": tag_name
+            }
+            
+            cicd_events.append(cicd_event)
+            timestamp = timestamp + timedelta(seconds=duration_seconds + random.randint(60, 300))
 
     # Sort all events by timestamp
     cicd_events.sort(key=lambda x: x["timestamp"])
 
     # Print statistics
-    automatic_builds = sum(1 for e in cicd_events if e["mode"] == BuildMode.AUTOMATIC.value)
+    total_builds = len(cicd_events)
     successful_builds = sum(1 for e in cicd_events if e["status"] == BuildStatus.SUCCESS.value)
     failed_builds = sum(1 for e in cicd_events if e["status"] == BuildStatus.FAILURE.value)
+    tag_builds = sum(1 for e in cicd_events if e["tag"] is not None)
+    bottleneck_builds = sum(1 for e in cicd_events if e["duration_seconds"] > 2400)
 
-    print(f"Generated {len(cicd_events)} CICD events")
-    print(f"- Automatic builds: {automatic_builds}")
-    print(f"- Successful builds: {successful_builds}")
-    print(f"- Failed builds: {failed_builds}")
+    print(f"Generated {total_builds} CICD events:")
+    print(f"- Successful builds: {successful_builds} ({successful_builds/total_builds*100:.1f}%)")
+    print(f"- Failed builds: {failed_builds} ({failed_builds/total_builds*100:.1f}%)")
+    print(f"- Tag-based builds: {tag_builds}")
+    print(f"- Builds with bottlenecks: {bottleneck_builds}")
 
     return cicd_events
 
@@ -1300,13 +1370,17 @@ def generate_bugs_for_builds(cicd_events: List[Dict[str, Any]]) -> List[Dict[str
     """Generate bugs for successful CICD builds"""
     generator = BugDataGenerator()
     all_bugs = []
+    bug_counter = 1  # Add a counter for unique bug IDs
 
     for event in cicd_events:
         if event["status"] != BuildStatus.SUCCESS.value:
             continue
 
-        # Determine number of bugs based on branch
-        if event["branch"] == "main":
+        # Determine number of bugs based on branch and tag
+        if event["tag"] is not None:
+            # Fewer bugs for tag-based builds
+            bug_count = random.randint(0, 1)
+        elif event["branch"] == "main":
             # Fewer bugs for main branch
             bug_count = random.randint(0, 2)
         else:
@@ -1314,8 +1388,73 @@ def generate_bugs_for_builds(cicd_events: List[Dict[str, Any]]) -> List[Dict[str
             bug_count = random.randint(1, 4)
 
         if bug_count > 0:
-            bugs = generator.generate_bug_data(event, bug_count)
-            all_bugs.extend(bugs)
+            created_date = event["timestamp"] + timedelta(hours=random.randint(1, 24))
+            
+            for _ in range(bug_count):
+                # Generate a unique bug ID using the counter
+                bug_id = f"BUG-{event['build_id']}-{bug_counter}"
+                bug_counter += 1
+
+                # Determine if bug will be resolved/closed
+                will_resolve = random.random() < 0.7  # 70% chance of resolution
+                resolved_date = None
+                close_date = None
+                resolution_time_hours = None
+
+                if will_resolve:
+                    # Calculate resolution time
+                    min_resolution_hours = 24
+                    max_resolution_hours = 96
+                    actual_resolution_hours = random.randint(min_resolution_hours, max_resolution_hours)
+                    resolved_date = created_date + timedelta(hours=actual_resolution_hours)
+                    
+                    # Calculate actual working hours (20-80% of total time)
+                    max_possible_hours = (resolved_date - created_date).total_seconds() / 3600
+                    resolution_time_hours = round(random.uniform(0.2 * max_possible_hours, 0.8 * max_possible_hours), 1)
+
+                    will_close = random.random() < 0.8  # 80% chance of closure if resolved
+                    if will_close:
+                        close_date = resolved_date + timedelta(hours=random.randint(4, 24))
+                        status = BugStatus.CLOSED
+                    else:
+                        status = BugStatus.FIXED
+                else:
+                    status = random.choice([BugStatus.OPEN, BugStatus.IN_PROGRESS, BugStatus.BLOCKED])
+
+                bug_data = {
+                    "id": bug_id,
+                    "project_id": event["project_id"],
+                    "bug_type": random.choice(list(BugType)),
+                    "impact_area": random.choice(list(ImpactArea)),
+                    "severity": "P0",
+                    "title": random.choice(generator.bug_titles).format(
+                        area=random.choice(generator.areas)
+                    ),
+                    "status": status,
+                    "created_date": created_date,
+                    "resolved_date": resolved_date,
+                    "close_date": close_date,
+                    "resolution_time_hours": resolution_time_hours,
+                    "assigned_to": f"dev{random.randint(1, 5)}@example.com",
+                    "environment_found": event["environment"],
+                    "build_id": event["build_id"],
+                    "release_id": event["release_version"] if event["tag"] else event["branch"]
+                }
+                all_bugs.append(bug_data)
+
+    # Print bug statistics with corrected f-string syntax
+    total_bugs = len(all_bugs)
+    if total_bugs > 0:
+        resolved_bugs = sum(1 for bug in all_bugs if bug["resolved_date"] is not None)
+        closed_bugs = sum(1 for bug in all_bugs if bug["close_date"] is not None)
+        resolved_percentage = (resolved_bugs / total_bugs) * 100
+        closed_percentage = (closed_bugs / total_bugs) * 100
+        
+        print(f"\nGenerated {total_bugs} bugs:")
+        print(f"- Resolved bugs: {resolved_bugs} ({resolved_percentage:.1f}%)")
+        print(f"- Closed bugs: {closed_bugs} ({closed_percentage:.1f}%)")
+    else:
+        print("\nNo bugs generated")
 
     return all_bugs
 
