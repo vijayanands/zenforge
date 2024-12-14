@@ -14,6 +14,7 @@ from demo.ui.title_bar import set_title_bar
 from model.load_events_db import load_sample_data_into_timeseries_db
 from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
 from datetime import datetime, timedelta
+from tools.github.github import pull_github_data
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
@@ -144,11 +145,23 @@ def zenforge_dashboard():
 
         # Apply button for time range
         if st.button("Apply Time Range", key="apply_time_range"):
+            # Store time range in session state
             st.session_state.selected_time_range = {
                 'start_date': start_date,
                 'end_date': end_date
             }
-            st.rerun()
+            
+            # Fetch GitHub data with selected time range
+            with st.spinner('Fetching GitHub data... This may take a few moments.'):
+                github_data, user_info = pull_github_data(
+                    start_date=start_date.strftime("%Y-%m-%d"),
+                    end_date=end_date.strftime("%Y-%m-%d")
+                )
+                
+                # Store in session state
+                st.session_state.github_data = github_data
+                st.session_state.user_info = user_info
+                st.rerun()
 
         if main_option == "Productivity and Performance":
             # Section for persona selection

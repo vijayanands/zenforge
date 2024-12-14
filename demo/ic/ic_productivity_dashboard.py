@@ -238,97 +238,24 @@ def ic_productivity_dashboard():
 
     st.title("Employee Productivity Dashboard")
 
-    # Time Range Selection Section
-    st.header("Time Range")
-    col1, col2 = st.columns(2)
-    with col1:
-        start_date = st.date_input(
-            "Start Date",
-            value=datetime.today() - timedelta(days=30),
-            max_value=datetime.today(),
-        )
-    with col2:
-        end_date = st.date_input(
-            "End Date",
-            value=datetime.today(),
-            min_value=start_date,
-            max_value=datetime.today(),
-        )
+    # Get GitHub data from session state
+    github_data = st.session_state.get('github_data')
+    user_info = st.session_state.get('user_info')
 
-    # Display Dashboard button
-    if st.button("Display Dashboard"):
-        # Convert dates to string format for GitHub API
-        start_date_str = start_date.strftime("%Y-%m-%d")
-        end_date_str = end_date.strftime("%Y-%m-%d")
-
-        # Initialize session state for GitHub data if not already done
-        if 'github_data' not in st.session_state:
-            st.session_state.github_data = None
-        if 'user_info' not in st.session_state:
-            st.session_state.user_info = None
-        if 'github_data_start_date' not in st.session_state:
-            st.session_state.github_data_start_date = None
-        if 'github_data_end_date' not in st.session_state:
-            st.session_state.github_data_end_date = None
-        if 'selected_employee' not in st.session_state:
-            st.session_state.selected_employee = None
-        if 'show_dashboard' not in st.session_state:
-            st.session_state.show_dashboard = False
-
-        # Check if we need to fetch new data
-        need_new_data = (
-            st.session_state.github_data is None or
-            st.session_state.user_info is None or
-            st.session_state.github_data_start_date != start_date_str or
-            st.session_state.github_data_end_date != end_date_str
-        )
-        
-        if need_new_data:
-            with st.spinner('Fetching GitHub data... This may take a few moments.'):
-                github_data, user_info = pull_github_data(
-                    start_date=start_date_str,
-                    end_date=end_date_str
-                )
-                
-                # Update session state
-                st.session_state.github_data = github_data
-                st.session_state.user_info = user_info
-                st.session_state.github_data_start_date = start_date_str
-                st.session_state.github_data_end_date = end_date_str
-                st.session_state.selected_employee = None
-                st.session_state.show_dashboard = True
-                
-                # Show success message and rerun
-                st.success('GitHub data successfully loaded!')
-                st.rerun()
-        else:
-            # Just show the dashboard with existing data
-            st.session_state.show_dashboard = True
-            st.rerun()
-
-    # Show dashboard only if data is loaded and show_dashboard is True
-    if st.session_state.get('show_dashboard', False):
-        st.markdown("---")  # Add a separator
-        
-        # Use cached data
-        github_data = st.session_state.github_data
-        user_info = st.session_state.user_info
-
-        # Get list of employees from GitHub data
-        employees = generate_employee_list(user_info) if user_info else []
+    if github_data and user_info:
+        # Get list of employees
+        employees = generate_employee_list(user_info)
         
         # Create a list of names for the selectbox, with default option
         employee_names = ["Select an employee"] + [name for name, _ in employees] if employees else ["No data available"]
-        
-        # Create a dict to map names to emails
         name_to_email = dict(employees) if employees else {}
         
         # Use session state to maintain selection across reruns
-        index = 0
-        if st.session_state.selected_employee in employee_names:
-            index = employee_names.index(st.session_state.selected_employee)
+        if 'selected_employee' not in st.session_state:
+            st.session_state.selected_employee = "Select an employee"
         
-        selected_name = st.selectbox("Select Employee", employee_names, index=index)
+        selected_name = st.selectbox("Select Employee", employee_names, 
+                                   index=employee_names.index(st.session_state.selected_employee))
         st.session_state.selected_employee = selected_name
         selected_email = name_to_email.get(selected_name)
 
