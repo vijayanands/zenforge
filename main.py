@@ -161,133 +161,138 @@ def zenforge_dashboard():
                 # Store in session state
                 st.session_state.github_data = github_data
                 st.session_state.user_info = user_info
+                st.session_state.show_navigation = True  # Flag to show navigation
                 st.rerun()
 
+        # Only show persona selection and navigation after time range is applied
+        if st.session_state.get('show_navigation', False):
+            if main_option == "Productivity and Performance":
+                st.markdown("---")  # Add separator
+                # Section for persona selection
+                persona = st.selectbox(
+                    PERSONA_SELECTION_LABEL,
+                    PERSONA_OPTIONS,
+                    index=DEFAULT_PERSONA_INDEX,
+                )
+
+                # Section for persona-based navigation
+                nav_options = PERSONA_NAVIGATION.get(persona, [])
+                nav_options.append("Engineering Metrics")
+                nav_option = st.radio("Persona Navigation", nav_options)
+                
+                # Add action buttons section if Productivity is selected
+                if nav_option == "Productivity":
+                    st.markdown("---")  # Add a separator
+                    st.markdown("### Actions")
+                    if st.button("Create Self Appraisal"):
+                        st.session_state.show_self_appraisal = True
+                    if st.button("Create Weekly Report"):
+                        st.session_state.show_weekly_report = True
+
+    # Main content area - only show if navigation is enabled
+    if st.session_state.get('show_navigation', False):
         if main_option == "Productivity and Performance":
-            # Section for persona selection
-            persona = st.selectbox(
-                PERSONA_SELECTION_LABEL,
-                PERSONA_OPTIONS,
-                index=DEFAULT_PERSONA_INDEX,
-            )
-
-            # Section for persona-based navigation
-            nav_options = PERSONA_NAVIGATION.get(persona, [])
-            nav_options.append("Engineering Metrics")  # Add Engineering Metrics to navigation
-            nav_option = st.radio("Persona Navigation", nav_options)
-            
-            # Add action buttons section if Productivity is selected
-            if nav_option == "Productivity":
-                st.markdown("---")  # Add a separator
-                st.markdown("### Actions")
-                if st.button("Create Self Appraisal"):
-                    st.session_state.show_self_appraisal = True
-                if st.button("Create Weekly Report"):
-                    st.session_state.show_weekly_report = True
-
-    # Main content area
-    if main_option == "Productivity and Performance":
-        # Display appropriate dashboard based on persona and navigation option
-        if nav_option:
-            if nav_option == "Engineering Metrics":
-                engineering_metrics_dashboard()
-            elif persona == PERSONA_OPTIONS[0]:  # Individual Contributor
-                show_ic_dashboard(nav_option)
-            elif persona == PERSONA_OPTIONS[1]:  # First Line Manager
-                show_first_line_manager_dashboard(nav_option)
-            elif persona == PERSONA_OPTIONS[2]:  # Second Line Manager
-                show_director_dashboard(nav_option)
-            
-            # Handle action button states
-            if st.session_state.get("show_self_appraisal", False):
-                with st.container():
-                    st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
+            # Display appropriate dashboard based on persona and navigation option
+            if nav_option:
+                if nav_option == "Engineering Metrics":
+                    engineering_metrics_dashboard()
+                elif persona == PERSONA_OPTIONS[0]:  # Individual Contributor
+                    show_ic_dashboard(nav_option)
+                elif persona == PERSONA_OPTIONS[1]:  # First Line Manager
+                    show_first_line_manager_dashboard(nav_option)
+                elif persona == PERSONA_OPTIONS[2]:  # Second Line Manager
+                    show_director_dashboard(nav_option)
+                
+                # Handle action button states
+                if st.session_state.get("show_self_appraisal", False):
                     with st.container():
-                        st.markdown('<div class="modal-container">', unsafe_allow_html=True)
-                        st.subheader("Self Appraisal")
-                        
-                        # Initialize session state for appraisal flow
-                        if 'appraisal_step' not in st.session_state:
-                            st.session_state.appraisal_step = 'select_employee'
-                        if 'selected_appraisal_employee' not in st.session_state:
-                            st.session_state.selected_appraisal_employee = None
-
-                        if st.session_state.appraisal_step == 'select_employee':
-                            # Employee selection step
-                            employees = generate_employee_list(st.session_state.get('user_info', {}))
-                            employee_names = [name for name, _ in employees] if employees else ["No data available"]
-                            selected_name = st.selectbox("Select Employee", employee_names)
+                        st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
+                        with st.container():
+                            st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+                            st.subheader("Self Appraisal")
                             
-                            if st.button("Create Appraisal"):
-                                st.session_state.selected_appraisal_employee = selected_name
-                                st.session_state.appraisal_step = 'show_dashboard'
-                                st.rerun()
-
-                        elif st.session_state.appraisal_step == 'show_dashboard':
-                            # Dashboard view
-                            st.title(f"Employee Appraisal for {st.session_state.selected_appraisal_employee}")
-                            st.info("Appraisal functionality not yet completed")
-                            
-                            if st.button("Back to Selection"):
+                            # Initialize session state for appraisal flow
+                            if 'appraisal_step' not in st.session_state:
                                 st.session_state.appraisal_step = 'select_employee'
+                            if 'selected_appraisal_employee' not in st.session_state:
+                                st.session_state.selected_appraisal_employee = None
+
+                            if st.session_state.appraisal_step == 'select_employee':
+                                # Employee selection step
+                                employees = generate_employee_list(st.session_state.get('user_info', {}))
+                                employee_names = [name for name, _ in employees] if employees else ["No data available"]
+                                selected_name = st.selectbox("Select Employee", employee_names)
+                                
+                                if st.button("Create Appraisal"):
+                                    st.session_state.selected_appraisal_employee = selected_name
+                                    st.session_state.appraisal_step = 'show_dashboard'
+                                    st.rerun()
+
+                            elif st.session_state.appraisal_step == 'show_dashboard':
+                                # Dashboard view
+                                st.title(f"Employee Appraisal for {st.session_state.selected_appraisal_employee}")
+                                st.info("Appraisal functionality not yet completed")
+                                
+                                if st.button("Back to Selection"):
+                                    st.session_state.appraisal_step = 'select_employee'
+                                    st.rerun()
+
+                            # Close button
+                            if st.button("Close", key="close_appraisal"):
+                                st.session_state.show_self_appraisal = False
+                                st.session_state.appraisal_step = 'select_employee'
+                                st.session_state.selected_appraisal_employee = None
                                 st.rerun()
+                            
+                            st.markdown('</div>', unsafe_allow_html=True)
 
-                        # Close button
-                        if st.button("Close", key="close_appraisal"):
-                            st.session_state.show_self_appraisal = False
-                            st.session_state.appraisal_step = 'select_employee'
-                            st.session_state.selected_appraisal_employee = None
-                            st.rerun()
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-            if st.session_state.get("show_weekly_report", False):
-                with st.container():
-                    st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
+                if st.session_state.get("show_weekly_report", False):
                     with st.container():
-                        st.markdown('<div class="modal-container">', unsafe_allow_html=True)
-                        st.subheader("Weekly Report")
-                        
-                        # Initialize session state for report flow
-                        if 'report_step' not in st.session_state:
-                            st.session_state.report_step = 'select_employee'
-                        if 'selected_report_employee' not in st.session_state:
-                            st.session_state.selected_report_employee = None
-
-                        if st.session_state.report_step == 'select_employee':
-                            # Employee selection step
-                            employees = generate_employee_list(st.session_state.get('user_info', {}))
-                            employee_names = [name for name, _ in employees] if employees else ["No data available"]
-                            selected_name = st.selectbox("Select Employee", employee_names)
+                        st.markdown('<div class="modal-overlay"></div>', unsafe_allow_html=True)
+                        with st.container():
+                            st.markdown('<div class="modal-container">', unsafe_allow_html=True)
+                            st.subheader("Weekly Report")
                             
-                            if st.button("Create Report"):
-                                st.session_state.selected_report_employee = selected_name
-                                st.session_state.report_step = 'show_dashboard'
-                                st.rerun()
-
-                        elif st.session_state.report_step == 'show_dashboard':
-                            # Dashboard view
-                            st.title(f"Weekly Report for {st.session_state.selected_report_employee}")
-                            st.info("Weekly report functionality not yet completed")
-                            
-                            if st.button("Back to Selection"):
+                            # Initialize session state for report flow
+                            if 'report_step' not in st.session_state:
                                 st.session_state.report_step = 'select_employee'
-                                st.rerun()
+                            if 'selected_report_employee' not in st.session_state:
+                                st.session_state.selected_report_employee = None
 
-                        # Close button
-                        if st.button("Close", key="close_report"):
-                            st.session_state.show_weekly_report = False
-                            st.session_state.report_step = 'select_employee'
-                            st.session_state.selected_report_employee = None
-                            st.rerun()
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
+                            if st.session_state.report_step == 'select_employee':
+                                # Employee selection step
+                                employees = generate_employee_list(st.session_state.get('user_info', {}))
+                                employee_names = [name for name, _ in employees] if employees else ["No data available"]
+                                selected_name = st.selectbox("Select Employee", employee_names)
+                                
+                                if st.button("Create Report"):
+                                    st.session_state.selected_report_employee = selected_name
+                                    st.session_state.report_step = 'show_dashboard'
+                                    st.rerun()
+
+                            elif st.session_state.report_step == 'show_dashboard':
+                                # Dashboard view
+                                st.title(f"Weekly Report for {st.session_state.selected_report_employee}")
+                                st.info("Weekly report functionality not yet completed")
+                                
+                                if st.button("Back to Selection"):
+                                    st.session_state.report_step = 'select_employee'
+                                    st.rerun()
+
+                            # Close button
+                            if st.button("Close", key="close_report"):
+                                st.session_state.show_weekly_report = False
+                                st.session_state.report_step = 'select_employee'
+                                st.session_state.selected_report_employee = None
+                                st.rerun()
+                            
+                            st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.write(UNIMPLEMENTED_MESSAGE.format(persona))
+        elif main_option == "Development Cycle Metrics":
+            display_development_cycle_metrics()
         else:
-            st.write(UNIMPLEMENTED_MESSAGE.format(persona))
-    elif main_option == "Development Cycle Metrics":
-        display_development_cycle_metrics()
-    else:
-        st.write("Invalid Option")
+            st.write("Invalid Option")
 
 if __name__ == "__main__":
     zenforge_dashboard()
