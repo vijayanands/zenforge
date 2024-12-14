@@ -12,7 +12,12 @@ from dotenv import load_dotenv  # Import load_dotenv
 load_dotenv()
 
 # Set DEBUG_MODE based on the environment variable
-DEBUG_MODE = os.getenv('DEBUG_MODE') is not None
+DEBUG_MODE = os.getenv("LOAD_SYNTHETIC_DATA", "false").lower() in [
+    "true",
+    "1",
+    "yes",
+    "t",
+]
 
 def get_database_connection():
     try:
