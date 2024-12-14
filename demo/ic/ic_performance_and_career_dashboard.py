@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from demo.ui.style import create_styled_tabs
 from tools.github.github import pull_github_data
 from model.sdlc_events import User, DatabaseManager, connection_string
+import random
 
 def generate_employee_list(user_info):
     """Get list of employees from user_info with their emails"""
@@ -25,21 +26,74 @@ def get_employee_designation(email: str, user_info: dict) -> str:
     return "Unknown"
 
 def generate_goals_for_employee(email: str) -> dict:
-    """Generate or fetch goals for the specified employee"""
-    # This is a placeholder - you would typically fetch this from a database
+    """Generate or fetch goals for the specified employee with random statuses"""
+    # Use email as seed for random to get consistent results for same employee
+    random.seed(hash(email))
+    
+    status_options = ["Completed", "On Track", "In Progress", "At Risk", "Not Started"]
+    
+    technical_goals = [
+        {
+            "goal": "Complete Advanced Python Certification",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Lead 2 major feature implementations",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Improve code coverage to 85%",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Mentor 2 junior developers",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        }
+    ]
+
+    professional_goals = [
+        {
+            "goal": "Improve presentation skills",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Take leadership training",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Contribute to 3 cross-team projects",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Write 5 technical blog posts",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        }
+    ]
+
+    # Ensure completion percentage matches status
+    for goal in technical_goals + professional_goals:
+        if goal["status"] == "Completed":
+            goal["completion"] = 100
+        elif goal["status"] == "Not Started":
+            goal["completion"] = 0
+        elif goal["status"] == "At Risk":
+            goal["completion"] = random.randint(10, 40)
+        elif goal["status"] == "On Track":
+            goal["completion"] = random.randint(60, 90)
+        else:  # In Progress
+            goal["completion"] = random.randint(20, 80)
+
     return {
-        "technical_goals": [
-            {"goal": "Complete Advanced Python Certification", "status": "In Progress", "completion": 60},
-            {"goal": "Lead 2 major feature implementations", "status": "On Track", "completion": 50},
-            {"goal": "Improve code coverage to 85%", "status": "At Risk", "completion": 30},
-            {"goal": "Mentor 2 junior developers", "status": "Completed", "completion": 100}
-        ],
-        "professional_goals": [
-            {"goal": "Improve presentation skills", "status": "On Track", "completion": 70},
-            {"goal": "Take leadership training", "status": "Not Started", "completion": 0},
-            {"goal": "Contribute to 3 cross-team projects", "status": "In Progress", "completion": 40},
-            {"goal": "Write 5 technical blog posts", "status": "On Track", "completion": 60}
-        ]
+        "technical_goals": technical_goals,
+        "professional_goals": professional_goals
     }
 
 def display_goal_with_status(goal_data):
