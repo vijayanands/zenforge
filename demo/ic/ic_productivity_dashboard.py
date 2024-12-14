@@ -317,8 +317,8 @@ def ic_productivity_dashboard():
         # Get list of employees from GitHub data
         employees = generate_employee_list(user_info) if user_info else []
         
-        # Create a list of names for the selectbox
-        employee_names = [name for name, _ in employees] if employees else ["No data available"]
+        # Create a list of names for the selectbox, with default option
+        employee_names = ["Select an employee"] + [name for name, _ in employees] if employees else ["No data available"]
         
         # Create a dict to map names to emails
         name_to_email = dict(employees) if employees else {}
@@ -332,200 +332,202 @@ def ic_productivity_dashboard():
         st.session_state.selected_employee = selected_name
         selected_email = name_to_email.get(selected_name)
 
-        # Display employee info
-        col1, col2 = st.columns(2)
-        with col1:
-            st.info(f"**Employee:** {selected_name}")
-        with col2:
-            designation = get_employee_designation(selected_email, user_info) if selected_email else "Unknown"
-            st.info(f"**Position:** {designation}")
-
-        # Create tabs
-        tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
-
-        # Tab 1: Tasks
-        with tabs[0]:
-            total_tasks, completed, in_progress, on_track, overdue = generate_task_data()
-
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                create_styled_metric("Total Tasks", total_tasks, "📋")
-            with col2:
-                create_styled_metric("Completed", completed, "✅")
-            with col3:
-                create_styled_metric("In Progress", in_progress, "🔄")
-            with col4:
-                create_styled_metric("On Track", on_track, "🎯")
-            with col5:
-                create_styled_metric("Overdue", overdue, "⏰")
-
+        # Only show dashboard content if a valid employee is selected
+        if selected_name != "Select an employee" and selected_name != "No data available":
+            # Display employee info
             col1, col2 = st.columns(2)
             with col1:
-                st.header("Task Distribution")
-                task_data = pd.DataFrame(
-                    {
-                        "Status": ["Completed", "On Track", "Overdue"],
-                        "Value": [completed, on_track, overdue],
-                    }
-                )
-                fig = create_pie_chart(
-                    task_data,
-                    names="Status",
-                    values="Value",
-                    title="Task Distribution",
-                    height=360,
-                    width=360,
-                )
-                display_pie_chart(fig)
-
+                st.info(f"**Employee:** {selected_name}")
             with col2:
-                st.header("Weekly Task Completion Rate")
-                weekly_completion = generate_weekly_task_completion()
-                create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
+                designation = get_employee_designation(selected_email, user_info) if selected_email else "Unknown"
+                st.info(f"**Position:** {designation}")
 
-        # Tab 2: Code
-        with tabs[1]:
-            # Use the selected_email to find the employee's data
-            if selected_email and selected_email in github_data:
-                employee_data = github_data[selected_email]
-                code_data = {
-                    "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
-                    "peer_reviews": employee_data.get("total_pull_requests", 0),
-                    "git_commits": employee_data.get("total_commits", 0),
-                    "total_prs": employee_data.get("total_pull_requests", 0),  # Added total PRs
-                    "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
-                    "bugs_fixed": {  # Keep random for now
-                        "low": random.randint(5, 15),
-                        "medium": random.randint(3, 10),
-                        "high": random.randint(1, 5),
-                        "critical": random.randint(0, 3),
-                    }
-                }
-            else:
-                # Fallback to random data if employee not found
-                code_data = {
-                    "quality_score": round(random.uniform(1, 10), 1),
-                    "peer_reviews": random.randint(5, 20),
-                    "git_commits": random.randint(20, 100),
-                    "total_prs": random.randint(5, 15),  # Added total PRs
-                    "bug_fix_rate": round(random.uniform(0.5, 5), 1),
-                    "bugs_fixed": {
-                        "low": random.randint(5, 15),
-                        "medium": random.randint(3, 10),
-                        "high": random.randint(1, 5),
-                        "critical": random.randint(0, 3),
-                    }
-                }
+            # Create tabs
+            tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
 
-            # Display metrics
-            col1, col2, col3, col4, col5 = st.columns(5)  # Changed to 5 columns
-            with col1:
-                create_styled_metric(
-                    "Code Quality", f"{code_data['quality_score']}/10", "🏆"
-                )
-            with col2:
-                create_styled_metric("Code Reviews", code_data["peer_reviews"], "👁️")
-            with col3:
-                create_styled_metric("Code Commits", code_data["git_commits"], "🔢")
-            with col4:
-                create_styled_metric("Total PRs", code_data["total_prs"], "🔄")  # Added PR metric
-            with col5:
-                create_styled_metric(
-                    "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
-                )
+            # Tab 1: Tasks
+            with tabs[0]:
+                total_tasks, completed, in_progress, on_track, overdue = generate_task_data()
 
-            col1, col2 = st.columns(2)
-            with col1:
-                st.header("Bugs Fixed by Criticality")
-                bugs_data = pd.DataFrame(
-                    {
-                        "Criticality": code_data["bugs_fixed"].keys(),
-                        "Count": code_data["bugs_fixed"].values(),
-                    }
-                )
-                fig = create_pie_chart(
-                    bugs_data,
-                    names="Criticality",
-                    values="Count",
-                    title="Bugs Fixed by Criticality",
-                    height=360,
-                    width=360,
-                )
-                display_pie_chart(fig)
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    create_styled_metric("Total Tasks", total_tasks, "📋")
+                with col2:
+                    create_styled_metric("Completed", completed, "✅")
+                with col3:
+                    create_styled_metric("In Progress", in_progress, "🔄")
+                with col4:
+                    create_styled_metric("On Track", on_track, "🎯")
+                with col5:
+                    create_styled_metric("Overdue", overdue, "⏰")
 
-            with col2:
-                st.header("Code Quality Trend")
-                code_quality_trend = [
-                    random.uniform(
-                        code_data["quality_score"] - 1, code_data["quality_score"] + 1
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.header("Task Distribution")
+                    task_data = pd.DataFrame(
+                        {
+                            "Status": ["Completed", "On Track", "Overdue"],
+                            "Value": [completed, on_track, overdue],
+                        }
                     )
-                    for _ in range(12)
-                ]
-                create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
+                    fig = create_pie_chart(
+                        task_data,
+                        names="Status",
+                        values="Value",
+                        title="Task Distribution",
+                        height=360,
+                        width=360,
+                    )
+                    display_pie_chart(fig)
 
-        # Tab 3: Knowledge
-        with tabs[2]:
-            knowledge_data = generate_knowledge_data()
+                with col2:
+                    st.header("Weekly Task Completion Rate")
+                    weekly_completion = generate_weekly_task_completion()
+                    create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
 
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                create_styled_metric(
-                    "Articles Written", knowledge_data["articles_written"], "📝"
-                )
-            with col2:
-                create_styled_metric(
-                    "Articles Contributed", knowledge_data["articles_contributed"], "💬"
-                )
-            with col3:
-                create_styled_metric(
-                    "Training Sessions", knowledge_data["training_sessions"], "🎓"
-                )
-            with col4:
-                create_styled_metric(
-                    "Mentoring Hours", knowledge_data["mentoring_hours"], "🤝"
-                )
-            with col5:
-                create_styled_metric(
-                    "Doc Contributions",
-                    knowledge_data["documentation_contributions"],
-                    "📚",
+            # Tab 2: Code
+            with tabs[1]:
+                # Use the selected_email to find the employee's data
+                if selected_email and selected_email in github_data:
+                    employee_data = github_data[selected_email]
+                    code_data = {
+                        "quality_score": round(random.uniform(1, 10), 1),  # Keep random for now
+                        "pr_comments": employee_data.get("total_pull_request_comments", 0),  # Changed from peer_reviews
+                        "git_commits": employee_data.get("total_commits", 0),
+                        "total_prs": employee_data.get("total_pull_requests", 0),
+                        "bug_fix_rate": round(random.uniform(0.5, 5), 1),  # Keep random for now
+                        "bugs_fixed": {  # Keep random for now
+                            "low": random.randint(5, 15),
+                            "medium": random.randint(3, 10),
+                            "high": random.randint(1, 5),
+                            "critical": random.randint(0, 3),
+                        }
+                    }
+                else:
+                    # Fallback to random data if employee not found
+                    code_data = {
+                        "quality_score": round(random.uniform(1, 10), 1),
+                        "pr_comments": random.randint(10, 50),  # Changed from peer_reviews
+                        "git_commits": random.randint(20, 100),
+                        "total_prs": random.randint(5, 15),
+                        "bug_fix_rate": round(random.uniform(0.5, 5), 1),
+                        "bugs_fixed": {
+                            "low": random.randint(5, 15),
+                            "medium": random.randint(3, 10),
+                            "high": random.randint(1, 5),
+                            "critical": random.randint(0, 3),
+                        }
+                    }
+
+                # Display metrics
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    create_styled_metric("Code Commits", code_data["git_commits"], "🔢")
+                with col2:
+                    create_styled_metric("Total PRs", code_data["total_prs"], "🔄")
+                with col3:
+                    create_styled_metric("PR Comments", code_data["pr_comments"], "💬")
+                with col4:
+                    create_styled_metric(
+                        "Code Quality", f"{code_data['quality_score']}/10", "🏆"
+                    )
+                with col5:
+                    create_styled_metric(
+                        "Bug Fix Rate", f"{code_data['bug_fix_rate']}/week", "🐛"
+                    )
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.header("Bugs Fixed by Criticality")
+                    bugs_data = pd.DataFrame(
+                        {
+                            "Criticality": code_data["bugs_fixed"].keys(),
+                            "Count": code_data["bugs_fixed"].values(),
+                        }
+                    )
+                    fig = create_pie_chart(
+                        bugs_data,
+                        names="Criticality",
+                        values="Count",
+                        title="Bugs Fixed by Criticality",
+                        height=360,
+                        width=360,
+                    )
+                    display_pie_chart(fig)
+
+                with col2:
+                    st.header("Code Quality Trend")
+                    code_quality_trend = [
+                        random.uniform(
+                            code_data["quality_score"] - 1, code_data["quality_score"] + 1
+                        )
+                        for _ in range(12)
+                    ]
+                    create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
+
+            # Tab 3: Knowledge
+            with tabs[2]:
+                knowledge_data = generate_knowledge_data()
+
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    create_styled_metric(
+                        "Articles Written", knowledge_data["articles_written"], "📝"
+                    )
+                with col2:
+                    create_styled_metric(
+                        "Articles Contributed", knowledge_data["articles_contributed"], "💬"
+                    )
+                with col3:
+                    create_styled_metric(
+                        "Training Sessions", knowledge_data["training_sessions"], "🎓"
+                    )
+                with col4:
+                    create_styled_metric(
+                        "Mentoring Hours", knowledge_data["mentoring_hours"], "🤝"
+                    )
+                with col5:
+                    create_styled_metric(
+                        "Doc Contributions",
+                        knowledge_data["documentation_contributions"],
+                        "📚",
+                    )
+
+                create_styled_bullet_list(
+                    [
+                        f"{contrib} - {date.strftime('%Y-%m-%d')}"
+                        for contrib, date in generate_recent_contributions()
+                    ],
+                    title="Recent Contributions",
                 )
 
-            create_styled_bullet_list(
-                [
-                    f"{contrib} - {date.strftime('%Y-%m-%d')}"
-                    for contrib, date in generate_recent_contributions()
-                ],
-                title="Recent Contributions",
-            )
+            # Tab 4: Meetings
+            with tabs[3]:
+                meeting_data = generate_meeting_data()
 
-        # Tab 4: Meetings
-        with tabs[3]:
-            meeting_data = generate_meeting_data()
+                col1, col2, col3, col4, col5 = st.columns(5)
+                with col1:
+                    create_styled_metric("Organized", meeting_data["organized"], "📅")
+                with col2:
+                    create_styled_metric("Attended", meeting_data["attended"], "👥")
+                with col3:
+                    create_styled_metric(
+                        "Avg Duration", f"{meeting_data['avg_duration']} hours", "⏳"
+                    )
+                with col4:
+                    create_styled_metric(
+                        "Effectiveness", f"{meeting_data['effectiveness']}/10", "📊"
+                    )
+                with col5:
+                    create_styled_metric(
+                        "Weekly Time", f"{meeting_data['weekly_time_percentage']}%", "🕰️"
+                    )
 
-            col1, col2, col3, col4, col5 = st.columns(5)
-            with col1:
-                create_styled_metric("Organized", meeting_data["organized"], "📅")
-            with col2:
-                create_styled_metric("Attended", meeting_data["attended"], "👥")
-            with col3:
-                create_styled_metric(
-                    "Avg Duration", f"{meeting_data['avg_duration']} hours", "⏳"
+                st.header("Role in Meetings (RACI)")
+                raci_data = generate_raci_data()
+                create_styled_bar_chart(
+                    list(raci_data.keys()), list(raci_data.values()), "Roles", "Count"
                 )
-            with col4:
-                create_styled_metric(
-                    "Effectiveness", f"{meeting_data['effectiveness']}/10", "📊"
-                )
-            with col5:
-                create_styled_metric(
-                    "Weekly Time", f"{meeting_data['weekly_time_percentage']}%", "🕰️"
-                )
-
-            st.header("Role in Meetings (RACI)")
-            raci_data = generate_raci_data()
-            create_styled_bar_chart(
-                list(raci_data.keys()), list(raci_data.values()), "Roles", "Count"
-            )
 
 
 if __name__ == "__main__":
