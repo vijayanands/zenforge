@@ -13,6 +13,7 @@ from demo.second_line_manager_or_director.dashboard import show_director_dashboa
 from demo.ui.title_bar import set_title_bar
 from model.load_events_db import load_sample_data_into_timeseries_db
 from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
+from datetime import datetime, timedelta
 
 # Get the project root directory
 PROJECT_ROOT = Path(__file__).parent.absolute()
@@ -116,9 +117,38 @@ def zenforge_dashboard():
     with st.sidebar:
         # Main navigation options
         main_option = st.radio(
-            "Select Navigation", 
-            ["Productivity and Performance", "Development Cycle Metrics"]  # Removed Engineering Metrics
+            "Select Navigation",
+            ["Productivity and Performance", "Development Cycle Metrics"]
         )
+
+        # Time Range Selection
+        st.markdown("---")  # Add separator
+        st.header("Time Range")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            start_date = st.date_input(
+                "Start Date",
+                value=datetime.today() - timedelta(days=30),
+                max_value=datetime.today(),
+                key="sidebar_start_date"
+            )
+        with col2:
+            end_date = st.date_input(
+                "End Date",
+                value=datetime.today(),
+                min_value=start_date,
+                max_value=datetime.today(),
+                key="sidebar_end_date"
+            )
+
+        # Apply button for time range
+        if st.button("Apply Time Range", key="apply_time_range"):
+            st.session_state.selected_time_range = {
+                'start_date': start_date,
+                'end_date': end_date
+            }
+            st.rerun()
 
         if main_option == "Productivity and Performance":
             # Section for persona selection
@@ -141,9 +171,6 @@ def zenforge_dashboard():
                     st.session_state.show_self_appraisal = True
                 if st.button("Create Weekly Report"):
                     st.session_state.show_weekly_report = True
-
-        elif main_option == "Development Cycle Metrics":
-            st.write("Displaying Development Cycle Metrics")
 
     # Main content area
     if main_option == "Productivity and Performance":
