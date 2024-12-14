@@ -449,12 +449,14 @@ def display_build_timeline(pr_id):
     # Show detailed build information
     if builds:
         st.subheader("Build Details")
+        
+        # Create DataFrame and sort
         builds_df = pd.DataFrame(builds)
         builds_df['timestamp'] = pd.to_datetime(builds_df['timestamp'])
         builds_df = builds_df.sort_values('timestamp')
         
-        # Format the dataframe for display with more columns
-        display_df = builds_df[[
+        # Select columns and create a new DataFrame instead of a view
+        columns = [
             'environment', 
             'status', 
             'build_id',
@@ -463,26 +465,30 @@ def display_build_timeline(pr_id):
             'mode',
             'release_version',
             'timestamp'
-        ]]
-        
-        # Rename columns for better display
-        display_df.columns = [
-            'Environment',
-            'Status',
-            'Build ID',
-            'Duration (s)',
-            'Branch',
-            'Mode',
-            'Release Version',
-            'Timestamp'
         ]
         
-        # Add duration in minutes for better readability
-        display_df['Duration (min)'] = display_df['Duration (s)'].apply(
+        # Create a new DataFrame with selected columns
+        display_df = pd.DataFrame(builds_df[columns].copy())
+        
+        # Rename columns
+        column_mapping = {
+            'environment': 'Environment',
+            'status': 'Status',
+            'build_id': 'Build ID',
+            'duration_seconds': 'Duration (s)',
+            'branch': 'Branch',
+            'mode': 'Mode',
+            'release_version': 'Release Version',
+            'timestamp': 'Timestamp'
+        }
+        display_df = display_df.rename(columns=column_mapping)
+        
+        # Add duration in minutes using loc
+        display_df.loc[:, 'Duration (min)'] = display_df['Duration (s)'].apply(
             lambda x: f"{x/60:.1f}"
         )
         
-        # Reorder columns to put timestamp at the end
+        # Define final column order
         final_columns = [
             'Environment',
             'Status',
@@ -495,6 +501,7 @@ def display_build_timeline(pr_id):
             'Timestamp'
         ]
         
+        # Display the DataFrame with ordered columns
         st.dataframe(display_df[final_columns])
 
 def get_env_durations(project_id, release_version):
