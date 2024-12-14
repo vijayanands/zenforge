@@ -1,5 +1,5 @@
 from typing import Any, Dict
-
+import os
 from sqlalchemy import create_engine, text
 
 from model.events_data_generator import generate_all_data, generate_cicd_events
@@ -200,23 +200,25 @@ def verify_data_loaded():
             print(f"Designation: {sample_user.designation}")
             print(f"Supervisor: {sample_user.supervisor}")
 
-def load_sample_data_into_timeseries_db():
-    """Load sample data into the timeseries database"""
+def load_sample_data():
+    """Load sample data into the database"""
     try:
-        print("\nCreate Database and Initialize DB...")
-        create_database_if_not_exists()
-
-        db_manager = DatabaseManager(connection_string)
-        print("\nDropping existing tables...")
-        db_manager.drop_all_tables()
+        print("Starting to load sample data...")
         
-        print("\nInitializing database...")
-        db_manager.init_db()  # This will now create the user_mappings table along with other tables
-
-        print("\nGenerating synthetic data...")
+        # Create database if it doesn't exist
+        create_database_if_not_exists()
+        
+        # Initialize database
+        db_manager = DatabaseManager(connection_string)
+        
+        # Always recreate tables to ensure clean state
+        print("Recreating database tables...")
+        db_manager.recreate_tables()
+        
+        print("Generating sample data...")
         all_data = generate_all_data()
-
-        print("\nLoad synthetic data to Timeseries DB...")
+        
+        print("\nLoading data into database...")
         load_data(all_data)
         
         print("\nVerifying data loaded...")

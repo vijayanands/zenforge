@@ -197,7 +197,6 @@ def get_development_cycle_metrics(project_id):
         return None
 
 def get_releases_for_project(project_id):
-    """Get list of releases for the project with at least two events"""
     query = """
         WITH release_counts AS (
             SELECT 
@@ -209,7 +208,7 @@ def get_releases_for_project(project_id):
             WHERE project_id = :project_id
             AND release_version IS NOT NULL
             GROUP BY release_version
-            HAVING COUNT(DISTINCT build_id) >= 2  -- Only releases with at least 2 distinct builds
+            HAVING COUNT(DISTINCT build_id) >= 1  -- Only releases with at least 2 distinct builds
         )
         SELECT 
             release_version,

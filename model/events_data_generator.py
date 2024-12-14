@@ -1,3 +1,4 @@
+import os
 import random
 import uuid
 from datetime import datetime, timedelta
@@ -29,6 +30,57 @@ from model.sdlc_events import (
 
 BASE_START_DATE = datetime(2024, 1, 1)
 
+# Static user data organized by designation
+VICE_PRESIDENTS = [
+    ("John Anderson", "john.anderson@company.com"),
+]
+
+DIRECTORS = [
+    ("Sarah Mitchell", "sarah.mitchell@company.com"),
+    ("Michael Zhang", "michael.zhang@company.com"),
+]
+
+MANAGERS = [
+    ("Emily Rodriguez", "emily.rodriguez@company.com"),
+    ("David Kim", "david.kim@company.com"),
+    ("Lisa Patel", "lisa.patel@company.com"),
+    ("Robert Chen", "robert.chen@company.com"),
+]
+
+SR_SOFTWARE_ENGINEERS = [
+    ("Alex Thompson", "alex.thompson@company.com"),
+    ("Jordan Patel", "jordan.patel@company.com"),
+    ("Sam Lee", "sam.lee@company.com"),
+    ("Avery Brown", "avery.brown@company.com"),
+    ("Quinn Miller", "quinn.miller@company.com"),
+    ("Alex Foster", "alex.foster@company.com"),
+    ("Blair Murphy", "blair.murphy@company.com"),
+]
+
+SOFTWARE_ENGINEERS = [
+    ("Morgan Singh", "morgan.singh@company.com"),
+    ("Casey Williams", "casey.williams@company.com"),
+    ("Taylor Davis", "taylor.davis@company.com"),
+    ("Chris Martinez", "chris.martinez@company.com"),
+    ("Pat Johnson", "pat.johnson@company.com"),
+    ("Robin Garcia", "robin.garcia@company.com"),
+    ("Jamie Wilson", "jamie.wilson@company.com"),
+    ("Drew Taylor", "drew.taylor@company.com"),
+    ("Riley White", "riley.white@company.com"),
+    ("Sydney Clark", "sydney.clark@company.com"),
+    ("Jordan Hall", "jordan.hall@company.com"),
+    ("Casey Adams", "casey.adams@company.com"),
+    ("Morgan Lewis", "morgan.lewis@company.com"),
+    ("Cameron Ross", "cameron.ross@company.com"),
+    ("Dana Peterson", "dana.peterson@company.com"),
+    ("Eden Stewart", "eden.stewart@company.com"),
+    ("Frankie Morgan", "frankie.morgan@company.com"),
+    ("Gray Cooper", "gray.cooper@company.com"),
+    ("Harper Reed", "harper.reed@company.com"),
+]
+
+# Combined list of all engineers for use in get_random_developer
+ALL_ENGINEERS = SR_SOFTWARE_ENGINEERS + SOFTWARE_ENGINEERS
 
 class DataGenerator:
     def __init__(self):
@@ -736,20 +788,8 @@ def generate_jira_items(
 
 
 def get_random_developer():
-    """Get a random developer from the generated users data"""
-    # Use the users data from the first generation
-    if not hasattr(get_random_developer, 'users_data'):
-        users_and_teams = generate_users_and_teams()
-        get_random_developer.users_data = users_and_teams["users"]
-    
-    engineers = [
-        user for user in get_random_developer.users_data 
-        if user["designation"] in [
-            Designation.SOFTWARE_ENGINEER.value, 
-            Designation.SR_SOFTWARE_ENGINEER.value
-        ]
-    ]
-    return random.choice(engineers)["email"]
+    """Get a random developer from the combined list of engineers"""
+    return random.choice([email for _, email in ALL_ENGINEERS])
 
 
 def generate_commits(
@@ -908,7 +948,7 @@ def generate_pull_requests(
 ) -> List[Dict[str, Any]]:
     """Generate pull requests with proper timestamps and commit associations"""
     pull_requests = []
-    
+
     # Define target branches with weights
     target_branches = {
         "main": 0.6,  # Increased to 60% to main
@@ -957,7 +997,7 @@ def generate_pull_requests(
                 last_commit = branch_commits[-1]
 
                 pr_created = last_commit["timestamp"] + timedelta(minutes=randint(5, 30))
-                
+
                 # Select target branch based on weights
                 branch_to = np.random.choice(
                     list(target_branches.keys()), p=list(target_branches.values())
@@ -1109,7 +1149,7 @@ def generate_cicd_events(pull_requests: List[Dict[str, Any]], project_ids: List[
 
     # Process each PR that was merged
     for pr in pull_requests:
-        if pr["status"] != PRStatus.MERGED:
+        if pr["status"] != PRStatus.MERGED.value:
             continue
 
         # Convert string timestamp to datetime object
@@ -1119,7 +1159,7 @@ def generate_cicd_events(pull_requests: List[Dict[str, Any]], project_ids: List[
         # Generate builds for each environment
         for env in env_sequence:
             build_id = f"build-{uuid.uuid4().hex[:8]}"
-            
+
             cicd_event = {
                 "event_id": pr["id"],
                 "project_id": pr["project_id"],
@@ -1134,7 +1174,7 @@ def generate_cicd_events(pull_requests: List[Dict[str, Any]], project_ids: List[
                 "mode": BuildMode.AUTOMATIC.value,
                 "release_version": f"v{random.randint(1, 9)}.{random.randint(0, 9)}.{random.randint(0, 9)}",
             }
-            
+
             cicd_events.append(cicd_event)
             # Add timedelta to datetime object
             timestamp = timestamp + timedelta(minutes=random.randint(5, 15))
@@ -1281,25 +1321,21 @@ def generate_bugs_for_builds(cicd_events: List[Dict[str, Any]]) -> List[Dict[str
 
 
 def generate_users_and_teams() -> Dict[str, List[Dict[str, Any]]]:
-    """Generate users and teams data"""
+    """Generate users and teams data using the static user lists"""
     users = []
     teams = []
     
     # 1. Add Vice President
-    vp_email = "john.anderson@company.com"
+    vp_name, vp_email = VICE_PRESIDENTS[0]
     users.append({
-        "name": "John Anderson",
+        "name": vp_name,
         "email": vp_email,
         "designation": Designation.VICE_PRESIDENT.value,
         "supervisor": None
     })
     
-    # 2. Add Directors
-    directors = [
-        ("Sarah Mitchell", "sarah.mitchell@company.com"),
-        ("Michael Zhang", "michael.zhang@company.com")
-    ]
-    for name, email in directors:
+    # 2. Add Directors (reporting to VP)
+    for name, email in DIRECTORS:
         users.append({
             "name": name,
             "email": email,
@@ -1307,58 +1343,28 @@ def generate_users_and_teams() -> Dict[str, List[Dict[str, Any]]]:
             "supervisor": vp_email
         })
     
-    # 3. Add Managers and Teams
+    # Create team configurations
     team_configs = {
         "Cloud Infrastructure": {
-            "manager": ("Emily Rodriguez", "emily.rodriguez@company.com"),
-            "engineers": [
-                ("Alex Thompson", "alex.thompson@company.com"),
-                ("Jordan Patel", "jordan.patel@company.com"),
-                ("Morgan Singh", "morgan.singh@company.com"),
-                ("Casey Williams", "casey.williams@company.com"),
-                ("Taylor Davis", "taylor.davis@company.com")
-            ]
+            "manager": MANAGERS[0],
+            "engineers": ALL_ENGINEERS[:5]
         },
         "Frontend Development": {
-            "manager": ("David Kim", "david.kim@company.com"),
-            "engineers": [
-                ("Sam Lee", "sam.lee@company.com"),
-                ("Chris Martinez", "chris.martinez@company.com"),
-                ("Pat Johnson", "pat.johnson@company.com"),
-                ("Robin Garcia", "robin.garcia@company.com"),
-                ("Jamie Wilson", "jamie.wilson@company.com"),
-                ("Drew Taylor", "drew.taylor@company.com")
-            ]
+            "manager": MANAGERS[1],
+            "engineers": ALL_ENGINEERS[5:11]
         },
         "Backend Services": {
-            "manager": ("Lisa Patel", "lisa.patel@company.com"),
-            "engineers": [
-                ("Avery Brown", "avery.brown@company.com"),
-                ("Quinn Miller", "quinn.miller@company.com"),
-                ("Riley White", "riley.white@company.com"),
-                ("Sydney Clark", "sydney.clark@company.com"),
-                ("Jordan Hall", "jordan.hall@company.com"),
-                ("Casey Adams", "casey.adams@company.com"),
-                ("Morgan Lewis", "morgan.lewis@company.com")
-            ]
+            "manager": MANAGERS[2],
+            "engineers": ALL_ENGINEERS[11:18]
         },
         "Data Engineering": {
-            "manager": ("Robert Chen", "robert.chen@company.com"),
-            "engineers": [
-                ("Alex Foster", "alex.foster@company.com"),
-                ("Blair Murphy", "blair.murphy@company.com"),
-                ("Cameron Ross", "cameron.ross@company.com"),
-                ("Dana Peterson", "dana.peterson@company.com"),
-                ("Eden Stewart", "eden.stewart@company.com"),
-                ("Frankie Morgan", "frankie.morgan@company.com"),
-                ("Gray Cooper", "gray.cooper@company.com"),
-                ("Harper Reed", "harper.reed@company.com")
-            ]
+            "manager": MANAGERS[3],
+            "engineers": ALL_ENGINEERS[18:]
         }
     }
     
     # Assign directors to managers (round-robin)
-    director_emails = [email for _, email in directors]
+    director_emails = [email for _, email in DIRECTORS]
     
     for team_name, team_data in team_configs.items():
         manager_name, manager_email = team_data["manager"]
@@ -1380,10 +1386,12 @@ def generate_users_and_teams() -> Dict[str, List[Dict[str, Any]]]:
         
         # Add engineers
         for eng_name, eng_email in team_data["engineers"]:
-            designation = random.choice([
-                Designation.SOFTWARE_ENGINEER.value,
-                Designation.SR_SOFTWARE_ENGINEER.value
-            ])
+            # Determine if senior or regular engineer based on the static lists
+            designation = (
+                Designation.SR_SOFTWARE_ENGINEER.value 
+                if (eng_name, eng_email) in SR_SOFTWARE_ENGINEERS 
+                else Designation.SOFTWARE_ENGINEER.value
+            )
             users.append({
                 "name": eng_name,
                 "email": eng_email,
@@ -1404,7 +1412,7 @@ def generate_all_data() -> Dict[str, Any]:
         users_and_teams = generate_users_and_teams()
         # Store users data for get_random_developer
         get_random_developer.users_data = users_and_teams["users"]
-        
+
         design_events, jira_items, project_details, projects = generate_projects()
 
         print("Generating sprints...")

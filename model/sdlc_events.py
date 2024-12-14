@@ -611,45 +611,34 @@ class DatabaseManager:
     def __init__(self, connection_string):
         self.connection_string = connection_string
         self.engine = create_engine(connection_string)
+        
+        # Create schema if it doesn't exist
+        with self.engine.connect() as connection:
+            connection.execute(text("CREATE SCHEMA IF NOT EXISTS sdlc_timeseries;"))
+            connection.commit()
+        
+        # Create all tables
+        Base.metadata.schema = "sdlc_timeseries"
+        Base.metadata.create_all(self.engine)
 
     def get_session(self):
         Session = sessionmaker(bind=self.engine)
         return Session()
 
-    def init_db(self):
-        """Initialize the database by creating schemas and tables"""
-        try:
-            # Create the schema if it doesn't exist
-            with self.engine.connect() as connection:
-                connection.execute(text("CREATE SCHEMA IF NOT EXISTS sdlc_timeseries;"))
-                connection.commit()
-
-            # Create all tables
-            Base.metadata.schema = "sdlc_timeseries"
-            Base.metadata.create_all(self.engine)
-            print("Database initialized successfully")
-            
-        except Exception as e:
-            print(f"Error initializing database: {e}")
-            raise
-
-    def drop_all_tables(self):
-        """Drop all tables and types in the sdlc_timeseries schema"""
-        try:
+    def recreate_tables(self):
+        """Drop and recreate all tables and types"""
+        with self.engine.connect() as connection:
             # Drop schema (which will cascade to all tables and types)
-            with self.engine.connect() as connection:
-                connection.execute(text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE;"))
-                connection.commit()
-                print("Schema and all objects dropped successfully")
-                
-                # Recreate the schema
-                connection.execute(text("CREATE SCHEMA sdlc_timeseries;"))
-                connection.commit()
-                print("Schema recreated")
-                
-        except Exception as e:
-            print(f"Error dropping schema and objects: {e}")
-            raise
+            connection.execute(text("DROP SCHEMA IF EXISTS sdlc_timeseries CASCADE;"))
+            connection.commit()
+            
+            # Recreate schema
+            connection.execute(text("CREATE SCHEMA sdlc_timeseries;"))
+            connection.commit()
+        
+        # Recreate all tables and types
+        Base.metadata.schema = "sdlc_timeseries"
+        Base.metadata.create_all(self.engine)
 
 
 # Define your database connection details
