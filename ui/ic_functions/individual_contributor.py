@@ -10,8 +10,6 @@ import streamlit as st
 
 from functions.self_appraisal import create_self_appraisal
 from helpers.ingestion import answer_question, ingest_data
-from ui.ic_functions.productivity import productivity_tab
-
 
 def ask(llm, query, index):
     enhanced_query = f"Based on the jira, github and the confluence data in the embedded json data, please answer my {query}"
@@ -164,8 +162,6 @@ def q_and_a_tab():
 def handle_prompt(prompt):
     if prompt == "self_appraisal":
         return "self_appraisal"  # Return the view name instead of a message
-    elif prompt == "productivity":
-        return productivity_tab()
     elif prompt == "employee_productivity":
         return "employee_productivity"
     else:
@@ -290,7 +286,7 @@ def display_employee_stats(employee):
     st.plotly_chart(fig_productivity)
 
 
-def individual_contributor_dashboard_conversational(is_manager):
+def individual_contributor_dashboard_conversational():
     if "current_view" not in st.session_state:
         st.session_state.current_view = "main"
 
@@ -306,11 +302,8 @@ def individual_contributor_dashboard_conversational(is_manager):
         prompt_options = [
             "Select an action",
             "Generate a self appraisal for me",
-            "I would like to get a picture of my productivity",
+            "Show me statistics on SDLC timeline for my projects"
         ]
-
-        if is_manager:
-            prompt_options.append("Show me productivity stats for my employees")
 
         selected_prompt = st.selectbox(
             "", prompt_options, index=0, key="action_selector"
@@ -319,13 +312,8 @@ def individual_contributor_dashboard_conversational(is_manager):
         if selected_prompt != "Select an action":
             prompt_map = {
                 "Generate a self appraisal for me": "self_appraisal",
-                "I would like to get a picture of my productivity": "productivity",
+                "Show me statistics on SDLC timeline for my projects": "sdlc_timeline_view",
             }
-
-            if is_manager:
-                prompt_map["Show me productivity stats for my employees"] = (
-                    "employee_productivity"
-                )
 
             st.session_state.current_view = prompt_map.get(selected_prompt, selected_prompt)
             st.rerun()
@@ -334,19 +322,7 @@ def individual_contributor_dashboard_conversational(is_manager):
 
     elif st.session_state.current_view == "self_appraisal":
         perform_self_appraisal()
-    elif st.session_state.current_view == "productivity":
-        productivity_tab()
     elif st.session_state.current_view == "employee_productivity":
-        if is_manager:
-            employees = get_dummy_employees()
-            selected_employee = st.selectbox(
-                "Select an employee",
-                options=employees,
-                format_func=lambda x: x["name"],
-            )
-            if selected_employee:
-                display_employee_stats(selected_employee)
-        else:
-            st.error("You do not have permission to view this page.")
+        st.error("You do not have permission to view this page.")
 
     return st.session_state.current_view  # Return the current view for all cases

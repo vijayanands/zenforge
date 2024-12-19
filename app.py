@@ -33,7 +33,6 @@ def setup_streamlit_ui():
             'id': 1,  # Added id attribute
             'first_name': 'Demo',
             'email': 'demo@example.com',
-            'is_manager': False,
             'is_enterprise_admin': False,
             'get_skills': lambda: {},  # Add empty skills method
             'profile_image': None,  # Add profile image attribute

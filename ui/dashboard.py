@@ -6,14 +6,12 @@ from ui.ic_functions.individual_contributor import individual_contributor_dashbo
 
 
 def dashboard():
-    is_manager = st.session_state.get("is_manager", False)
-
     st.title(
         f"Good morning, {st.session_state.user.first_name or st.session_state.user.email.split('@')[0]}"
     )
 
     # Get the current selection
-    current_action = individual_contributor_dashboard_conversational(is_manager)
+    current_action = individual_contributor_dashboard_conversational()
 
     # Store the previous selection
     if "previous_action" not in st.session_state:
