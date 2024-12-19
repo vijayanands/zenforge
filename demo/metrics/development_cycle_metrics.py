@@ -741,16 +741,37 @@ def display_commit_metrics(pr_id):
     if commit['comments_count'] and commit['comments_count'] > 0:
         st.markdown(f"**Comments:** {commit['comments_count']}")
 
+def initialize_synthetic_data():
+    """Initialize synthetic data if not already loaded"""
+    if "synthetic_data_loaded" not in st.session_state:
+        should_load_synthetic = os.getenv("LOAD_SYNTHETIC_DATA", "false").lower() in [
+            "true",
+            "1",
+            "yes",
+            "t",
+        ]
+
+        if should_load_synthetic:
+            try:
+                load_sample_data()
+                st.session_state.synthetic_data_loaded = True
+            except Exception as e:
+                st.error(f"Failed to load synthetic data: {str(e)}")
+                st.session_state.synthetic_data_loaded = False
+
 def display_development_cycle_metrics():
     st.title("Development Cycle Metrics")
-
+    
+    # Initialize synthetic data
+    initialize_synthetic_data()
+    
     # Initialize session states
     if 'active_tab' not in st.session_state:
         st.session_state.active_tab = 0
 
     # Move project selector to main window
     projects_df = get_projects()
-
+    
     if projects_df.empty:
         st.error("No projects found in the database.")
         return

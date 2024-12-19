@@ -8,6 +8,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
+from demo.metrics.productivity_dashboard import display_productivity_dashboard
 from functions.self_appraisal import create_self_appraisal
 from helpers.ingestion import answer_question, ingest_data
 
@@ -320,9 +322,9 @@ def individual_contributor_dashboard_conversational():
     elif st.session_state.current_view == "weekly_report":
         st.error("Functionality is not yet implemented")
     elif st.session_state.current_view == "producitity_dashboard":
-        st.error("Functionality is not yet implemented")
+        display_productivity_dashboard()
     elif st.session_state.current_view == "sdlc_timeline_view":
-        st.error("Functionality is not yet implemented")
+        display_development_cycle_metrics()
     else:
         st.error("Invalid view selected. Please go back to the main dashboard.")
 
