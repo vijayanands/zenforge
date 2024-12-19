@@ -82,7 +82,7 @@ def perform_self_appraisal():
         del st.session_state.reset_appraisal
 
     if st.button("Generate Self-Appraisal", key="generate_button"):
-        user_email = st.session_state.user.email
+        user_email = "vijayanands@gmail.com"
         with st.spinner(f"Generating self-appraisal for {user_email} ..."):
             st.session_state.appraisal = create_self_appraisal(user_email)
 
@@ -120,7 +120,7 @@ def q_and_a_tab():
         st.session_state.last_answer = ""
 
     # Get the logged-in user's email
-    user_email = st.session_state.user.email
+    user_email = "vijayanands@gmail.com"
 
     query = st.text_input("Enter your question:", key="query_input")
     show_full_response = os.getenv("SHOW_CHATBOT_DEBUG_LOG", "false").lower() == "true"
@@ -157,16 +157,6 @@ def q_and_a_tab():
 
     # Add a note about the context of the answers
     st.info(f"Answers are based on the data available for {user_email}.")
-
-
-def handle_prompt(prompt):
-    if prompt == "self_appraisal":
-        return "self_appraisal"  # Return the view name instead of a message
-    elif prompt == "employee_productivity":
-        return "employee_productivity"
-    else:
-        return f"Error: Unknown prompt '{prompt}'."
-
 
 # New functions for manager dashboard functionality
 def get_dummy_employees():
@@ -286,6 +276,22 @@ def display_employee_stats(employee):
     st.plotly_chart(fig_productivity)
 
 
+# Define prompt options as constants
+PROMPT_OPTIONS = [
+    "Select an action",
+    "Generate a self appraisal for me",
+    "Generate a weekly report for me",
+    "Show me productivity dashboard",
+    "Show me statistics on SDLC timeline for my projects"
+]
+
+PROMPT_MAP = {
+    PROMPT_OPTIONS[1]: "self_appraisal",
+    PROMPT_OPTIONS[2]: "weekly_report",
+    PROMPT_OPTIONS[3]: "producitity_dashboard",
+    PROMPT_OPTIONS[4]: "sdlc_timeline_view",
+}
+
 def individual_contributor_dashboard_conversational():
     if "current_view" not in st.session_state:
         st.session_state.current_view = "main"
@@ -299,30 +305,25 @@ def individual_contributor_dashboard_conversational():
             st.rerun()
 
     if st.session_state.current_view == "main":
-        prompt_options = [
-            "Select an action",
-            "Generate a self appraisal for me",
-            "Show me statistics on SDLC timeline for my projects"
-        ]
-
         selected_prompt = st.selectbox(
-            "", prompt_options, index=0, key="action_selector"
+            "", PROMPT_OPTIONS, index=0, key="action_selector"
         )
 
         if selected_prompt != "Select an action":
-            prompt_map = {
-                "Generate a self appraisal for me": "self_appraisal",
-                "Show me statistics on SDLC timeline for my projects": "sdlc_timeline_view",
-            }
-
-            st.session_state.current_view = prompt_map.get(selected_prompt, selected_prompt)
+            st.session_state.current_view = PROMPT_MAP.get(selected_prompt, selected_prompt)
             st.rerun()
 
         return selected_prompt  # Return the selected action
 
     elif st.session_state.current_view == "self_appraisal":
         perform_self_appraisal()
-    elif st.session_state.current_view == "employee_productivity":
-        st.error("You do not have permission to view this page.")
+    elif st.session_state.current_view == "weekly_report":
+        st.error("Functionality is not yet implemented")
+    elif st.session_state.current_view == "producitity_dashboard":
+        st.error("Functionality is not yet implemented")
+    elif st.session_state.current_view == "sdlc_timeline_view":
+        st.error("Functionality is not yet implemented")
+    else:
+        st.error("Invalid view selected. Please go back to the main dashboard.")
 
     return st.session_state.current_view  # Return the current view for all cases

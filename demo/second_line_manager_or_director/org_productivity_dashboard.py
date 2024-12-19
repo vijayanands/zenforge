@@ -103,7 +103,7 @@ def generate_dummy_data():
         + performance_ratings["unsatisfactory"] * 1
     ) / performance_ratings["total_employees"]
 
-    # Generate time series data for productivity and performance trends
+    # Generate time series data for productivity trends
     date_range = pd.date_range(start="2023-01-01", end="2023-12-31", freq="D")
     trends = pd.DataFrame(index=date_range)
 

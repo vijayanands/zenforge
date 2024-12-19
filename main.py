@@ -123,11 +123,10 @@ def zenforge_dashboard():
         # Main navigation options
         main_option = st.radio(
             "Select Navigation",
-            ["Productivity and Performance", "Development Cycle Metrics"]
+            ["Productivity", "Development Cycle Metrics"]
         )
 
-        # Only show time range and related options for Productivity and Performance
-        if main_option == "Productivity and Performance":
+        if main_option == "Productivity":
             # Time Range Selection
             st.markdown("---")  # Add separator
             st.header("Time Range")
@@ -199,7 +198,7 @@ def zenforge_dashboard():
         # Show Development Cycle Metrics directly without time range requirement
         display_development_cycle_metrics()
     elif st.session_state.get('show_navigation', False):
-        if main_option == "Productivity and Performance":
+        if main_option == "Productivity":
             # Display appropriate dashboard based on persona and navigation option
             if nav_option:
                 if nav_option == "Engineering Metrics":

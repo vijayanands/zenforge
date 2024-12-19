@@ -7,7 +7,7 @@ from ui.ic_functions.individual_contributor import individual_contributor_dashbo
 
 def dashboard():
     st.title(
-        f"Good morning, {st.session_state.user.first_name or st.session_state.user.email.split('@')[0]}"
+        f"Good morning vijayanands@gmail.com"
     )
 
     # Get the current selection
@@ -65,7 +65,7 @@ def dashboard():
             question = st.session_state.get("custom_question", "")
             if question:
                 index = ingest_data()
-                answer = answer_question(index, st.session_state.user.email, question)
+                answer = answer_question(index, "vijayanands@gmail.com", question)
                 st.session_state.question_answer = answer
             st.session_state.processing_question = False
             st.rerun()
