@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, DefaultDict
 
 import requests
 from dotenv import load_dotenv
@@ -78,7 +78,7 @@ class GitHubAPIClient:
     def _fetch_from_github(
         self,
         path: str,
-        additional_params: Dict[str, Any] = {},
+        additional_params: Dict[str, Any] = DefaultDict,
         since: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
@@ -163,6 +163,38 @@ class GitHubAPIClient:
         print(f"Fetched {len(all_issues)} issues")
         return all_issues
 
+    def fetch_pull_requests(self, start_date, end_date=None, token=None):
+        base_url = "https://api.github.com/search/issues"
+        headers = {"Accept": "application/vnd.github.v3+json"}
+        if token:
+            headers["Authorization"] = f"token {token}"
+
+        date_range = f"created:>={start_date}"
+        if end_date:
+            date_range = f"created:{start_date}..{end_date}"
+
+        query = f"repo:{self.github_owner}/{self.github_repo} is:pr {date_range}"
+        params = {"q": query, "per_page": 100}
+        all_pull_requests = []
+        page = 1
+
+        while True:
+            params["page"] = page
+            response =self.call_github(url=base_url, params=params)
+            if response.status_code != 200:
+                print(f"Error fetching data: {response.status_code}")
+                print(response.json().get("message", "No error message provided"))
+                break
+
+            data = response.json()
+            items = data.get("items", [])
+            all_pull_requests.extend(items)
+
+            if "next" not in response.links:
+                break
+            page += 1
+
+        return all_pull_requests
 
     def fetch_PR_data(self) -> Any:
         url = f"{self.base_url}/pulls"

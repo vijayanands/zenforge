@@ -8,7 +8,6 @@ from typing import Any, DefaultDict, Dict, List, Optional
 import random
 
 from constants import map_user, user_to_external_users, unique_user_emails
-from tools.github.fetch_prs import fetch_pull_requests
 from model.sdlc_events import UserMapping, User, DatabaseManager, connection_string, Base
 from tools.github.github_client import GitHubAPIClient
 
@@ -26,7 +25,7 @@ _cached_user_info = None
 _cached_start_date = None
 _cached_end_date = None
 
-def _is_date_range_subset(new_start: str, new_end: str, cached_start: str, cached_end: str) -> bool:
+def _is_date_range_subset(new_start: str, new_end: str, cached_start: Optional[str], cached_end: Optional[str]) -> bool:
     """Check if new date range is a subset of cached date range"""
     if not all([new_start, new_end, cached_start, cached_end]):
         return False
@@ -438,7 +437,7 @@ def get_PRs(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    prs = fetch_pull_requests(owner, repo, start_date, end_date, token)
+    prs = client.fetch_pull_requests(start_date, end_date, token)
     return prs
 
 
@@ -488,7 +487,7 @@ def set_user_name_to_email(user_info: Dict[str, Dict[str, str]]) -> None:
 
 def pull_github_data(
     start_date: str, end_date: Optional[str] = None
-) -> Dict[str, Dict[str, Any]]:
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, str]]]:
     """Pull GitHub data with caching"""
     global _cached_github_data, _cached_user_info, _cached_start_date, _cached_end_date
     
@@ -505,17 +504,17 @@ def pull_github_data(
     commits = get_commits(start_date=start_date, end_date=end_date)
     commit_comments = get_commit_comments(start_date=start_date, end_date=end_date)
 
-    github_data = aggregate_github_data(prs, pr_comments, commits, commit_comments)
+    data = aggregate_github_data(prs, pr_comments, commits, commit_comments)
     set_user_name_to_email(user_info)
     
     # Cache the new data
-    _cached_github_data = github_data
+    _cached_github_data = data
     _cached_user_info = user_info
     _cached_start_date = start_date
     _cached_end_date = end_date
     
-    print_github_data(github_data)
-    return github_data, user_info
+    print_github_data(data)
+    return data, user_info
 
 
 def _analyze_commits_per_user():
@@ -608,38 +607,19 @@ def get_pull_requests_per_user() -> Any:
     return prs_by_author
 
 
-def get_pull_requests_by_author(author: str) -> Any:
+def get_commits_by_author(author: str, since: Optional[str]) -> Any:
     # Get a list of external user ids mapped to the author
     external_usernames = user_to_external_users[author]
 
-    if not external_usernames:
-        logging.warning(f"No external usernames found for author: {author}")
-        return None
-
-    raw_prs: Any = client.fetch_PR_data()
-
-    pr_list = []
-    for user in external_usernames:
-        raw_prs_by_author = [
-            pr for pr in raw_prs if pr["user"]["login"].lower() == user.lower()
-        ]
-        prs_by_author = [_extract_pr_info(pr) for pr in raw_prs_by_author]
-        pr_list.extend(prs_by_author)
-    return pr_list
-
-
-def get_commits_by_author(author: str) -> Any:
-    # Get a list of external user ids mapped to the author
-    external_usernames = user_to_external_users[author]
-
+    logging.info(f"Get commits by author: {author} since: {since}")
     if not external_usernames:
         logging.warning(f"No external usernames found for author: {author}")
         return None
 
     # Get commits per user in the repository
-    github_data = _get_commits_per_user_in_repo()
+    _github_data = _get_commits_per_user_in_repo()
 
-    if not github_data:
+    if not _github_data:
         logging.warning("No GitHub data retrieved")
         return None
 
@@ -647,7 +627,7 @@ def get_commits_by_author(author: str) -> Any:
     commit_info_list = []
     total_commits = 0
     for username in external_usernames:
-        commit_info = github_data.get(username)
+        commit_info = _github_data.get(username)
         if not commit_info:
             logging.warning(f"No commit info found for external username: {username}")
             continue
@@ -682,29 +662,3 @@ def get_github_contributions_by_repo():
         github_contributions[user]["pull_requests"] = pull_requests
 
     return github_contributions
-
-
-if __name__ == "__main__":
-    author = "vijayanands@gmail.com"
-    initialize_github_hack()
-
-    # contributors = list_repo_contributors(github_owner, github_repo)
-    # print(f"\nAll contributors in {github_owner}/{github_repo}:")
-    # print(json.dumps(contributors, indent=2))
-    #
-    # prs = get_all_pull_requests_data(github_owner, github_repo)
-    # print(f"\nAll pull requests in {github_owner}/{github_repo}:")
-    # print(json.dumps(prs, indent=2))
-    #
-    # prs_by_author = get_pull_requests_by_author(github_owner, github_repo, author)
-    # print(f"\nPull requests by {author}:")
-    # print(json.dumps(prs_by_author, indent=2))
-
-    contributions_by_author = get_github_contributions_by_author(author)
-    print(f"\nGitHub contributions by {author}:")
-    print(json.dumps(contributions_by_author, indent=2))
-
-    start_date = "2024-10-01"
-    end_date = None
-    github_data, user_info = pull_github_data(start_date, end_date)
-
