@@ -66,24 +66,55 @@ class GitHubAPIClient:
     def get_all_pulls(self, since: Optional[datetime] = None) -> Any:
         return self._fetch_from_github("pulls", since=since)
 
-    def get_PR_comments(self, pr_number: int, since: Optional[datetime] = None) -> Any:
+    def get_pull_request_comments(self, pr_number: int, since: Optional[datetime] = None) -> Any:
         return self._fetch_from_github(f"pulls/{pr_number}/comments", since=since)
 
-    def get_all_contributors(self, since: Optional[datetime] = None) -> Any:
+    def get_repo_activities(self, since: Optional[datetime] = None) -> Any:
+        return self._fetch_from_github("activity", since=since)
+
+    def get_repo_contributors(self, since: Optional[datetime] = None) -> Any:
         return self._fetch_from_github("contributors", since=since)
 
     def get_all_commit_comments(self, since: Optional[datetime] = None) -> Any:
         return self._fetch_from_github("comments", since=since)
 
+    def get_issues_data(self, since: Optional[datetime] = None) -> Any:
+        return self._fetch_from_github("issues", since=since)
+
+    def list_contributors(self) -> Any:
+        all_contributors: Set[str] = set()
+
+        # Fetch commit contributors
+        commit_contributors = self.get_repo_contributors()
+        all_contributors.update(
+            contributor["login"] for contributor in commit_contributors
+        )
+
+        # Fetch comment contributors
+        comment_contributors = self.get_all_commit_comments()
+        all_contributors.update(
+            contributor["user"]["login"] for contributor in comment_contributors
+        )
+
+        # Fetch pull request contributors
+        pr_contributors = self.get_all_pulls()
+        all_contributors.update(
+            contributor["user"]["login"] for contributor in pr_contributors
+        )
+
+        print(f"Fetched {len(all_contributors)} unique contributors")
+        return list(all_contributors)
+
     def _fetch_from_github(
         self,
         path: str,
-        additional_params: Dict[str, Any] = DefaultDict,
+        additional_params: Optional[Dict[str, Any]] = None,
         since: Optional[datetime] = None,
     ) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
         params: Dict[str, Any] = {"per_page": 100}
-        params.update(additional_params)
+        if additional_params is not None:
+            params.update(additional_params)
 
         if since:
             params["since"] = since.isoformat()
@@ -109,65 +140,8 @@ class GitHubAPIClient:
         print(f"Fetched {len(all_items)} {path}")
         return all_items
 
-    def list_repo_activity(self) -> Any:
-        url = f"{self.base_url}/activity"
-        params: Dict[str, Any] = {"per_page": 100}
-        all_activity = []
-        while url:
-            response = self.call_github(url, params)
-            if response.status_code != 200:
-                logging.error(f"Error fetching activity: {response.status_code}")
-                logging.error(f"Response content: {response.text}")
-                break
-            activities = response.json()
-            all_activity.extend(activities)
-            # Check for pagination
-            url = response.links.get("next", {}).get("url")
-
-        print(f"Fetched {len(all_activity)} repository activities")
-        return all_activity
-
-    def list_repo_contributors(self) -> Any:
-        url = f"{self.base_url}/contributors"
-        params: Dict[str, Any] = {"per_page": 100}
-        all_contributors = []
-        while url:
-            response = self.call_github(url, params)
-            if response.status_code != 200:
-                logging.error(f"Error fetching contributors: {response.status_code}")
-                logging.error(f"Response content: {response.text}")
-                break
-            contributors = response.json()
-            all_contributors.extend(contributors)
-            # Check for pagination
-            url = response.links.get("next", {}).get("url")
-
-        print(f"Fetched {len(all_contributors)} contributors")
-        return all_contributors
-
-    def fetch_issues_data(self) -> Any:
-        url = f"{self.base_url}/issues"
-        params: Dict[str, Any] = {"state": "all", "per_page": 100}
-        all_issues = []
-        while url:
-            response = self.call_github(url, params)
-            if response.status_code != 200:
-                logging.error(f"Error fetching issues: {response.status_code}")
-                logging.error(f"Response content: {response.text}")
-                break
-            issues = response.json()
-            all_issues.extend(issues)
-            # Check for pagination
-            url = response.links.get("next", {}).get("url")
-
-        print(f"Fetched {len(all_issues)} issues")
-        return all_issues
-
-    def fetch_pull_requests(self, start_date, end_date=None, token=None):
+    def search_pull_requests(self, start_date, end_date=None, token=None):
         base_url = "https://api.github.com/search/issues"
-        headers = {"Accept": "application/vnd.github.v3+json"}
-        if token:
-            headers["Authorization"] = f"token {token}"
 
         date_range = f"created:>={start_date}"
         if end_date:
@@ -196,44 +170,7 @@ class GitHubAPIClient:
 
         return all_pull_requests
 
-    def fetch_PR_data(self) -> Any:
-        url = f"{self.base_url}/pulls"
-        params: Dict[str, Any] = {"state": "all", "per_page": 100}
-        all_prs = []
-        while url:
-            response = self.call_github(url, params)
-            if response.status_code != 200:
-                logging.error(f"Error fetching PRs: {response.status_code}")
-                logging.error(f"Response content: {response.text}")
-                break
-            prs = response.json()
-            all_prs.extend(prs)
-            # Check for pagination
-            url = response.links.get("next", {}).get("url")
-
-        print(f"Fetched {len(all_prs)} pull requests")
-        return all_prs
-
-
-    def fetch_PR_comments(self, pr_number: int) -> Any:
-        url = f"{self.base_url}/pulls/{pr_number}/comments"
-        params: Dict[str, Any] = {"per_page": 100}
-        all_comments = []
-        while url:
-            response = self.call_github(url, params)
-            if response.status_code != 200:
-                logging.error(f"Error fetching PR comments: {response.status_code}")
-                logging.error(f"Response content: {response.text}")
-                break
-            comments = response.json()
-            all_comments.extend(comments)
-            # Check for pagination
-            url = response.links.get("next", {}).get("url")
-
-        print(f"Fetched {len(all_comments)} comments for PR #{pr_number}")
-        return all_comments
-
-    def fetch_pr_comments(self, start_date, end_date=None, token=None):
+    def search_pull_request_comments(self, start_date, end_date=None, token=None):
         base_url = f"{self.base_url}/pulls/comments"
         headers = {"Accept": "application/vnd.github.v3+json"}
         if token:
@@ -274,7 +211,7 @@ class GitHubAPIClient:
 
         return all_comments
 
-    def fetch_commits(self, start_date, end_date=None, token=None):
+    def search_commits(self, start_date, end_date=None, token=None):
         base_url = f"{self.base_url}/commits"
         headers = {"Accept": "application/vnd.github.v3+json"}
         if token:
@@ -307,7 +244,7 @@ class GitHubAPIClient:
 
         return all_commits
 
-    def fetch_commit_comments(self, start_date, end_date=None, token=None):
+    def search_commit_comments(self, start_date, end_date=None, token=None):
         base_url = f"{self.base_url}/comments"
         headers = {"Accept": "application/vnd.github.v3+json"}
         if token:
@@ -348,49 +285,3 @@ class GitHubAPIClient:
 
         return all_comments
 
-
-    def list_contributors(self) -> Any:
-        all_contributors: Set[str] = set()
-
-        # Fetch commit contributors
-        commit_contributors = self._fetch_contributors("contributors")
-        all_contributors.update(
-            contributor["login"] for contributor in commit_contributors
-        )
-
-        # Fetch comment contributors
-        comment_contributors = self._fetch_contributors("comments")
-        all_contributors.update(
-            contributor["user"]["login"] for contributor in comment_contributors
-        )
-
-        # Fetch pull request contributors
-        pr_contributors = self._fetch_contributors("pulls")
-        all_contributors.update(
-            contributor["user"]["login"] for contributor in pr_contributors
-        )
-
-        print(f"Fetched {len(all_contributors)} unique contributors")
-        return list(all_contributors)
-
-    def _fetch_contributors(self, contribution_type: str) -> List[Dict[str, Any]]:
-        url = f"{self.base_url}/{contribution_type}"
-        params: Dict[str, Any] = {"per_page": 100, "state": "all"}
-        all_items = []
-
-        while url:
-            response = self.call_github(url, params)
-            if response.status_code != 200:
-                logging.error(
-                    f"Error fetching {contribution_type}: {response.status_code}"
-                )
-                logging.error(f"Response content: {response.text}")
-                break
-            items = response.json()
-            all_items.extend(items)
-
-            # Check for pagination
-            url = response.links.get("next", {}).get("url")
-
-        print(f"Fetched {len(all_items)} {contribution_type}")
-        return all_items
