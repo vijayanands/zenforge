@@ -113,7 +113,7 @@ def _extract_commit_info(commit: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def get_all_PRs_by_user(since: Optional[datetime] = None) -> Any:
+def get_all_pull_requests_by_user(since: Optional[datetime] = None) -> Any:
     raw_prs: Any = client.get_all_pulls(since=since)
     extracted_pr_info = [_extract_pr_info(pr) for pr in raw_prs]
     prs_by_author = defaultdict(dict)
@@ -125,7 +125,7 @@ def get_all_PRs_by_user(since: Optional[datetime] = None) -> Any:
 
 
 def get_pull_requests_by_author(author: str, since: Optional[datetime] = None) -> Any:
-    return get_all_PRs_by_user(since=since)[author].get("pull_requests", [])
+    return get_all_pull_requests_by_user(since=since)[author].get("pull_requests", [])
 
 
 def _extract_commits_by_user(since: Optional[datetime] = None) -> Any:
@@ -170,16 +170,6 @@ def get_commits_by_user(since: Optional[datetime] = None) -> Any:
         print(f"An error occurred during analysis: {str(e)}")
         print("Please check your token, owner, and repo name, and try again.")
         return None  # Return None in case of an error
-
-
-def get_commits_by_author(author: str, since: Optional[datetime] = None) -> Any:
-    # Get commits per user in the repository
-    commits_by_users = get_commits_by_user(since=since)
-    if commits_by_users is None:
-        return None, 0
-    return commits_by_users.get(author, {}), commits_by_users.get(author, {}).get(
-        "total_commits", 0
-    )
 
 
 def get_github_contributions_by_author(
@@ -528,14 +518,12 @@ def pull_github_data(
     return github_data, user_info
 
 
-def _analyze_commits_per_user(client):
-    owner = client.get_github_owner()
-    repo = client.get_github_repo()
+def _analyze_commits_per_user():
     logging.info(f"Analyzing repository: {owner}/{repo}")
-    branch = client.get_default_branch(owner, repo)
+    branch = client.get_default_branch()
     logging.info(f"Analyzing commits on the default branch: {branch}")
 
-    commits = client.get_commits(owner, repo, branch)
+    commits = client.get_commits(branch)
     logging.info(f"Found {len(commits)} commits on the {branch} branch")
 
     commits_per_user = defaultdict(dict)
@@ -556,10 +544,8 @@ def _analyze_commits_per_user(client):
 
 
 def _get_commits_per_user_in_repo():
-    client = GitHubAPIClient()
-
     try:
-        commits_per_user = _analyze_commits_per_user(client)
+        commits_per_user = _analyze_commits_per_user()
 
         # Print the results to the console as well
         print("\nCommits per user:")
@@ -589,17 +575,6 @@ def _extract_comment_info(pr_comments):
             )
     return comments
 
-
-def _extract_pr_info(pr) -> dict:
-    return {
-        "number": pr["number"],
-        "pr_title": pr["title"],
-        "pr_url": pr["html_url"],
-        "author": pr["user"]["login"],
-        "body": pr["body"],
-    }
-
-
 def initialize_github_hack():
     contributors = list_repo_contributors(owner="octocat", repo="Hello-World")
     print(contributors)
@@ -608,7 +583,6 @@ def initialize_github_hack():
 
 
 def list_repo_contributors(owner: str, repo: str) -> Any:
-    client = GitHubAPIClient()
     all_contributors = client.list_contributors()
     print(f"Found {len(all_contributors)} contributors in {owner}/{repo}")
     return all_contributors
@@ -624,7 +598,6 @@ def get_all_pull_requests_data(owner: str, repo: str) -> Any:
 
 
 def get_pull_requests_per_user() -> Any:
-    client = GitHubAPIClient()
     raw_prs: Any = client.fetch_PR_data()
     extracted_pr_info = [_extract_pr_info(pr) for pr in raw_prs]
     prs_by_author = defaultdict(dict)
@@ -643,7 +616,6 @@ def get_pull_requests_by_author(author: str) -> Any:
         logging.warning(f"No external usernames found for author: {author}")
         return None
 
-    client = GitHubAPIClient()
     raw_prs: Any = client.fetch_PR_data()
 
     pr_list = []
@@ -682,19 +654,6 @@ def get_commits_by_author(author: str) -> Any:
         total_commits += commit_info.get("total_commits")
         commit_info_list.append(commit_info)
     return commit_info_list, total_commits
-
-
-def get_github_contributions_by_author(author):
-    commit_info_list, total_commits = get_commits_by_author(author=author)
-    pr_list = get_pull_requests_by_author(author)
-
-    return {
-        "author": author,
-        "total_commits": total_commits,
-        "total_pull_requests": len(pr_list),
-        "commits": commit_info_list,
-        "pull_requests": pr_list,
-    }
 
 
 def get_github_contributions_by_repo():
