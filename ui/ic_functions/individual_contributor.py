@@ -11,7 +11,7 @@ import streamlit as st
 from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
 from demo.metrics.productivity_dashboard import display_productivity_dashboard
 from functions.self_appraisal import create_self_appraisal
-from helpers.ingestion import answer_question, ingest_data
+from functions.ingestion import answer_question, ingest_data
 
 def ask(llm, query, index):
     enhanced_query = f"Based on the jira, github and the confluence data in the embedded json data, please answer my {query}"

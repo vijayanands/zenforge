@@ -12,10 +12,9 @@ from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 from pydantic import ValidationError
 
-from helpers.confluence import get_confluence_contributions_per_user
-from helpers.github import get_github_contributions_by_repo
-from helpers.jira import get_jira_contributions_per_user
+from tools.confluence.confluence import get_confluence_contributions_per_user
 from model.pydantic_models import UserData, JiraData, GitHubData, ConfluenceData
+from tools.github.github import get_github_contributions_by_repo
 
 # Initialize Pinecone
 index_name = "pathforge-data"
@@ -28,7 +27,7 @@ def _generate_key(user: str) -> str:
 
 def _get_documents_to_ingest() -> List[Document]:
     jira_documents = get_jira_contributions_per_user()
-    github_documents = get_github_contributions_by_repo("octocat", "Hello-World")
+    github_documents = get_github_contributions_by_repo()
     confluence_documents = get_confluence_contributions_per_user()
 
     all_user_data = {}

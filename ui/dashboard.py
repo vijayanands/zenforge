@@ -1,7 +1,7 @@
 import streamlit as st
 import uuid
 
-from helpers.ingestion import ingest_data, answer_question
+from functions.ingestion import ingest_data, answer_question
 from ui.ic_functions.individual_contributor import individual_contributor_dashboard_conversational
 
 

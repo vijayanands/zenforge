@@ -5,6 +5,7 @@ from typing import Any, Dict, List
 
 import requests
 
+from constants import unique_user_emails
 from tools.auth import get_headers
 
 atlassian_base_url = "https://vijayanands.atlassian.net"
@@ -279,3 +280,4 @@ if __name__ == "__main__":
             print(f"Total resolved issues: {sum(resolved_counts.values())}")
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
+

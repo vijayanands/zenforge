@@ -54,14 +54,11 @@ def set_title_bar():
         </style>
         <div class="title-bar">
             <img src="data:image/png;base64,{logo_base64}" alt="PathForge Logo">
-            <div class="empower-text">EMPOWER</div>
+            <div class="empower-text">ZENFORGE</div>
             <h1>
-                Empowering Employee 
-                <span class="highlight-pink">Productivity</span>, 
-                <span class="highlight-blue">Performance</span>, 
-                <span class="highlight-pink">Career</span>, 
-                <span class="highlight-blue">Skills</span> and 
-                <span class="highlight-pink">Learning</span>
+                Transform 
+                <span class="highlight-pink">Workplace Productivity</span>, with
+                <span class="highlight-blue">AI Driven</span>, Insights
             </h1>
         </div>
         """,

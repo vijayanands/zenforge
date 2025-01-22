@@ -6,11 +6,11 @@ from llama_index.core.agent import ReActAgent
 from llama_index.core.tools import BaseTool, FunctionTool
 
 from functions.prompts import APPRAISAL_PROMPT
-from helpers.confluence import get_confluence_contributions_by_author
-from helpers.get_llm import get_llm
-from helpers.github import get_github_contributions_by_author
-from helpers.jira import get_jira_contributions_by_author
+from tools.confluence.confluence import get_confluence_contributions_by_author
+from get_llm import get_llm
 from tools.generate_appraisal_docs import generate_appraisal_docs
+from tools.github.github import get_github_contributions_by_author
+from tools.jira.jira import get_jira_contributions_by_author
 
 # Set up logging
 logging.basicConfig(
