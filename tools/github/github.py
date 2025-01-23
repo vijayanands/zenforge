@@ -113,7 +113,7 @@ def _extract_commit_info(commit: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_all_pull_requests_by_user(since: Optional[datetime] = None) -> Any:
-    raw_prs: Any = client.get_all_pulls(since=since)
+    raw_prs: Any = client.get_all_pull_requests(start_date=since)
     extracted_pr_info = [_extract_pr_info(pr) for pr in raw_prs]
     prs_by_author = defaultdict(dict)
     for pr_info in extracted_pr_info:
@@ -131,7 +131,7 @@ def _extract_commits_by_user(since: Optional[datetime] = None) -> Any:
     branch = client.get_default_branch()
     print(f"Analyzing commits on the default branch: {branch}")
 
-    commits = client.get_commits(branch, since=since)
+    commits = client.get_commits(branch, start_date=since)
     print(f"Found {len(commits)} commits on the {branch} branch")
 
     commits_per_user = defaultdict(dict)
@@ -354,7 +354,7 @@ def get_commits(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    commits = client.search_commits(start_date, end_date, token)
+    commits = client.search_commits(start_date, end_date)
     return commits
 
 
@@ -381,7 +381,7 @@ def get_PR_comments(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    comments = client.search_pull_request_comments(start_date, end_date, token)
+    comments = client.search_pull_request_comments(start_date, end_date)
     return comments
 
 
@@ -410,7 +410,7 @@ def get_commit_comments(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    comments = client.search_commit_comments(start_date, end_date, token)
+    comments = client.search_commit_comments(start_date, end_date)
     return comments
 
 
@@ -437,7 +437,7 @@ def get_PRs(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    prs = client.search_pull_requests(start_date, end_date, token)
+    prs = client.search_pull_requests(start_date, end_date)
     return prs
 
 
@@ -589,7 +589,7 @@ def list_repo_contributors(owner: str, repo: str) -> Any:
 
 def get_all_pull_requests_data(owner: str, repo: str) -> Any:
     client = GitHubAPIClient()
-    raw_prs: Any = client.get_all_pulls()
+    raw_prs: Any = client.get_all_pull_requests()
     prs = [_extract_pr_info(pr) for pr in raw_prs]
 
     print(f"Found {len(prs)} pull requests in {owner}/{repo}")
@@ -597,7 +597,7 @@ def get_all_pull_requests_data(owner: str, repo: str) -> Any:
 
 
 def get_pull_requests_per_user() -> Any:
-    raw_prs: Any = client.get_all_pulls()
+    raw_prs: Any = client.get_all_pull_requests()
     extracted_pr_info = [_extract_pr_info(pr) for pr in raw_prs]
     prs_by_author = defaultdict(dict)
     for pr_info in extracted_pr_info:
