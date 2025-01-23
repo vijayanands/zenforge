@@ -144,13 +144,19 @@ def process_json_to_html_and_pdf(json_file, html_file, pdf_file, author):
         print("HTML file was generated, but there was an issue with PDF creation.")
 
 
+def generate_weekly_report_docs(input_json_file: str, author):
+    _generate_docs(input_json_file, author, "weekly_report")
+
 def generate_appraisal_docs(input_json_file: str, author):
+    _generate_docs(input_json_file, author, "appraisal")
+
+def _generate_docs(input_json_file: str, author, doc_type):
     # Use the current working directory
     current_dir = os.getcwd()
 
     # Define input and output file paths
-    html_file = os.path.join(current_dir, "appraisal.html")
-    pdf_file = os.path.join(current_dir, "appraisal.pdf")
+    html_file = os.path.join(current_dir, f"{doc_type}.html")
+    pdf_file = os.path.join(current_dir, f"{doc_type}.pdf")
 
     process_json_to_html_and_pdf(input_json_file, html_file, pdf_file, author)
 
@@ -159,7 +165,3 @@ def generate_appraisal_docs(input_json_file: str, author):
     print(f"HTML file path: {html_file}")
     print(f"PDF file path: {pdf_file}")
 
-
-# Example usage
-# if __name__ == "__main__":
-#     generate_appraisal_docs()

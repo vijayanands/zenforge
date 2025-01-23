@@ -246,6 +246,9 @@ def get_jira_contributions_by_author(author: str):
     else:
         return None
 
+def get_jira_contributions_by_author_in_the_last_week(author: str):
+    pass
+
 
 def get_jira_contributions_per_user():
     all_jira_contributions = {}

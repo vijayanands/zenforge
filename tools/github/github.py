@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, DefaultDict, Dict, List, Optional
 import random
 
@@ -185,6 +185,8 @@ def get_github_contributions_by_author(
         "pull_requests": pr_list,
     }
 
+def get_github_contributions_by_author_in_the_last_week(author: str) -> Any:
+    return get_github_contributions_by_author(author, since=datetime.now() - timedelta(days=7))
 
 def get_user_mapping(github_username: str, session) -> Optional[str]:
     """Get mapped user email from the mapping table"""

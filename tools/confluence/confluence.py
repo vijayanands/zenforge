@@ -158,6 +158,8 @@ def get_confluence_contributions_by_author(author: str):
         doc["summary"] = summary
     return confluence_data
 
+def get_confluence_contributions_by_author_in_the_last_week(author: str):
+    pass
 
 def get_confluence_contributions_per_user():
     confluence_contributions = {}
