@@ -8,7 +8,7 @@
             "program": "/home/vijay/workspace/zenforge/.venv/bin/streamlit",
             "args": [
                 "run",
-                "/home/vijay/workspace/zenforge/main.py"
+                "/home/vijay/workspace/zenforge/app.py"
             ],
             "console": "integratedTerminal"
         }

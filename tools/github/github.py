@@ -39,7 +39,7 @@ def _is_date_range_subset(new_start: str, new_end: str, cached_start: Optional[s
 
 def _extract_pr_info(pr: Dict[str, Any]) -> Dict[str, Any]:
     milestone = pr.get("milestone", {})
-    merged_at = pr["pull_request"]["merged_at"]
+    merged_at = pr["merged_at"]
     return {
         "html_url": pr["html_url"],
         "id": pr["id"],
@@ -113,7 +113,7 @@ def _extract_commit_info(commit: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_all_pull_requests_by_user(since: Optional[datetime] = None) -> Any:
-    raw_prs: Any = client.get_all_pull_requests(start_date=since)
+    raw_prs: Any = client.get_all_pull_requests(start_date=since.strftime("%Y-%m-%d") if since else None)
     extracted_pr_info = [_extract_pr_info(pr) for pr in raw_prs]
     prs_by_author = defaultdict(dict)
     for pr_info in extracted_pr_info:
@@ -354,7 +354,9 @@ def get_commits(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    commits = client.search_commits(start_date, end_date)
+    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
+    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+    commits = client.get_commits(start_date_dt, end_date_dt)
     return commits
 
 
@@ -381,7 +383,9 @@ def get_PR_comments(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    comments = client.search_pull_request_comments(start_date, end_date)
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
+    comments = client.get_pull_request_comments(start, end)
     return comments
 
 
@@ -410,7 +414,7 @@ def get_commit_comments(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    comments = client.search_commit_comments(start_date, end_date)
+    comments = client.get_all_commit_comments(datetime.strptime(start_date, "%Y-%m-%d"), datetime.strptime(end_date, "%Y-%m-%d") if end_date else None)
     return comments
 
 
@@ -437,7 +441,7 @@ def get_PRs(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    prs = client.search_pull_requests(start_date, end_date)
+    prs = client.get_all_pull_requests(start_date=datetime.strptime(start_date, "%Y-%m-%d"), end_date=datetime.strptime(end_date, "%Y-%m-%d") if end_date else None)
     return prs
 
 
