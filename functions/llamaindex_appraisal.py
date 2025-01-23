@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import logging
 import re
@@ -56,28 +57,31 @@ def generate_weekly_report(author: str) -> str:
     {confluence_response.response}
     """
 
-    # Generate the weekly report using the LLM
-
-    weekly_report_response = llm.complete(WEEKLY_REPORT_PROMPT.format(context=context))
+    # Get the current date and author for the prompt
+    date = datetime.now().strftime("%Y-%m-%d")
+    
+    # Generate the weekly report using the LLM with all required parameters
+    weekly_report_response = llm.complete(
+        WEEKLY_REPORT_PROMPT.format(
+            context=context,
+            author=author,
+            date=date
+        )
+    )
 
     # Parse the JSON response
     try:
-        # Try to parse the response as JSON
         weekly_report_json = json.loads(weekly_report_response.text)
     except json.JSONDecodeError:
         print("Error: LLM output is not valid JSON. Attempting to clean the output.")
-
-        # Remove any potential Markdown formatting and find JSON-like content
         cleaned_text = weekly_report_response.text.strip("`").strip()
         json_match = re.search(r"\{.*\}", cleaned_text, re.DOTALL)
 
         if json_match:
             try:
-                appraisal_json = json.loads(json_match.group())
+                weekly_report_json = json.loads(json_match.group())
             except json.JSONDecodeError:
-                print(
-                    "Error: Cleaned output is still not valid JSON. Falling back to raw text."
-                )
+                print("Error: Cleaned output is still not valid JSON. Falling back to raw text.")
                 weekly_report_json = {"Raw Appraisal": weekly_report_response.text}
         else:
             print("Error: No JSON-like content found. Falling back to raw text.")

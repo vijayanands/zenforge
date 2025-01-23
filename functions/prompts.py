@@ -55,6 +55,6 @@ WEEKLY_REPORT_PROMPT = PromptTemplate(
 
     Ensure that the response is a valid JSON object and nothing else. Do not include any markdown formatting or code blocks.
 
-    Weekly Report:
+    Weekly Report for {author} for the week ending {date}:
     """
 )
