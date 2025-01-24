@@ -75,17 +75,41 @@ def display_productivity_dashboard():
     if st.session_state.get('show_navigation', False):
         st.markdown("---")  # Add separator
         
+        # Initialize navigation state if not exists
+        if 'current_persona' not in st.session_state:
+            st.session_state.current_persona = PERSONA_OPTIONS[DEFAULT_PERSONA_INDEX]
+        if 'current_nav_option' not in st.session_state:
+            st.session_state.current_nav_option = None
+
         # Section for persona selection
         persona = st.selectbox(
             PERSONA_SELECTION_LABEL,
             PERSONA_OPTIONS,
-            index=DEFAULT_PERSONA_INDEX,
+            index=PERSONA_OPTIONS.index(st.session_state.current_persona)
         )
 
+        # Update persona in session state if changed
+        if persona != st.session_state.current_persona:
+            st.session_state.current_persona = persona
+            st.session_state.current_nav_option = None
+            st.rerun()
+
+        # Get navigation options for current persona
+        nav_options = PERSONA_NAVIGATION.get(persona, []).copy()  # Create a copy of the list
+        if "Engineering Metrics" not in nav_options:  # Only add if not already present
+            nav_options.append("Engineering Metrics")
+
         # Section for persona-based navigation
-        nav_options = PERSONA_NAVIGATION.get(persona, [])
-        nav_options.append("Engineering Metrics")
-        nav_option = st.radio("Persona Navigation", nav_options)
+        nav_option = st.radio(
+            "Persona Navigation", 
+            nav_options,
+            index=nav_options.index(st.session_state.current_nav_option) if st.session_state.current_nav_option in nav_options else 0
+        )
+
+        # Update navigation option in session state if changed
+        if nav_option != st.session_state.current_nav_option:
+            st.session_state.current_nav_option = nav_option
+            st.rerun()
 
         # Display appropriate dashboard based on persona and navigation option
         if nav_option:

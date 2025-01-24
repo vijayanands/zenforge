@@ -254,10 +254,12 @@ def ic_productivity_dashboard():
         if 'selected_employee' not in st.session_state:
             st.session_state.selected_employee = "Select an employee"
         
-        selected_name = st.selectbox("Select Employee", employee_names, 
-                                   index=employee_names.index(st.session_state.selected_employee))
-        st.session_state.selected_employee = selected_name
-        selected_email = name_to_email.get(selected_name)
+        # Move selectbox to a container to prevent duplication of elements above it
+        with st.container():
+            selected_name = st.selectbox("Select Employee", employee_names, 
+                                       index=employee_names.index(st.session_state.selected_employee))
+            st.session_state.selected_employee = selected_name
+            selected_email = name_to_email.get(selected_name)
 
         # Only show dashboard content if a valid employee is selected
         if selected_name != "Select an employee" and selected_name != "No data available":
