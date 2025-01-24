@@ -11,6 +11,7 @@ from constants import unique_user_emails
 from tools.auth import get_headers
 
 
+# atlassian_base_url = https://openmrs.atlassian.net/wiki/spaces/docs/overview
 atlassian_base_url = "https://vijayanands.atlassian.net"
 atlassian_username = "vijayanands@gmail.com"
 atlassian_api_token = os.getenv("ATLASSIAN_API_TOKEN")
