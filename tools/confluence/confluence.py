@@ -160,7 +160,8 @@ def get_confluence_contributions_by_author(author: str):
     return confluence_data
 
 def get_confluence_contributions_by_author_in_the_last_week(author: str):
-    pass
+    #todo: implement date filtering for last week here
+    get_confluence_contributions_by_author(author)
 
 def get_confluence_contributions_per_user():
     confluence_contributions = {}
@@ -185,17 +186,3 @@ def get_confluence_pages_space(base_url, username, api_token, space_id):
         print(f"Error: {response.status_code}")
         print(response.text)
         return None
-
-
-# if __name__ == "__main__":
-#     base_url = "https://vijayanands.atlassian.net/wiki"
-#     username = "vijayanands@gmail.com"
-#     api_token = os.getenv("ATLASSIAN_API_TOKEN")
-#     space_key = "SD"
-#     page_title = "Conversational AI For Customer Service"
-#     # spaces = get_spaces(base_url, username, api_token)
-#     # get_page_content_v2(base_url, page_id, username, api_token)
-#
-# if __name__ == "__main__":
-#     confluence_data = get_confluence_contributions_by_author(author="vijayanands@gmail.com")
-#     print(json.dumps(confluence_data, indent=2))
