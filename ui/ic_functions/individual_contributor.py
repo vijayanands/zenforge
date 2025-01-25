@@ -285,7 +285,10 @@ PROMPT_OPTIONS = [
     "Generate a self appraisal for me",
     "Generate a weekly report for me",
     "Show me productivity dashboard",
-    "Show me statistics on SDLC timeline for my projects"
+    "Show me statistics on SDLC timeline for my projects",
+    "compare productivity data for employees in my team",
+    "List me the top 5% performers in my organization",
+    "List me the bottom 5% performers in my organization",
 ]
 
 PROMPT_MAP = {
@@ -293,6 +296,9 @@ PROMPT_MAP = {
     PROMPT_OPTIONS[2]: "weekly_report",
     PROMPT_OPTIONS[3]: "producitity_dashboard",
     PROMPT_OPTIONS[4]: "sdlc_timeline_view",
+    PROMPT_OPTIONS[5]: "compare_productivity_data",
+    PROMPT_OPTIONS[6]: "top_performers",
+    PROMPT_OPTIONS[7]: "bottom_performers",
 }
 
 def individual_contributor_dashboard_conversational():
