@@ -388,8 +388,9 @@ def get_PR_comments(prs: List, start_date: str, end_date: Optional[str] = None):
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
     comments = []
-    for pr in prs:
-        comments.extend(client.get_pull_request_comments(pr["number"], start, end))
+    # todo: uncomment next two lines
+    # for pr in prs:
+    #     comments.extend(client.get_pull_request_comments(pr["number"], start, end))
     return comments
 
 

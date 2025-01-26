@@ -73,20 +73,6 @@ def generate_employee_position(employee):
     }
     return positions.get(employee, "Employee")
 
-
-def generate_task_data():
-    total_tasks = random.randint(50, 100)
-    completed = random.randint(20, total_tasks - 10)
-    in_progress = total_tasks - completed
-    on_track = random.randint(0, in_progress)
-    overdue = in_progress - on_track
-    return total_tasks, completed, in_progress, on_track, overdue
-
-
-def generate_weekly_task_completion():
-    return [random.randint(5, 20) for _ in range(12)]
-
-
 def generate_email_response_trend():
     return [round(random.uniform(0.5, 4), 1) for _ in range(12)]
 
@@ -264,50 +250,10 @@ def ic_productivity_dashboard():
                 st.info(f"**Position:** {designation}")
 
             # Create tabs
-            tabs = create_styled_tabs(["Tasks", "Code", "Knowledge", "Meetings"])
+            tabs = create_styled_tabs(["Code", "Knowledge", "Meetings", "Goals & Objectives"])
 
-            # Tab 1: Tasks
+            # Tab 1: Code
             with tabs[0]:
-                total_tasks, completed, in_progress, on_track, overdue = generate_task_data()
-
-                col1, col2, col3, col4, col5 = st.columns(5)
-                with col1:
-                    create_styled_metric("Total Tasks", total_tasks, "📋")
-                with col2:
-                    create_styled_metric("Completed", completed, "✅")
-                with col3:
-                    create_styled_metric("In Progress", in_progress, "🔄")
-                with col4:
-                    create_styled_metric("On Track", on_track, "🎯")
-                with col5:
-                    create_styled_metric("Overdue", overdue, "⏰")
-
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.header("Task Distribution")
-                    task_data = pd.DataFrame(
-                        {
-                            "Status": ["Completed", "On Track", "Overdue"],
-                            "Value": [completed, on_track, overdue],
-                        }
-                    )
-                    fig = create_pie_chart(
-                        task_data,
-                        names="Status",
-                        values="Value",
-                        title="Task Distribution",
-                        height=360,
-                        width=360,
-                    )
-                    display_pie_chart(fig)
-
-                with col2:
-                    st.header("Weekly Task Completion Rate")
-                    weekly_completion = generate_weekly_task_completion()
-                    create_styled_line_chart(weekly_completion, "Weeks", "Tasks Completed")
-
-            # Tab 2: Code
-            with tabs[1]:
                 # Use the selected_email to find the employee's data
                 if selected_email and selected_email in github_data:
                     employee_data = github_data[selected_email]
@@ -386,8 +332,8 @@ def ic_productivity_dashboard():
                     ]
                     create_styled_line_chart(code_quality_trend, "Weeks", "Code Quality Score")
 
-            # Tab 3: Knowledge
-            with tabs[2]:
+            # Tab 2: Knowledge
+            with tabs[1]:
                 knowledge_data = generate_knowledge_data()
 
                 col1, col2, col3, col4, col5 = st.columns(5)
@@ -422,8 +368,8 @@ def ic_productivity_dashboard():
                     title="Recent Contributions",
                 )
 
-            # Tab 4: Meetings
-            with tabs[3]:
+            # Tab 3: Meetings
+            with tabs[2]:
                 meeting_data = generate_meeting_data()
 
                 col1, col2, col3, col4, col5 = st.columns(5)
@@ -449,7 +395,124 @@ def ic_productivity_dashboard():
                 create_styled_bar_chart(
                     list(raci_data.keys()), list(raci_data.values()), "Roles", "Count"
                 )
+            # Tab 4: Goals & Objectives
+            with tabs[3]:
+                goals = generate_goals_for_employee(selected_email)
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Technical Goals")
+                    for goal in goals["technical_goals"]:
+                        display_goal_with_status(goal)
+
+                with col2:
+                    st.subheader("Professional Goals")
+                    for goal in goals["professional_goals"]:
+                        display_goal_with_status(goal)
 
 
 if __name__ == "__main__":
     ic_productivity_dashboard()
+
+
+def generate_goals_for_employee(email: str) -> dict:
+    """Generate or fetch goals for the specified employee with random statuses"""
+    # Use email as seed for random to get consistent results for same employee
+    random.seed(hash(email))
+
+    status_options = ["Completed", "On Track", "In Progress", "At Risk", "Not Started"]
+
+    technical_goals = [
+        {
+            "goal": "Complete Advanced Python Certification",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Lead 2 major feature implementations",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Improve code coverage to 85%",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Mentor 2 junior developers",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        }
+    ]
+
+    professional_goals = [
+        {
+            "goal": "Improve presentation skills",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Take leadership training",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Contribute to 3 cross-team projects",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        },
+        {
+            "goal": "Write 5 technical blog posts",
+            "status": random.choice(status_options),
+            "completion": random.randint(0, 100)
+        }
+    ]
+
+    # Ensure completion percentage matches status
+    for goal in technical_goals + professional_goals:
+        if goal["status"] == "Completed":
+            goal["completion"] = 100
+        elif goal["status"] == "Not Started":
+            goal["completion"] = 0
+        elif goal["status"] == "At Risk":
+            goal["completion"] = random.randint(10, 40)
+        elif goal["status"] == "On Track":
+            goal["completion"] = random.randint(60, 90)
+        else:  # In Progress
+            goal["completion"] = random.randint(20, 80)
+
+    return {
+        "technical_goals": technical_goals,
+        "professional_goals": professional_goals
+    }
+
+
+def display_goal_with_status(goal_data):
+    """Display a goal with its status and completion progress"""
+    status_colors = {
+        "Completed": "green",
+        "On Track": "blue",
+        "In Progress": "orange",
+        "At Risk": "red",
+        "Not Started": "grey"
+    }
+    color = status_colors.get(goal_data["status"], "grey")
+
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="flex-grow: 1;">
+                    <span>• {goal_data["goal"]}</span>
+                </div>
+                <div style="margin-left: 20px;">
+                    <span style="color: {color}; font-weight: bold;">{goal_data["status"]}</span>
+                </div>
+            </div>
+            <div style="background-color: #f0f2f6; height: 8px; border-radius: 4px; margin-top: 5px;">
+                <div style="background-color: {color}; width: {goal_data['completion']}%; height: 100%; border-radius: 4px;"></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
