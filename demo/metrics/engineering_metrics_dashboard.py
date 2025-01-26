@@ -1,13 +1,8 @@
 from datetime import datetime, timedelta
 import streamlit as st
 import pandas as pd
-from demo.ui.style import (
-    create_styled_metric,
-    create_styled_line_chart,
-    create_styled_tabs,
-    create_pie_chart,
-    display_pie_chart,
-)
+from ui.style import create_styled_metric, create_pie_chart, display_pie_chart, create_styled_tabs, \
+    create_styled_line_chart
 from demo.metrics.engineering_metrics import calculate_metrics_from_timescale
 
 def engineering_metrics_dashboard():

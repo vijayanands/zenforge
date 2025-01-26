@@ -1,9 +1,34 @@
 import streamlit as st
 import uuid
 
-from functions.ingestion import ingest_data, answer_question
-from ui.ic_functions.individual_contributor import individual_contributor_dashboard_conversational
+from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
+from demo.metrics.productivity_dashboard import display_productivity_dashboard
 
+from functions.ingestion import ingest_data, answer_question
+from ui.weekly_report_ui import perform_weekly_report_generation
+from ui.self_appraisal_ui import perform_self_appraisal
+
+PROMPT_OPTIONS = [
+    "Select an action",
+    "Generate a self appraisal for me",
+    "Generate a weekly report for me",
+    "Show me statistics on SDLC timeline for my projects",
+    "Show me productivity dashboard",
+    "compare productivity data for employees in my team",
+    "List me the top 5% performers in my organization",
+    "List me the bottom 5% performers in my organization",
+    "Code Quality Analysis",
+]
+PROMPT_MAP = {
+    PROMPT_OPTIONS[1]: "self_appraisal",
+    PROMPT_OPTIONS[2]: "weekly_report",
+    PROMPT_OPTIONS[3]: "sdlc_timeline_view",
+    PROMPT_OPTIONS[4]: "producivity_dashboard",
+    PROMPT_OPTIONS[5]: "compare_productivity_data",
+    PROMPT_OPTIONS[6]: "top_performers",
+    PROMPT_OPTIONS[7]: "bottom_performers",
+    PROMPT_OPTIONS[8]: "code_quality_analysis",
+}
 
 def dashboard():
     st.title(
@@ -11,7 +36,7 @@ def dashboard():
     )
 
     # Get the current selection
-    current_action = individual_contributor_dashboard_conversational()
+    current_action = dashboard_conversational()
 
     # Store the previous selection
     if "previous_action" not in st.session_state:
@@ -75,3 +100,48 @@ def dashboard():
         st.write(st.session_state.question_answer)
         # Clear the answer after displaying
         st.session_state.question_answer = None
+
+
+def dashboard_conversational():
+    if "current_view" not in st.session_state:
+        st.session_state.current_view = "main"
+
+    if st.session_state.current_view != "main":
+        if st.button("Back to Dashboard", key=f"back_{st.session_state.current_view}"):
+            st.session_state.current_view = "main"
+            st.session_state.selected_skill_for_improvement = None
+            st.session_state.add_skill_mode = False
+            st.session_state.skills_edit_mode = False
+            st.rerun()
+
+    if st.session_state.current_view == "main":
+        selected_prompt = st.selectbox(
+            "", PROMPT_OPTIONS, index=0, key="action_selector"
+        )
+
+        if selected_prompt != "Select an action":
+            st.session_state.current_view = PROMPT_MAP.get(selected_prompt, selected_prompt)
+            st.rerun()
+
+        return selected_prompt  # Return the selected action
+
+    elif st.session_state.current_view == "self_appraisal":
+        perform_self_appraisal()
+    elif st.session_state.current_view == "weekly_report":
+        perform_weekly_report_generation()
+    elif st.session_state.current_view == "producivity_dashboard":
+        display_productivity_dashboard()
+    elif st.session_state.current_view == "sdlc_timeline_view":
+        display_development_cycle_metrics()
+    elif st.session_state.current_view == "compare_productivity_data":
+        st.error("Functionality not yet implemented.")
+    elif st.session_state.current_view == "top_performers":
+        st.error("Functionality not yet implemented.")
+    elif st.session_state.current_view == "bottom_performers":
+        st.error("Functionality not yet implemented.")
+    elif st.session_state.current_view == "code_quality_analysis":
+        st.error("Functionality not yet implemented.")
+    else:
+        st.error("Invalid view selected. Please go back to the main dashboard.")
+
+    return st.session_state.current_view  # Return the current view for all cases

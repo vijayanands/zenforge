@@ -5,17 +5,9 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from demo.ui.style import (
-    apply_styled_dropdown_css,
-    create_pie_chart,
-    create_progress_bar,
-    create_styled_bar_chart,
-    create_styled_bullet_list,
-    create_styled_line_chart,
-    create_styled_metric,
-    create_styled_tabs,
-    display_pie_chart,
-)
+from ui.style import create_styled_metric, create_styled_bullet_list, create_pie_chart, display_pie_chart, \
+    create_styled_tabs, create_progress_bar, create_styled_line_chart, create_styled_bar_chart, \
+    apply_styled_dropdown_css
 
 
 # Helper functions to generate dummy data for employee-level dashboard

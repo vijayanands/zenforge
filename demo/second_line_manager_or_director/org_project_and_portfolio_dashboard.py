@@ -2,13 +2,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-from demo.ui.style import (
-    apply_styled_dropdown_css,
-    create_multi_bar_chart,
-    create_progress_bar,
-    create_styled_metric,
-    create_styled_tabs,
-)
+from ui.style import create_styled_metric, create_styled_tabs, create_progress_bar, apply_styled_dropdown_css, \
+    create_multi_bar_chart
 
 
 def director_project_portfolio_dashboard():

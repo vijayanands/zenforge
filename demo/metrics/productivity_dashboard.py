@@ -114,7 +114,7 @@ def display_productivity_dashboard():
         # Display appropriate dashboard based on persona and navigation option
         if nav_option:
             if nav_option == "Engineering Metrics":
-                engineering_metrics_dashboard()
+                pass
             elif persona == PERSONA_OPTIONS[0]:  # Individual Contributor
                 show_ic_dashboard(nav_option)
             elif persona == PERSONA_OPTIONS[1]:  # First Line Manager

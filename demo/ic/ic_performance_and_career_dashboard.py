@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import datetime, timedelta
-from demo.ui.style import create_styled_tabs
+from ui.style import create_styled_tabs
 from tools.github.github import pull_github_data
 from model.sdlc_events import User, DatabaseManager, connection_string
 import random
