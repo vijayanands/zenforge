@@ -1,8 +1,8 @@
 import streamlit as st
 import uuid
 
-from demo.metrics.development_cycle_metrics import display_development_cycle_metrics
-from demo.metrics.productivity_dashboard import display_productivity_dashboard
+from demo.development_cycle_metrics import display_development_cycle_metrics
+from demo.productivity_dashboard import display_productivity_dashboard
 
 from functions.ingestion import ingest_data, answer_question
 from ui.weekly_report_ui import perform_weekly_report_generation
