@@ -284,21 +284,23 @@ PROMPT_OPTIONS = [
     "Select an action",
     "Generate a self appraisal for me",
     "Generate a weekly report for me",
-    "Show me productivity dashboard",
     "Show me statistics on SDLC timeline for my projects",
+    "Show me productivity dashboard",
     "compare productivity data for employees in my team",
     "List me the top 5% performers in my organization",
     "List me the bottom 5% performers in my organization",
+    "Code Quality Analysis",
 ]
 
 PROMPT_MAP = {
     PROMPT_OPTIONS[1]: "self_appraisal",
     PROMPT_OPTIONS[2]: "weekly_report",
-    PROMPT_OPTIONS[3]: "producitity_dashboard",
-    PROMPT_OPTIONS[4]: "sdlc_timeline_view",
+    PROMPT_OPTIONS[3]: "sdlc_timeline_view",
+    PROMPT_OPTIONS[4]: "producivity_dashboard",
     PROMPT_OPTIONS[5]: "compare_productivity_data",
     PROMPT_OPTIONS[6]: "top_performers",
     PROMPT_OPTIONS[7]: "bottom_performers",
+    PROMPT_OPTIONS[8]: "code_quality_analysis",
 }
 
 def individual_contributor_dashboard_conversational():
@@ -328,7 +330,7 @@ def individual_contributor_dashboard_conversational():
         perform_self_appraisal()
     elif st.session_state.current_view == "weekly_report":
         perform_weekly_report_generation()
-    elif st.session_state.current_view == "producitity_dashboard":
+    elif st.session_state.current_view == "producivity_dashboard":
         display_productivity_dashboard()
     elif st.session_state.current_view == "sdlc_timeline_view":
         display_development_cycle_metrics()
