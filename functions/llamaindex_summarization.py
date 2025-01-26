@@ -3,7 +3,8 @@ import uuid
 
 from llama_index.core import Document, VectorStoreIndex
 from llama_index.core.node_parser import SimpleNodeParser
-from get_llm import get_llm
+from utils import get_llm
+
 
 def summarize_data(data, id=None):
     # Check if data is a string (possibly a JSON string)

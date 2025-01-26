@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 
 import requests
 
-from constants import unique_user_emails
+from utils import unique_user_emails
 from tools.auth import get_headers
 
 atlassian_base_url = "https://vijayanands.atlassian.net"

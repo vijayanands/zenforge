@@ -9,7 +9,7 @@ from llama_index.core.tools import BaseTool, FunctionTool
 from functions.prompts import APPRAISAL_PROMPT, WEEKLY_REPORT_PROMPT
 from tools.confluence.confluence import get_confluence_contributions_by_author, \
     get_confluence_contributions_by_author_in_the_last_week
-from get_llm import get_llm
+from utils import get_llm
 from tools.generate_docs import generate_appraisal_docs, generate_weekly_report_docs
 from tools.github.github import get_github_contributions_by_author, get_github_contributions_by_author_in_the_last_week
 from tools.jira.jira import get_jira_contributions_by_author, get_jira_contributions_by_author_in_the_last_week
@@ -169,7 +169,7 @@ def self_appraisal_tool(author: str):
     print(f"Appraisal saved as JSON: {json_file_name}")
 
     # Generate HTML and PDF documents
-    generate_appraisal_docs(json_file_name, author)
+    # generate_appraisal_docs(json_file_name, author)
     return appraisal
 
 def weekly_report_tool(author: str):
@@ -182,5 +182,5 @@ def weekly_report_tool(author: str):
     print(f"Weekly report saved as JSON: {json_file_name}")
 
     # Generate HTML and PDF documents
-    generate_weekly_report_docs(json_file_name, author)
+    # generate_weekly_report_docs(json_file_name, author)
     return weekly_report

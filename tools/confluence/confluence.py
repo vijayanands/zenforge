@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup, Comment
 
 from functions.llamaindex_summarization import summarize_data
 
-from constants import unique_user_emails
+from utils import unique_user_emails
 from tools.auth import get_headers
 
 

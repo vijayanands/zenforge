@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from typing import Any, DefaultDict, Dict, List, Optional
 import random
 
-from constants import map_user, user_to_external_users, unique_user_emails
+from utils import unique_user_emails, user_to_external_users, map_user
 from model.sdlc_events import UserMapping, User, DatabaseManager, connection_string, Base
 from tools.github.github_client import GitHubAPIClient
 
