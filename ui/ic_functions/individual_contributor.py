@@ -334,6 +334,14 @@ def individual_contributor_dashboard_conversational():
         display_productivity_dashboard()
     elif st.session_state.current_view == "sdlc_timeline_view":
         display_development_cycle_metrics()
+    elif st.session_state.current_view == "compare_productivity_data":
+        st.error("Functionality not yet implemented.")
+    elif st.session_state.current_view == "top_performers":
+        st.error("Functionality not yet implemented.")
+    elif st.session_state.current_view == "bottom_performers":
+        st.error("Functionality not yet implemented.")
+    elif st.session_state.current_view == "code_quality_analysis":
+        st.error("Functionality not yet implemented.")
     else:
         st.error("Invalid view selected. Please go back to the main dashboard.")
 
