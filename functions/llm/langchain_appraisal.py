@@ -1,15 +1,13 @@
-from datetime import datetime
 import json
 from typing import Dict, List
 from langchain.agents import AgentType, Tool, initialize_agent
 from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage
 from langchain.prompts import PromptTemplate
 
-from tools.generate_docs import generate_appraisal_docs
-from tools.github.github import get_github_contributions_by_author
-from tools.jira.jira import get_jira_contributions_by_author
-from tools.confluence.confluence import get_confluence_contributions_by_author
+from utils import generate_appraisal_docs
+from functions.github.github import get_github_contributions_by_author
+from functions.jira.jira import get_jira_contributions_by_author
+from functions.confluence.confluence import get_confluence_contributions_by_author
 
 def create_langchain_tools() -> List[Tool]:
     """Create tools for the Langchain agent"""

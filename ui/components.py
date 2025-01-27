@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import streamlit as st
-from tools.github.github import pull_github_data
+from functions.github.github import pull_github_data
 
 def time_range_selector(key_prefix=""):
     """Shared time range selector component with GitHub data fetching"""

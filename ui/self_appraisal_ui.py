@@ -2,7 +2,7 @@ import json
 
 import streamlit as st
 
-from functions.self_appraisal import create_self_appraisal
+from functions.llm.self_appraisal import create_self_appraisal
 
 
 def reset_self_appraisal_ui():

@@ -5,11 +5,9 @@ from typing import Any, Dict, List
 import requests
 from bs4 import BeautifulSoup, Comment
 
-from functions.llamaindex_summarization import summarize_data
+from functions.llm.llamaindex_summarization import summarize_data
 
-from utils import unique_user_emails
-from tools.auth import get_headers
-
+from utils import unique_user_emails, get_headers
 
 # atlassian_base_url = https://openmrs.atlassian.net/wiki/spaces/docs/overview
 atlassian_base_url = "https://vijayanands.atlassian.net"

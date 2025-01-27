@@ -10,7 +10,7 @@ from pathlib import Path
 import pinecone
 from pymongo import MongoClient
 import logging
-from tools.github.github import pull_github_data
+from functions.github.github import pull_github_data
 
 # Configure logging
 logging.basicConfig(

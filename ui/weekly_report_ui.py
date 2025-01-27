@@ -2,7 +2,7 @@ import json
 
 import streamlit as st
 
-from functions.weekly_report import create_weekly_report
+from functions.llm.weekly_report import create_weekly_report
 
 
 def perform_weekly_report_generation():

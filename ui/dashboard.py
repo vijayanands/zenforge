@@ -1,10 +1,10 @@
 import streamlit as st
 import uuid
 
-from demo.development_cycle_metrics import display_development_cycle_metrics
-from demo.productivity_dashboard import display_productivity_dashboard
+from functions.development_cycle_metrics import display_development_cycle_metrics
+from ui.productivity_dashboard import display_productivity_dashboard
 
-from functions.ingestion import ingest_data, answer_question
+from functions.llm.ingestion import ingest_data, answer_question
 from ui.weekly_report_ui import perform_weekly_report_generation
 from ui.self_appraisal_ui import perform_self_appraisal
 
@@ -32,7 +32,7 @@ PROMPT_MAP = {
 
 def dashboard():
     st.title(
-        f"Good morning vijayanands@gmail.com"
+        f"Good morning vijay"
     )
 
     # Get the current selection

@@ -1,8 +1,8 @@
 import streamlit as st
 from datetime import datetime, timedelta
 
-from demo.ic_productivity_dashboard import ic_productivity_dashboard
-from tools.github.github import pull_github_data
+from ui.ic_productivity_dashboard import ic_productivity_dashboard
+from functions.github.github import pull_github_data
 
 def display_productivity_dashboard():
     # Time range selection

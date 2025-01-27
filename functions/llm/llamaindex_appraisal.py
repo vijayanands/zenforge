@@ -6,13 +6,12 @@ from typing import List
 from llama_index.core.agent import ReActAgent
 from llama_index.core.tools import BaseTool, FunctionTool
 
-from functions.prompts import APPRAISAL_PROMPT, WEEKLY_REPORT_PROMPT
-from tools.confluence.confluence import get_confluence_contributions_by_author, \
+from functions.llm.prompts import APPRAISAL_PROMPT, WEEKLY_REPORT_PROMPT
+from functions.confluence.confluence import get_confluence_contributions_by_author, \
     get_confluence_contributions_by_author_in_the_last_week
 from utils import get_llm
-from tools.generate_docs import generate_appraisal_docs, generate_weekly_report_docs
-from tools.github.github import get_github_contributions_by_author, get_github_contributions_by_author_in_the_last_week
-from tools.jira.jira import get_jira_contributions_by_author, get_jira_contributions_by_author_in_the_last_week
+from functions.github.github import get_github_contributions_by_author, get_github_contributions_by_author_in_the_last_week
+from functions.jira.jira import get_jira_contributions_by_author, get_jira_contributions_by_author_in_the_last_week
 
 # Set up logging
 logging.basicConfig(

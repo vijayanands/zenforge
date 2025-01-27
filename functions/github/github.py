@@ -9,7 +9,7 @@ import random
 
 from utils import unique_user_emails, user_to_external_users, map_user
 from model.sdlc_events import UserMapping, User, DatabaseManager, connection_string, Base
-from tools.github.github_client import GitHubAPIClient
+from functions.github.github_client import GitHubAPIClient
 
 client = GitHubAPIClient()
 owner = client.get_github_owner()
@@ -483,7 +483,7 @@ def print_github_data(github_data):
     print(json_data)
 
     # Save the JSON data to a file
-    output_file = "../github_data_output.json"
+    output_file = "../../tools/github_data_output.json"
     with open(output_file, "w") as f:
         f.write(json_data)
 
@@ -522,7 +522,7 @@ def pull_github_data(
     _cached_start_date = start_date
     _cached_end_date = end_date
     
-    print_github_data(data)
+    # print_github_data(data)
     return data, user_info
 
 

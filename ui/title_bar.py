@@ -1,6 +1,6 @@
 import streamlit as st
 
-from tools.utils import get_base64_of_bin_file
+from utils import get_base64_of_bin_file
 
 
 def set_title_bar():

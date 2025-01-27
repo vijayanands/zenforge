@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 
-from ui.style import create_styled_metric, create_styled_bullet_list, create_styled_radio_buttons, create_pie_chart, \
+from ui.style import create_styled_metric, create_styled_bullet_list, create_pie_chart, \
     display_pie_chart, create_styled_tabs, create_styled_line_chart, create_styled_bar_chart
 
-from tools.github.github import pull_github_data
+from functions.github.github import pull_github_data
 from model.sdlc_events import User, DatabaseManager, connection_string
 
 

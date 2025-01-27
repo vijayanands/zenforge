@@ -12,9 +12,9 @@ from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 from pydantic import ValidationError
 
-from tools.confluence.confluence import get_confluence_contributions_per_user
+from functions.confluence.confluence import get_confluence_contributions_per_user
 from model.pydantic_models import UserData, JiraData, GitHubData, ConfluenceData
-from tools.github.github import get_github_contributions_by_repo
+from functions.github.github import get_github_contributions_by_repo
 
 # Initialize Pinecone
 index_name = "pathforge-data"

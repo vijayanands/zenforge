@@ -1,5 +1,5 @@
-from functions.llamaindex_appraisal import self_appraisal_tool
-from tools.github.github import initialize_github_hack
+from functions.llm.llamaindex_appraisal import self_appraisal_tool
+from functions.github.github import initialize_github_hack
 
 debug_jira = False
 debug_confluence = False
