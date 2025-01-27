@@ -8,6 +8,11 @@ import os
 import difflib
 from radon.metrics import h_visit
 from radon.raw import analyze
+from pylint.lint import Run
+from pylint.reporters import JSONReporter
+import io
+import sys
+from contextlib import redirect_stdout, redirect_stderr
 
 
 class CodeQualityEvaluator:
@@ -55,6 +60,82 @@ class CodeQualityEvaluator:
             self.max_line_length = config.get('max_line_length', self.max_line_length)
             self.min_comment_ratio = config.get('min_comment_ratio', self.min_comment_ratio)
 
+    def _run_pylint_analysis(self, code: str) -> Dict[str, any]:
+        """Run pylint analysis on code"""
+        try:
+            # Create a temporary file for pylint analysis
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
+                temp_file.write(code)
+                temp_file.flush()
+                temp_path = temp_file.name
+
+            try:
+                # Create JSON reporter
+                json_reporter = JSONReporter()
+                
+                # Run pylint with JSON reporter
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    Run(
+                        [temp_path],
+                        reporter=json_reporter,
+                        exit=False
+                    )
+                
+                # Get results
+                results = json_reporter.messages
+                
+                # Calculate score (10 - number of errors/warnings)
+                score = 10.0
+                feedback = []
+                
+                for msg in results:
+                    if msg.category in ('error', 'warning', 'convention', 'refactor'):
+                        score -= 0.5
+                        feedback.append(f"{msg.symbol} ({msg.line}:{msg.column}): {msg.msg}")
+                
+                return {
+                    'score': max(0.0, score),
+                    'feedback': feedback[:3],  # Return top 3 issues
+                    'total_issues': len(results)
+                }
+            finally:
+                # Clean up temporary file
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                    
+        except Exception as e:
+            return {
+                'score': 0.0,
+                'feedback': [f"Pylint analysis failed: {str(e)}"],
+                'total_issues': 0
+            }
+
+    def _calculate_halstead_metrics(self, code: str) -> Dict[str, any]:
+        """Calculate Halstead metrics for the code"""
+        try:
+            hal_metrics = h_visit(code)
+            if not hal_metrics:
+                return None
+                
+            # Get metrics from the first module
+            metrics = hal_metrics[0] if isinstance(hal_metrics, list) else next(iter(hal_metrics))
+            
+            return {
+                'h1': metrics.h1,
+                'h2': metrics.h2,
+                'N1': metrics.N1,
+                'N2': metrics.N2,
+                'vocabulary': metrics.vocabulary,
+                'length': metrics.length,
+                'volume': metrics.volume,
+                'difficulty': metrics.difficulty,
+                'effort': metrics.effort,
+                'time': metrics.time,
+                'bugs': metrics.bugs
+            }
+        except Exception as e:
+            return None
+
     def evaluate_code_quality(self, code: str, file_path: str = None) -> Dict[str, any]:
         """
         Evaluates Python code quality using multiple metrics.
@@ -101,34 +182,18 @@ class CodeQualityEvaluator:
             feedback.append("Unable to calculate complexity")
 
         # Calculate Halstead metrics
-        try:
-            hal_metrics = h_visit(code)
-            if hal_metrics:
-                # Get the first module's metrics (usually there's only one)
-                module_metrics = list(hal_metrics.values())[0]
-                metrics.update({
-                    'h1': module_metrics.h1,  # distinct operators
-                    'h2': module_metrics.h2,  # distinct operands
-                    'N1': module_metrics.N1,  # total operators
-                    'N2': module_metrics.N2,  # total operands
-                    'vocabulary': module_metrics.vocabulary,
-                    'length': module_metrics.length,
-                    'volume': module_metrics.volume,
-                    'difficulty': module_metrics.difficulty,
-                    'effort': module_metrics.effort,
-                    'time': module_metrics.time,
-                    'bugs': module_metrics.bugs
-                })
+        halstead_results = self._calculate_halstead_metrics(code)
+        if halstead_results:
+            metrics.update(halstead_results)
+            
+            if halstead_results['difficulty'] > self.max_halstead_difficulty:
+                score -= min(20, (halstead_results['difficulty'] - self.max_halstead_difficulty) * 2)
+                feedback.append(f"High code complexity (Halstead difficulty: {halstead_results['difficulty']:.2f})")
 
-                # Evaluate Halstead metrics
-                if module_metrics.difficulty > self.max_halstead_difficulty:
-                    score -= min(20, (module_metrics.difficulty - self.max_halstead_difficulty) * 2)
-                    feedback.append(f"High code complexity (Halstead difficulty: {module_metrics.difficulty:.2f})")
-
-                if module_metrics.bugs > 0.3:
-                    score -= min(15, int(module_metrics.bugs * 30))
-                    feedback.append(f"Code might be prone to bugs (Estimated bugs: {module_metrics.bugs:.2f})")
-        except:
+            if halstead_results['bugs'] > 0.3:
+                score -= min(15, int(halstead_results['bugs'] * 30))
+                feedback.append(f"Code might be prone to bugs (Estimated bugs: {halstead_results['bugs']:.2f})")
+        else:
             feedback.append("Unable to calculate Halstead metrics")
 
         # Analyze raw code metrics
@@ -154,42 +219,20 @@ class CodeQualityEvaluator:
         except:
             feedback.append("Unable to calculate code metrics")
 
-        # Run pylint with proper module naming
+        # Run pylint analysis
         try:
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as temp_file:
-                if file_path:
-                    # Use original filename for better pylint module naming
-                    temp_path = os.path.join(os.path.dirname(temp_file.name),
-                                             os.path.basename(file_path))
-                    os.rename(temp_file.name, temp_path)
-                else:
-                    temp_path = temp_file.name
-
-                with open(temp_path, 'w') as f:
-                    f.write(code)
-
-                pylint_args = f'--module-naming-style=any {temp_path}'
-                (pylint_stdout, _) = lint.py_run(pylint_args, return_std=True)
-                pylint_output = pylint_stdout.getvalue()
-
-                # Parse pylint output for score
-                pylint_score_match = re.search(r'Your code has been rated at (-?\d+\.\d+)', pylint_output)
-                if pylint_score_match:
-                    pylint_score = float(pylint_score_match.group(1))
-                    metrics['pylint_score'] = pylint_score
-
-                    # Adjust score based on pylint rating
-                    if pylint_score < 5:
-                        score -= 20
-                    elif pylint_score < 8:
-                        score -= 10
-
-                # Extract major issues from pylint output
-                major_issues = re.findall(r'([CEF]\d{4}:.*?)(?=\n[A-Z]|\Z)', pylint_output, re.DOTALL)
-                if major_issues:
-                    feedback.extend([issue.strip() for issue in major_issues[:3]])
-
-            os.unlink(temp_path)
+            pylint_results = self._run_pylint_analysis(code)
+            if pylint_results:
+                metrics['pylint_score'] = pylint_results['score']
+                
+                # Adjust score based on pylint rating
+                if pylint_results['score'] < 5:
+                    score -= 20
+                elif pylint_results['score'] < 8:
+                    score -= 10
+                    
+                # Add pylint feedback
+                feedback.extend(pylint_results['feedback'])
         except Exception as e:
             feedback.append(f"Unable to run pylint analysis: {str(e)}")
 
@@ -398,37 +441,51 @@ def evaluate_code_and_comment(code_before: str,
 
 # Example usage
 if __name__ == "__main__":
-    # Example code change
-    before_code = """
-def process_data(data):
-    return data.upper()
+    # Simple example that should work with both metrics
+    test_code = '''"""Example module for testing code quality metrics.
+
+This module demonstrates a simple factorial calculation with proper
+documentation, type hints, and error handling.
 """
 
-    after_code = """
-def process_data(data, normalize=True):
-    '''Process input data with optional normalization'''
-    if normalize:
-        data = data.strip().lower()
-    return data.upper()
-"""
-
-    pr_comment = """Added normalization option to process_data function. 
-The normalize parameter strips whitespace and converts to lowercase before upper-casing,
-which helps standardize input handling."""
-
-    # Evaluate everything
-    results = evaluate_code_and_comment(before_code, after_code, pr_comment)
-    print("Evaluation Results:")
-    print("-" * 50)
-    print(f"Original Code Quality Score: {results['original_code_quality']['score']}")
-    print(f"Modified Code Quality Score: {results['modified_code_quality']['score']}")
-    print(f"Quality Change: {results['quality_delta']}")
-    print(f"Comment Quality Score: {results['comment_quality']['score']}")
-    print("\nDetailed Feedback:")
-    print("-" * 50)
-    print("Modified Code Feedback:")
-    for feedback in results['modified_code_quality']['feedback']:
-        print(f"- {feedback}")
-    print("\nComment Feedback:")
-    for feedback in results['comment_quality']['feedback']:
-        print(f"- {feedback}")
+def calculate_factorial(n: int) -> int:
+    """Calculate the factorial of a number.
+    
+    Args:
+        n: The number to calculate factorial for
+        
+    Returns:
+        The factorial of n
+    
+    Raises:
+        ValueError: If n is negative
+    """
+    if not isinstance(n, int):
+        raise TypeError("Input must be an integer")
+    if n < 0:
+        raise ValueError("Input must be non-negative")
+    if n == 0:
+        return 1
+    return n * calculate_factorial(n - 1)
+'''
+    
+    evaluator = CodeQualityEvaluator()
+    result = evaluator.evaluate_code_quality(test_code)
+    
+    print("\nCode Quality Analysis Results:")
+    print("-" * 40)
+    print(f"Overall Score: {result['score']}")
+    print(f"Quality Level: {result['quality_level']}")
+    
+    if result['feedback']:
+        print("\nFeedback:")
+        for fb in result['feedback']:
+            print(f"- {fb}")
+    
+    if 'metrics' in result:
+        print("\nMetrics:")
+        for key, value in result['metrics'].items():
+            if isinstance(value, float):
+                print(f"{key}: {value:.2f}")
+            else:
+                print(f"{key}: {value}")
