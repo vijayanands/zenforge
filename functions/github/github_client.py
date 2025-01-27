@@ -65,25 +65,25 @@ class GitHubAPIClient:
         return response.json()["default_branch"]
 
     def get_commits(self, branch: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github("commits", {"sha": branch}, start_date)
+        return self._fetch_from_github("commits", {"sha": branch}, start_date, end_date)
 
     def get_all_pull_requests(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github("pulls", start_date=start_date)
+        return self._fetch_from_github("pulls", start_date=start_date, end_date=end_date)
 
     def get_pull_request_comments(self, pr_number: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github(f"pulls/{pr_number}/comments", start_date=start_date)
+        return self._fetch_from_github(f"pulls/{pr_number}/comments", start_date=start_date, end_date=end_date)
 
     def get_repo_activities(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github("activity", start_date=start_date)
+        return self._fetch_from_github("activity", start_date=start_date, end_date=end_date)
 
     def get_repo_contributors(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github("contributors", start_date=start_date)
+        return self._fetch_from_github("contributors", start_date=start_date, end_date=end_date)
 
     def get_all_commit_comments(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github("comments", start_date=start_date)
+        return self._fetch_from_github("comments", start_date=start_date, end_date=end_date)
 
     def get_issues_data(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
-        return self._fetch_from_github("issues", start_date=start_date)
+        return self._fetch_from_github("issues", start_date=start_date, end_date=end_date)
 
     def list_contributors(self) -> Any:
         all_contributors: Set[str] = set()

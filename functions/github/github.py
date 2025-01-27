@@ -358,7 +358,8 @@ def get_commits(start_date: str, end_date: Optional[str] = None):
 
     start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
     end_date_dt = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
-    commits = client.get_commits(start_date_dt, end_date_dt)
+    branch = client.get_default_branch()
+    commits = client.get_commits(branch, start_date_dt, end_date_dt)
     return commits
 
 
@@ -375,7 +376,7 @@ def print_commits(commits, start_date):
         print(f"  URL: {url}\n")
 
 
-def get_PR_comments(prs: List, start_date: str, end_date: Optional[str] = None):
+def get_pull_request_comments(prs: List, start_date: str, end_date: Optional[str] = None):
     # Validate date format
     try:
         datetime.strptime(start_date, "%Y-%m-%d")
@@ -394,7 +395,7 @@ def get_PR_comments(prs: List, start_date: str, end_date: Optional[str] = None):
     return comments
 
 
-def print_PR_comments(comments, start_date):
+def print_pull_request_comments(comments, start_date):
     print(
         f"Found {len(comments)} pull request comment(s) starting from {start_date}:\n"
     )
@@ -509,7 +510,7 @@ def pull_github_data(
     # If we need to fetch new data
     print(f"Fetching new GitHub data from {start_date} to {end_date}")
     prs = get_PRs(start_date=start_date, end_date=end_date)
-    pr_comments = get_PR_comments(prs=prs, start_date=start_date, end_date=end_date)
+    pr_comments = get_pull_request_comments(prs=prs, start_date=start_date, end_date=end_date)
     commits = get_commits(start_date=start_date, end_date=end_date)
     commit_comments = get_commit_comments(start_date=start_date, end_date=end_date)
 

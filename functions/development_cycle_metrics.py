@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
-from model.sdlc_events import Project, Environment
-import psycopg2
+
+from model.load_events_db import load_sample_data
+from model.sdlc_events import Environment
 import matplotlib.pyplot as plt
 import os  # Make sure to import os at the top of your file
 from dotenv import load_dotenv  # Import load_dotenv
@@ -131,76 +132,6 @@ def get_data_for_display(project_id):
     prs = get_pull_requests(project_id)
     return commits, prs
 
-def get_development_cycle_metrics(project_id):
-    # get a list of code commits for the project
-
-    engine = get_database_connection()
-    if engine is None:
-        return None
-
-    # Query to get successful releases and associated metrics
-    query = """
-    WITH successful_releases AS (
-        SELECT 
-            release_version,
-            MIN(timestamp) AS release_start,
-            MAX(timestamp) AS release_end
-        FROM sdlc_timeseries.cicd_events
-        WHERE project_id = :project_id
-        AND status = 'success'
-        AND LOWER(branch) = 'main'
-        GROUP BY release_version
-    ),
-    jira_metrics AS (
-        SELECT 
-            j.id AS jira_id,
-            j.created_date AS sprint_start,
-            j.completed_date AS pr_opened,
-            j.type AS jira_type
-        FROM sdlc_timeseries.jira_items j
-        JOIN successful_releases sr ON j.event_id = sr.release_version
-    ),
-    pr_metrics AS (
-        SELECT 
-            pr.id AS pr_id,
-            pr.created_at AS pr_created,
-            pr.merged_at AS pr_merged,
-            pr.project_id
-        FROM sdlc_timeseries.pull_requests pr
-        JOIN successful_releases sr ON pr.project_id = sr.release_version
-    ),
-    build_metrics AS (
-        SELECT 
-            c.environment,
-            c.timestamp AS build_time,
-            c.status,
-            c.release_version
-        FROM sdlc_timeseries.cicd_events c
-        JOIN successful_releases sr ON c.release_version = sr.release_version
-        WHERE c.status = 'success'
-    )
-    SELECT 
-        sr.release_version,
-        MIN(j.sprint_start) AS development_time,
-        MAX(pr.pr_merged) - MIN(pr.pr_created) AS pr_time,
-        SUM(CASE WHEN bm.environment = 'dev' THEN bm.build_time END) AS dev_build_time,
-        SUM(CASE WHEN bm.environment = 'qa' THEN bm.build_time END) AS qa_build_time,
-        SUM(CASE WHEN bm.environment = 'staging' THEN bm.build_time END) AS staging_build_time,
-        SUM(CASE WHEN bm.environment = 'production' THEN bm.build_time END) AS production_build_time
-    FROM successful_releases sr
-    LEFT JOIN jira_metrics j ON sr.release_version = j.jira_id
-    LEFT JOIN pr_metrics pr ON sr.release_version = pr.project_id
-    LEFT JOIN build_metrics bm ON sr.release_version = bm.release_version
-    GROUP BY sr.release_version;
-    """
-
-    try:
-        result = pd.read_sql_query(text(query), engine, params={"project_id": project_id})
-        return result
-    except SQLAlchemyError as e:
-        st.error(f"Query execution failed: {str(e)}")
-        return None
-
 def get_releases_for_project(project_id):
     query = """
         SELECT *
@@ -264,19 +195,6 @@ def display_commit_metrics(project_id, release_version):
     commit_records = [get_commit_record(commit_id) for commit_id in commit_ids if get_commit_record(commit_id)]
     if commit_records:
         st.dataframe(pd.DataFrame(commit_records))
-
-
-def get_cicd_record(release_version):
-    """Get the cicd record for the given release version"""
-    query = """
-        SELECT 
-            event_id
-        FROM sdlc_timeseries.cicd_events
-        WHERE release_version = :release_version
-        LIMIT 1;
-    """
-    result = db.execute(query, release_version=release_version)
-    return result.fetchone()
 
 def get_pr_record(pr_id):
     """Get the pull request record for the given pull request id"""
@@ -353,23 +271,6 @@ def get_builds_for_release(project_id, release_version):
     except Exception as e:
         st.error(f"Query execution failed: {str(e)}")
         return []
-
-
-
-def display_pr_metrics(project_id, release_version):
-    """Display PR metrics for the selected release"""
-    st.subheader("Pull Request Analysis")
-
-    pr_metrics = get_pr_metrics_for_display(project_id, release_version)
-    if not pr_metrics:
-        st.info("No pull requests found for builds in this release")
-        return
-    prs_df = pd.DataFrame(pr_metrics)
-    # Convert 'pr_duration' from seconds to hours, minutes, and seconds
-    prs_df['pr_duration'] = prs_df['pr_duration'].apply(lambda x: f"{x//3600}h {x%3600//60}m {x%60}s")
-    # Selecting specific columns to display including the formatted 'pr_duration'
-    selected_columns = ['pr_id', 'environment', 'title', 'author', 'pr_duration', 'created_at', 'merged_at', 'commit_id']
-    st.dataframe(prs_df[selected_columns])
 
 
 
@@ -562,39 +463,39 @@ def get_pr_details(pr_id):
         st.error(f"Query execution failed: {str(e)}")
         return None
 
-def display_pr_metrics(pr_id):
+def display_pull_request_metrics(pr_id):
     """Display PR metrics for the selected PR"""
     st.subheader("Pull Request Details")
-    
+
     # Get PR details
     pr_details = get_pr_details(pr_id)
-    
+
     if not pr_details:
         st.warning("No pull request found with this ID.")
         return
-        
+
     # Create two columns for PR information
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("#### Basic Information")
         st.markdown(f"**PR ID:** {pr_details['pr_id']}")
         st.markdown(f"**Title:** {pr_details['title']}")
         st.markdown(f"**Author:** {pr_details['author']}")
         st.markdown(f"**Status:** {pr_details['status']}")
-        
+
         # Calculate duration in a readable format
         if pr_details['duration_seconds'] and pr_details['duration_seconds'] > 0:
             duration_hours = pr_details['duration_seconds'] / 3600
             duration_str = f"{duration_hours:.1f} hours"
             st.markdown(f"**Duration:** {duration_str}")
-            
+
     with col2:
         st.markdown("#### Branch Information")
         st.markdown(f"**From Branch:** {pr_details['branch_from']}")
         st.markdown(f"**To Branch:** {pr_details['branch_to']}")
         st.markdown(f"**Commit ID:** {pr_details['commit_id']}")
-        
+
     # Show timestamps in their own section
     st.markdown("#### Timeline")
     col1, col2 = st.columns(2)
@@ -605,15 +506,15 @@ def display_pr_metrics(pr_id):
             st.markdown(f"**Merged:** {pr_details['merged_at'].strftime('%Y-%m-%d %H:%M:%S')}")
         else:
             st.markdown("**Merged:** Not merged yet")
-            
+
     # Show PR description if available
     if pr_details['description']:
         st.markdown("#### Description")
         st.markdown(pr_details['description'])
-        
+
     # Add a divider
     st.markdown("---")
-    
+
     # Get and display associated commits
     commits_query = """
         SELECT 
@@ -631,20 +532,20 @@ def display_pr_metrics(pr_id):
         WHERE cc.commit_hash = :commit_id
         ORDER BY cc.timestamp DESC;
     """
-    
+
     try:
         with get_database_connection().connect() as conn:
             commits = pd.read_sql(
-                text(commits_query), 
-                conn, 
+                text(commits_query),
+                conn,
                 params={"commit_id": pr_details['commit_id']}
             )
-            
+
             if not commits.empty:
                 st.markdown("#### Associated Commits")
                 st.dataframe(
                     commits[[
-                        'commit_hash', 'author', 'timestamp', 
+                        'commit_hash', 'author', 'timestamp',
                         'files_changed', 'lines_added', 'lines_removed'
                     ]],
                     hide_index=True
@@ -841,11 +742,6 @@ def display_development_cycle_metrics():
             with tab1:
                 display_build_timeline(pr_id)
             with tab2:
-                display_pr_metrics(pr_id)
+                display_pull_request_metrics(pr_id)
             with tab3:
                 display_commit_metrics(pr_id)            
-
-
-
-if __name__ == "__main__":
-    display_development_cycle_metrics()
