@@ -13,6 +13,7 @@ from pinecone import Pinecone, ServerlessSpec
 from pydantic import ValidationError
 
 from functions.confluence.confluence import get_confluence_contributions_per_user
+from functions.jira.jira import get_jira_contributions_per_user
 from model.pydantic_models import UserData, JiraData, GitHubData, ConfluenceData
 from functions.github.github import get_github_contributions_by_repo
 
