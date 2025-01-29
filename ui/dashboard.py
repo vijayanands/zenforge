@@ -4,7 +4,7 @@ import uuid
 from functions.development_cycle_metrics import display_development_cycle_metrics
 from ui.productivity_dashboard import display_productivity_dashboard
 
-from functions.llm.ingestion import ingest_data, answer_question
+from functions.data_ingestion.ingestion import ingest_data, answer_question
 from ui.weekly_report_ui import perform_weekly_report_generation
 from ui.self_appraisal_ui import perform_self_appraisal
 
