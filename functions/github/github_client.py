@@ -2,7 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, DefaultDict
+from typing import Any, Dict, List, Optional, Set
 
 import requests
 from dotenv import load_dotenv
@@ -64,7 +64,7 @@ class GitHubAPIClient:
             sys.exit(1)
         return response.json()["default_branch"]
 
-    def get_commits(self, branch: str, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
+    def get_commits(self, branch: str, start_date: datetime, end_date: datetime) -> Any:
         return self._fetch_from_github("commits", {"sha": branch}, start_date, end_date)
 
     def get_all_pull_requests(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:

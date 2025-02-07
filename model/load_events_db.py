@@ -1,10 +1,8 @@
 from typing import Any, Dict
-import os
 from sqlalchemy import create_engine, text
 
-from model.events_data_generator import generate_all_data, generate_cicd_events
+from model.events_data_generator import generate_all_data
 from model.sdlc_events import (
-    BuildMode,
     DatabaseManager,
     connection_string,
     create_bug,
@@ -43,16 +41,6 @@ def create_database_if_not_exists():
             connection.execute(text("commit"))  # Commit any existing transaction
             connection.execute(text(f"CREATE DATABASE {db_name}"))
             print(f"Database {db_name} created successfully")
-
-
-def initialize_db():
-    # Create the DatabaseManager instance and initialize the database
-    db_manager = DatabaseManager(connection_string)
-    try:
-        db_manager.init_db()
-        print("Schemas created successfully.")
-    except Exception as e:
-        print(f"Error creating schemas: {e}")
 
 
 def load_cicd_events(all_data) -> None:

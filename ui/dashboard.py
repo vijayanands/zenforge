@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import streamlit as st
 import uuid
 
@@ -89,7 +91,9 @@ def dashboard():
         with st.spinner("Processing your question..."):
             question = st.session_state.get("custom_question", "")
             if question:
-                index = ingest_data()
+                end_date = datetime.now()
+                start_date = end_date - timedelta(days=365)
+                index = ingest_data(start_date=start_date, end_date=end_date)
                 answer = answer_question(index, "vijayanands@gmail.com", question)
                 st.session_state.question_answer = answer
             st.session_state.processing_question = False

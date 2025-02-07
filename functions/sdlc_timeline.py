@@ -1,12 +1,8 @@
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
-from plotly.subplots import make_subplots
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
-
-from model.sdlc_events import BuildStatus, Environment
 
 
 def safe_dataframe_check(df):

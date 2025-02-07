@@ -1,13 +1,14 @@
 import os
 import re
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
+from dotenv import load_dotenv
 
 import requests
 from bs4 import BeautifulSoup, Comment
-
 from functions.llm.llamaindex_summarization import summarize_data
-
 from utils import unique_user_emails, get_headers
+load_dotenv()
 
 # atlassian_base_url = https://openmrs.atlassian.net/wiki/spaces/docs/overview
 atlassian_base_url = "https://vijayanands.atlassian.net"
@@ -95,7 +96,7 @@ def clean_confluence_content(html_content):
 
 
 def get_confluence_contributions(
-    base_url, username, api_token, space_key, target_username
+    base_url, username, api_token, space_key, target_username, start_date, end_date
 ):
     space_id = get_space_id(base_url, space_key, username, api_token)
 
@@ -105,6 +106,8 @@ def get_confluence_contributions(
         "limit": 100,  # Adjust as needed
         "creator": target_username,
         "status": "current",
+        "startDate": start_date,
+        "endDate": end_date,
     }
 
     response = requests.get(api_endpoint, headers=headers, params=params)
@@ -140,13 +143,15 @@ def get_confluence_contributions(
         return None
 
 
-def get_confluence_contributions_by_author(author: str):
+def get_confluence_contributions_by_author(author: str, start_date: datetime, end_date: datetime):
     confluence_data = get_confluence_contributions(
         atlassian_base_url,
         atlassian_username,
         atlassian_api_token,
         confluence_space_key,
         author,
+        start_date,
+        end_date,
     )
     for key, doc in confluence_data.items():
         if not isinstance(doc, dict):
@@ -158,13 +163,14 @@ def get_confluence_contributions_by_author(author: str):
     return confluence_data
 
 def get_confluence_contributions_by_author_in_the_last_week(author: str):
-    #todo: implement date filtering for last week here
-    get_confluence_contributions_by_author(author)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+    get_confluence_contributions_by_author(author, end_date=end_date, start_date=start_date)
 
-def get_confluence_contributions_per_user():
+def get_confluence_contributions_per_user(start_date: datetime, end_date: datetime):
     confluence_contributions = {}
     for user in unique_user_emails:
-        confluence_data = get_confluence_contributions_by_author(user)
+        confluence_data = get_confluence_contributions_by_author(user, start_date, end_date)
         confluence_contributions[user] = confluence_data
     return confluence_contributions
 

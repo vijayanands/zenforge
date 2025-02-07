@@ -1,11 +1,13 @@
 import json
 import os
 from collections import defaultdict
+from datetime import datetime, timedelta
 from typing import Any, Dict, List
-
+from dotenv import load_dotenv
 import requests
-
 from utils import unique_user_emails, get_headers
+
+load_dotenv()
 
 atlassian_base_url = "https://vijayanands.atlassian.net"
 atlassian_username = "vijayanands@gmail.com"
@@ -125,16 +127,13 @@ def fetch_jira_projects(base_url: str, username: str) -> List[Dict[str, Any]]:
         response.raise_for_status()
 
 
-def count_resolved_issues(base_url, username, author):
+def count_resolved_issues(base_url, username, author, start_date, end_date):
     projects = fetch_jira_projects(base_url, username)
     print(json.dumps(projects, indent=2))
     projects = [project["key"] for project in projects]
 
-    # Initialize the count
-    total_resolved = 0
-
-    # Construct the JQL query
-    jql_query = f'project in ({",".join(projects)}) AND resolution = Done AND assignee = "{author}"'
+    # Construct the JQL query with date filtering
+    jql_query = f'project in ({",".join(projects)}) AND resolution = Done AND assignee = "{author}" AND resolutiondate >= "{start_date}" AND resolutiondate <= "{end_date}"'
 
     # Set up the API endpoint
     api_endpoint = f"{base_url}/rest/api/3/search"
@@ -231,8 +230,8 @@ def count_resolved_issues_by_assignee(base_url, username):
         return None
 
 
-def get_jira_contributions_by_author(author: str):
-    response = count_resolved_issues(atlassian_base_url, atlassian_username, author)
+def get_jira_contributions_by_author(author: str, start_date: datetime, end_date: datetime):
+    response = count_resolved_issues(atlassian_base_url, atlassian_username, author, start_date, end_date)
     jira_data = response.get("jiras_resolved", [])
     jira_url_list = [jira["link"] for jira in jira_data]
     if response is not None:
@@ -246,41 +245,17 @@ def get_jira_contributions_by_author(author: str):
         return None
 
 def get_jira_contributions_by_author_in_the_last_week(author: str):
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
     #todo: implement date filtering for last week here
-    get_jira_contributions_by_author(author)
+    get_jira_contributions_by_author(author, start_date, end_date)
 
 
-def get_jira_contributions_per_user():
+def get_jira_contributions_per_user(start_date: datetime, end_date: datetime):
     all_jira_contributions = {}
     for user in unique_user_emails:
-        contributions = get_jira_contributions_by_author(user)
+        contributions = get_jira_contributions_by_author(user, start_date, end_date)
         all_jira_contributions[user] = contributions
     return all_jira_contributions
 
-
-# Usage example
-if __name__ == "__main__":
-    author = "vijayanands@gmail.com"
-
-    try:
-        contributions = get_jira_contributions_by_author(author)
-        print(f"Jira contributions by {author}:")
-        print(json.dumps(contributions, indent=2))
-        resolved_count = count_resolved_issues(
-            atlassian_base_url, atlassian_username, author
-        )
-        if resolved_count is not None:
-            print(f"Number of resolved issues by {author}: {resolved_count}")
-        resolved_counts = count_resolved_issues_by_assignee(
-            atlassian_base_url, atlassian_username
-        )
-        if resolved_counts is not None:
-            print("Number of resolved issues by assignee:")
-            for assignee, count in sorted(
-                resolved_counts.items(), key=lambda x: x[1], reverse=True
-            ):
-                print(f"{assignee}: {count}")
-            print(f"Total resolved issues: {sum(resolved_counts.values())}")
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
 

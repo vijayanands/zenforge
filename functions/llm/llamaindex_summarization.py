@@ -24,7 +24,7 @@ def summarize_data(data, id=None):
     documents = []
     if not isinstance(data, dict):
         raise ValueError(
-            f"Each value in the dictionary must be a dictionary, found {type(doc)} for key {key}"
+            f"Each value in the dictionary must be a dictionary, found {type(data)}"
         )
 
     content = data.get("content")
@@ -47,14 +47,12 @@ def summarize_data(data, id=None):
     # 3. Create an index
     index = VectorStoreIndex(nodes)
 
-    # 4. Create a query engine
-    query_engine = index.as_query_engine()
+    # 4. Customize the LLM and create a query engine
+    llm = get_llm(model="gpt-3.5-turbo", temperature=0.1)
+    query_engine_custom = index.as_query_engine(llm=llm)
 
     # 5. Generate the summary
     summary_prompt = "Please provide a comprehensive summary of the document."
-    # Customize the LLM
-    llm = get_llm(model="gpt-3.5-turbo", temperature=0.1)
-    query_engine_custom = index.as_query_engine(llm=llm)
     summary_custom = query_engine_custom.query(summary_prompt)
 
     print(summary_custom.response)

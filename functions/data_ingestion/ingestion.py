@@ -2,8 +2,10 @@ import os
 import random
 import shutil
 import time
+from datetime import datetime
 from typing import List
 from uuid import NAMESPACE_DNS, uuid5
+from dotenv import load_dotenv
 
 from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.base.base_query_engine import BaseQueryEngine
@@ -17,6 +19,7 @@ from functions.jira.jira import get_jira_contributions_per_user
 from model.pydantic_models import UserData, JiraData, GitHubData, ConfluenceData
 from functions.github.github import get_github_contributions_by_repo
 
+load_dotenv()
 # Initialize Pinecone
 index_name = "pathforge-data"
 local_persist_path = "/tmp/talent-copilot/data/pinecone_store"
@@ -26,13 +29,13 @@ def _generate_key(user: str) -> str:
     return str(uuid5(NAMESPACE_DNS, user))
 
 
-def _get_documents_to_ingest() -> List[Document]:
-    jira_documents = get_jira_contributions_per_user()
-    github_documents = get_github_contributions_by_repo()
-    confluence_documents = get_confluence_contributions_per_user()
+def _get_documents_to_ingest(start_date: datetime, end_date: datetime) -> List[Document]:
+    jira_documents = get_jira_contributions_per_user(start_date, end_date)
+    github_documents = get_github_contributions_by_repo(start_date, end_date)
+    confluence_documents = get_confluence_contributions_per_user(start_date, end_date)
 
     all_user_data = {}
-    for email in (
+    for email_id in (
         set(jira_documents.keys())
         | set(github_documents.keys())
         | set(confluence_documents.keys())
@@ -41,9 +44,9 @@ def _get_documents_to_ingest() -> List[Document]:
             user_data = UserData(
                 jira=JiraData(
                     **jira_documents.get(
-                        email,
+                        email_id,
                         {
-                            "author": email,
+                            "author": email_id,
                             "total_resolved_issues": 0,
                             "jiras_data": [],
                             "jira_list": [],
@@ -51,27 +54,27 @@ def _get_documents_to_ingest() -> List[Document]:
                     )
                 ),
                 github=GitHubData(
-                    **github_documents.get(email, {"commits": [], "pull_requests": []})
+                    **github_documents.get(email_id, {"commits": [], "pull_requests": []})
                 ),
-                confluence=ConfluenceData(pages=confluence_documents.get(email, {})),
+                confluence=ConfluenceData(pages=confluence_documents.get(email_id, {})),
             )
-            all_user_data[email] = user_data
+            all_user_data[email_id] = user_data
         except ValidationError as e:
-            print(f"Error parsing data for user {email}: {e}")
+            print(f"Error parsing data for user {email_id}: {e}")
             continue
 
     documents = []
-    for email, user_data in all_user_data.items():
-        content = user_data.json()
+    for email_id, user_data in all_user_data.items():
+        content = user_data.model_dump_json()
         metadata = {
-            "email": email,
+            "email_id": email_id,
             "has_jira": bool(user_data.jira.jiras_data),
             "has_github": bool(
                 user_data.github.commits or user_data.github.pull_requests
             ),
             "has_confluence": bool(user_data.confluence.pages),
         }
-        user_id = _generate_key(email)
+        user_id = _generate_key(email_id)
         doc = Document(text=content, metadata=metadata, id_=user_id)
         documents.append(doc)
 
@@ -184,7 +187,7 @@ def calculate_similarity(text1: str, text2: str) -> float:
     return overlap / min(len(words1), len(words2))
 
 
-def ingest_data():
+def ingest_data(start_date: datetime, end_date: datetime):
     recreate_index = os.getenv("RECREATE_INDEX", "False").lower() == "true"
 
     embed_model = OpenAIEmbedding()
@@ -210,7 +213,7 @@ def ingest_data():
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
         print("Creating index with new documents...")
-        documents = _get_documents_to_ingest()
+        documents = _get_documents_to_ingest(start_date, end_date)
         index = VectorStoreIndex.from_documents(
             documents, storage_context=storage_context, embed_model=embed_model
         )
@@ -304,7 +307,7 @@ if __name__ == "__main__":
         "List all email addresses that have Confluence data.",
     ]
 
-    index = ingest_data()
+    index = ingest_data(datetime(2023, 1, 1), datetime(2023, 12, 31))
     if index is None:
         print("Failed to create or load index. Exiting.")
         exit(1)

@@ -1,14 +1,11 @@
-import os
 import random
 import uuid
 from datetime import datetime, timedelta
 from random import randint
 from typing import Any, Dict, List, Tuple
-from collections import defaultdict
 
 import numpy as np
 from soupsieve.css_match import DAYS_IN_WEEK
-from sqlalchemy import text
 
 from model.sdlc_events import (
     BugStatus,
@@ -376,8 +373,7 @@ class DataGenerator:
                 if relevant_jiras:
                     num_jiras = random.randint(
                         min(3, len(relevant_jiras)), 
-                        min(8, len(relevant_jiras))
-                    )
+                        min(8, len(relevant_jiras)))
                     sprint_jira_map[sprint["id"]] = random.sample(
                         relevant_jiras, num_jiras
                     )

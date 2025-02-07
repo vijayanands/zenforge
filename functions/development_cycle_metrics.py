@@ -186,16 +186,6 @@ def get_commit_record(commit_id):
         st.error(f"Query execution failed: {str(e)}")
         return None
 
-
-def display_commit_metrics(project_id, release_version):
-    """Display commit metrics for the selected release"""
-    st.subheader("Commit Analysis")
-    pr_metrics = get_pr_metrics_for_display(project_id, release_version)
-    commit_ids = set(pr['commit_id'] for pr in pr_metrics)
-    commit_records = [get_commit_record(commit_id) for commit_id in commit_ids if get_commit_record(commit_id)]
-    if commit_records:
-        st.dataframe(pd.DataFrame(commit_records))
-
 def get_pr_record(pr_id):
     """Get the pull request record for the given pull request id"""
     query = """

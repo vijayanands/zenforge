@@ -6,9 +6,11 @@ import re
 from collections import defaultdict
 from html import escape
 from typing import Dict, List
-
+from dotenv import load_dotenv
 from llama_index.llms.openai import OpenAI
+from pdfkit import pdfkit
 
+load_dotenv()
 unique_user_emails = [
     "vijayanands@gmail.com",
     "vijayanands@yahoo.com",
@@ -77,16 +79,6 @@ def get_base64_of_bin_file(bin_file):
 
 def get_base64_of_bytes(bytes_data):
     return base64.b64encode(bytes_data).decode()
-
-
-# Add error handling for pdfkit import
-PDFKIT_AVAILABLE = True
-try:
-    import pdfkit
-except ImportError:
-    PDFKIT_AVAILABLE = False
-    print("pdfkit is not installed. PDF generation will be unavailable.")
-
 
 def parse_markdown_links(text):
     def replace_link(match):
@@ -188,10 +180,6 @@ def create_pdf(html_content, output_file):
     :param output_file: String, path to the output PDF file
     :return: Boolean indicating success or failure
     """
-    if not PDFKIT_AVAILABLE:
-        print("Cannot create PDF: pdfkit is not installed.")
-        return False
-
     try:
         pdfkit.from_string(html_content, output_file)
         if os.path.exists(output_file):

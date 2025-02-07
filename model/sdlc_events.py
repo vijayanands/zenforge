@@ -800,4 +800,4 @@ class UserMapping(Base):
     
     github_username = Column(String, primary_key=True)
     email = Column(String, ForeignKey("sdlc_timeseries.users.email"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now())

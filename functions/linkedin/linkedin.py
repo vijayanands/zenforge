@@ -2,6 +2,9 @@ import json
 import os
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 api_key = os.getenv("PROXYCURL_API_KEY")
 headers = {"Authorization": "Bearer " + api_key}

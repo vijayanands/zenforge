@@ -1,9 +1,10 @@
-import os
 import json
 import time
 from datetime import datetime, timedelta
 import logging
 from pathlib import Path
+
+from functions.data_ingestion.ingestion import ingest_data
 
 # Set up logging
 logging.basicConfig(
@@ -27,8 +28,8 @@ def get_last_ingestion_timestamp() -> datetime:
 def save_last_ingestion_timestamp(timestamp: datetime) -> None:
     """Save the last ingestion timestamp to file"""
     timestamp_file = Path(__file__).parent / 'last_ingestion.json'
-    with open(timestamp_file, 'w') as f:
-        json.dump({'last_timestamp': timestamp.isoformat()}, f)
+    with open(timestamp_file, 'w', encoding='utf-8') as f:  # Ensure correct encoding
+        json.dump({'last_timestamp': timestamp.isoformat()}, f)  # f should be compatible
 
 def ingest_data_into_pinecone_until_now():
     """
