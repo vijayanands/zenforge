@@ -1,10 +1,28 @@
+import os
+import sys
+from pathlib import Path
+from dotenv import load_dotenv
 import streamlit as st
+
+# Get the project root directory
+PROJECT_ROOT = Path(__file__).parent.absolute()
+
+# Add project root and subdirectories to Python path
+sys.path.extend([
+    str(PROJECT_ROOT),
+    str(PROJECT_ROOT / "tools"),
+    str(PROJECT_ROOT / "demo"),
+    str(PROJECT_ROOT / "model")
+])
+
+load_dotenv()
 
 from ui.dashboard import dashboard
 from ui.style import set_page_style, set_page_container_style
 from ui.title_bar import set_title_bar
 
 def setup_streamlit_ui():
+    """Setup and run the Streamlit UI"""
     st.set_page_config(
         page_title="PathForge",
         layout="wide",

@@ -223,13 +223,14 @@ def ingest_data(start_date: datetime, end_date: datetime, verify_index = True):
                 print(
                     "Index created and verified successfully. Persisting Pinecone store locally..."
                 )
-                os.makedirs(os.path.dirname(local_persist_path), exist_ok=True)
-                storage_context.persist(persist_dir=local_persist_path)
             else:
                 print(
                     "Failed to verify index creation after multiple attempts. Please check the logs and try again."
                 )
                 return None
+        # store index locally
+        os.makedirs(os.path.dirname(local_persist_path), exist_ok=True)
+        storage_context.persist(persist_dir=local_persist_path)
     else:
         print("Loading existing Pinecone store from local persistence...")
         vector_store = PineconeVectorStore(index_name=index_name)
