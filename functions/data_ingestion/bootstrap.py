@@ -47,7 +47,7 @@ def ingest_data_into_pinecone_until_now():
         
         try:
             logging.info(f"Importing data for period: {start_date} to {end_date}")
-            ingest_data(start_date, end_date)
+            ingest_data(start_date, end_date, False)
             logging.info(f"Successfully imported data for period ending {end_date}")
             
             # Save the successful import timestamp

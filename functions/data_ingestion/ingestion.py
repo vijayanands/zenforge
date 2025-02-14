@@ -187,7 +187,7 @@ def calculate_similarity(text1: str, text2: str) -> float:
     return overlap / min(len(words1), len(words2))
 
 
-def ingest_data(start_date: datetime, end_date: datetime):
+def ingest_data(start_date: datetime, end_date: datetime, verify_index = True):
     recreate_index = os.getenv("RECREATE_INDEX", "False").lower() == "true"
 
     embed_model = OpenAIEmbedding()
@@ -218,17 +218,18 @@ def ingest_data(start_date: datetime, end_date: datetime):
             documents, storage_context=storage_context, embed_model=embed_model
         )
 
-        if verify_index_creation_with_retries(documents):
-            print(
-                "Index created and verified successfully. Persisting Pinecone store locally..."
-            )
-            os.makedirs(os.path.dirname(local_persist_path), exist_ok=True)
-            storage_context.persist(persist_dir=local_persist_path)
-        else:
-            print(
-                "Failed to verify index creation after multiple attempts. Please check the logs and try again."
-            )
-            return None
+        if verify_index:
+            if verify_index_creation_with_retries(documents):
+                print(
+                    "Index created and verified successfully. Persisting Pinecone store locally..."
+                )
+                os.makedirs(os.path.dirname(local_persist_path), exist_ok=True)
+                storage_context.persist(persist_dir=local_persist_path)
+            else:
+                print(
+                    "Failed to verify index creation after multiple attempts. Please check the logs and try again."
+                )
+                return None
     else:
         print("Loading existing Pinecone store from local persistence...")
         vector_store = PineconeVectorStore(index_name=index_name)

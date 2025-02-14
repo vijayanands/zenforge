@@ -49,6 +49,7 @@ def _extract_pr_info(pr: Dict[str, Any]) -> Dict[str, Any]:
         "state": pr["state"],
         "title": pr["title"],
         "body": pr["body"],
+        "author": pr["user"]["login"],
         "labels": [
             {
                 "id": label["id"],

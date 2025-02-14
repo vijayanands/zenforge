@@ -29,10 +29,17 @@ class GitHubCommit(BaseModel):
 
 class GitHubPullRequest(BaseModel):
     number: int
-    pr_title: str
-    pr_url: str
+    title: str
+    html_url: str
     author: str
     body: Optional[str]
+    id: int
+    number: int
+    state: str
+    created_at: datetime
+    updated_at: datetime
+    closed_at: Optional[datetime]
+    merged_at: Optional[datetime]
 
 
 class GitHubData(BaseModel):

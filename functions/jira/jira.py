@@ -132,8 +132,12 @@ def count_resolved_issues(base_url, username, author, start_date, end_date):
     print(json.dumps(projects, indent=2))
     projects = [project["key"] for project in projects]
 
+    # Convert start_date and end_date to strings in the format yyyy-MM-dd HH:mm
+    start_date_str = start_date.strftime("%Y-%m-%d %H:%M")
+    end_date_str = end_date.strftime("%Y-%m-%d %H:%M")
+
     # Construct the JQL query with date filtering
-    jql_query = f'project in ({",".join(projects)}) AND resolution = Done AND assignee = "{author}" AND resolutiondate >= "{start_date}" AND resolutiondate <= "{end_date}"'
+    jql_query = f'project in ({",".join(projects)}) AND resolution = Done AND assignee = "{author}" AND resolutiondate >= "{start_date_str}" AND resolutiondate <= "{end_date_str}"'
 
     # Set up the API endpoint
     api_endpoint = f"{base_url}/rest/api/3/search"
