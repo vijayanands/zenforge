@@ -70,7 +70,7 @@ def ingest_data_into_pinecone_until_now():
     logging.info("Data ingestion completed successfully")
     return current_date
 
-if __name__ == "__main__":
+def bootstrap_data():
     try:
         logging.info("Starting Pinecone data ingestion process")
         final_timestamp = ingest_data_into_pinecone_until_now()
@@ -78,3 +78,6 @@ if __name__ == "__main__":
     except Exception as e:
         logging.error(f"Fatal error in data ingestion process: {str(e)}")
         raise
+
+if __name__ == "__main__":
+    bootstrap_data()
