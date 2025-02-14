@@ -32,12 +32,20 @@ def run_streamlit():
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='ZenForge Application')
-    parser.add_argument(
+    
+    # Create mutually exclusive group for run mode
+    mode_group = parser.add_mutually_exclusive_group(required=True)
+    mode_group.add_argument(
+        '--streamlit',
+        action='store_true',
+        help='Run the Streamlit application'
+    )
+    mode_group.add_argument(
         '--bootstrap',
         action='store_true',
-        default=False,
-        help='Bootstrap data before starting the application'
+        help='Bootstrap data'
     )
+    
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -52,5 +60,6 @@ if __name__ == "__main__":
             print(f"Error bootstrapping data: {str(e)}")
             sys.exit(1)
     
-    print("Starting Streamlit app...")
-    run_streamlit()
+    elif args.streamlit:
+        print("Starting Streamlit app...")
+        run_streamlit()
