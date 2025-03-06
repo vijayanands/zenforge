@@ -5,8 +5,9 @@ description = ""
 authors = ["Vijay Sankarasubramanian <vijayanands@gmail.com>"]
 readme = "README.md"
 packages = [
-    { include = "tools" },
-    { include = "demo" },
+    { include = "functions" },
+    { include = "ui" },
+    { include = "images"},
     { include = "model" }
 ]
 
