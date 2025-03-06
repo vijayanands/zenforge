@@ -7,12 +7,13 @@ from typing import List
 from uuid import NAMESPACE_DNS, uuid5
 from dotenv import load_dotenv
 
-from llama_index.core import Document, StorageContext, VectorStoreIndex
-from llama_index.core.base.base_query_engine import BaseQueryEngine
+from llama_index import Document, StorageContext, VectorStoreIndex
+from llama_index.indices.query.base import BaseQueryEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.core.vector_stores.pinecone import PineconeVectorStore
+from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 from pydantic import ValidationError
+import pinecone
 
 from functions.confluence.confluence import get_confluence_contributions_per_user
 from functions.jira.jira import get_jira_contributions_per_user
@@ -191,18 +192,18 @@ def ingest_data(start_date: datetime, end_date: datetime, verify_index = True):
     recreate_index = os.getenv("RECREATE_INDEX", "False").lower() == "true"
 
     embed_model = OpenAIEmbedding()
-    pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
+    pinecone.init(api_key=os.environ.get("PINECONE_API_KEY"))
 
     if recreate_index or not os.path.exists(local_persist_path):
         if os.path.exists(local_persist_path):
             print(f"Deleting existing local store at {local_persist_path}")
             shutil.rmtree(local_persist_path)
 
-        if index_name in pc.list_indexes().names():
+        if index_name in pinecone.list_indexes():
             print(f"Deleting existing Pinecone index: {index_name}")
-            pc.delete_index(index_name)
+            pinecone.delete_index(index_name)
 
-        if not create_pinecone_index(pc):
+        if not create_pinecone_index(pinecone):
             print("Failed to create Pinecone index. Exiting.")
             return None
 
@@ -289,8 +290,8 @@ def answer_confluence_question(confluence_data: ConfluenceData, question: str) -
 
 
 def check_pinecone_directly(email):
-    pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
-    index = pc.Index(index_name)
+    pinecone.init(api_key=os.environ.get("PINECONE_API_KEY"))
+    index = pinecone.Index(index_name)
     results = index.query(
         vector=[0] * 1536, filter={"email": email}, top_k=1, include_metadata=True
     )
