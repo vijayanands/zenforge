@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from llama_index.core import Document, StorageContext, VectorStoreIndex
 from llama_index.core.base.base_query_engine import BaseQueryEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
-from llama_index.vector_stores.pinecone import PineconeVectorStore
+from llama_index.core.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
 from pydantic import ValidationError
 

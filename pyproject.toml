@@ -32,6 +32,9 @@ pinecone-client = "^5.0.1"
 pytz = "^2024.2"
 radon = "^6.0.1"
 pylint = "^3.3.3"
+python-dotenv = "^1.0.1"
+llama-index = "^0.12.22"
+pinecone = "^6.0.1"
 
 
 [tool.poetry.group.dev.dependencies]
