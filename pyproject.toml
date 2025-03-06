@@ -33,6 +33,8 @@ radon = "^6.0.1"
 pylint = "^3.3.3"
 python-dotenv = "^1.0.1"
 setuptools = "^75.8.2"
+pinecone-client = "^5.0.1"
+
 
 
 [tool.poetry.group.dev.dependencies]

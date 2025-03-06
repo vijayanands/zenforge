@@ -7,8 +7,8 @@ from typing import List
 from uuid import NAMESPACE_DNS, uuid5
 from dotenv import load_dotenv
 
-from llama_index import Document, StorageContext, VectorStoreIndex
-from llama_index.indices.query.base import BaseQueryEngine
+from llama_index.core import Document, StorageContext, VectorStoreIndex
+from llama_index.core.query_engine import BaseQueryEngine
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
