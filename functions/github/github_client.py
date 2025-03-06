@@ -117,9 +117,19 @@ class GitHubAPIClient:
             params.update(additional_params)
 
         if start_date:
-            params["since"] = start_date.isoformat()
+            if isinstance(start_date, datetime):
+                params["since"] = start_date.isoformat()
+            elif isinstance(start_date, str):
+                params["since"] = start_date  # Assuming the string is already in ISO format
+            else:
+                raise ValueError("start_date must be a datetime object or a string in ISO format")
         if end_date:
-            params["until"] = end_date.isoformat()
+            if isinstance(end_date, datetime):
+                params["until"] = end_date.isoformat()
+            elif isinstance(end_date, str):
+                params["until"] = end_date  # Assuming the string is already in ISO format
+            else:
+                raise ValueError("end_date must be a datetime object or a string in ISO format")
 
         all_items = []
 

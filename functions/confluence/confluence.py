@@ -144,6 +144,10 @@ def get_confluence_contributions(
 
 
 def get_confluence_contributions_by_author(author: str, start_date: datetime, end_date: datetime):
+    """
+    Get Confluence contributions by the specified author for the specified date range.
+    If no date range is provided, defaults to the last year.
+    """
     confluence_data = get_confluence_contributions(
         atlassian_base_url,
         atlassian_username,
@@ -163,6 +167,9 @@ def get_confluence_contributions_by_author(author: str, start_date: datetime, en
     return confluence_data
 
 def get_confluence_contributions_by_author_in_the_last_week(author: str):
+    """
+    Get Confluence contributions by the specified author in the last week.
+    """
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
     get_confluence_contributions_by_author(author, end_date=end_date, start_date=start_date)

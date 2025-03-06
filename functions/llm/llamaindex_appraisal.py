@@ -12,11 +12,13 @@ from functions.confluence.confluence import get_confluence_contributions_by_auth
 from utils import get_llm
 from functions.github.github import get_github_contributions_by_author, get_github_contributions_by_author_in_the_last_week
 from functions.jira.jira import get_jira_contributions_by_author, get_jira_contributions_by_author_in_the_last_week
+from llama_index.core import set_global_handler
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
+set_global_handler("simple")
 
 # Create FunctionTool instances
 tools: List[BaseTool] = [

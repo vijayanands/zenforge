@@ -235,6 +235,10 @@ def count_resolved_issues_by_assignee(base_url, username):
 
 
 def get_jira_contributions_by_author(author: str, start_date: datetime, end_date: datetime):
+    """
+    Get Jira contributions by the specified author for the specified date range.
+    If no date range is provided, defaults to the last year.
+    """
     response = count_resolved_issues(atlassian_base_url, atlassian_username, author, start_date, end_date)
     jira_data = response.get("jiras_resolved", [])
     jira_url_list = [jira["link"] for jira in jira_data]
@@ -248,10 +252,13 @@ def get_jira_contributions_by_author(author: str, start_date: datetime, end_date
     else:
         return None
 
-def get_jira_contributions_by_author_in_the_last_week(author: str):
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=7)
-    #todo: implement date filtering for last week here
+def get_jira_contributions_by_author_in_the_last_week(author: str, start_date: datetime = None, end_date: datetime = None):
+    """
+    Get Jira contributions by the specified author in the last week
+    """
+    if start_date is None or end_date is None:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=365)  # Set to last year
     get_jira_contributions_by_author(author, start_date, end_date)
 
 

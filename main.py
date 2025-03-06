@@ -3,6 +3,9 @@ import sys
 from pathlib import Path
 import argparse
 from functions.data_ingestion.bootstrap import bootstrap_data
+import logging
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 def run_streamlit():
     """Run Streamlit app programmatically"""
