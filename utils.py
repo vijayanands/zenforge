@@ -3,14 +3,16 @@ import hashlib
 import json
 import os
 import re
+import sys
+import logging
 from collections import defaultdict
+from datetime import datetime
 from html import escape
 from typing import Dict, List
 from dotenv import load_dotenv
 from llama_index.llms.openai import OpenAI
 from pdfkit import pdfkit
 
-load_dotenv()
 unique_user_emails = [
     "vijayanands@gmail.com",
     "vijayanands@yahoo.com",
@@ -19,6 +21,25 @@ unique_user_emails = [
 ]
 user_to_external_users: Dict[str, List[str]] = defaultdict(list)
 external_user_to_user: Dict[str, str] = defaultdict()
+
+def get_log_level():
+    load_dotenv()
+    # Get the logging level from environment variable, default to INFO if not set
+    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+
+    # Map string log levels to logging constants
+    log_level_map = {
+        "DEBUG": logging.DEBUG,
+        "INFO": logging.INFO,
+        "WARNING": logging.WARNING,
+        "ERROR": logging.ERROR,
+        "CRITICAL": logging.CRITICAL
+    }
+
+    # Get the appropriate logging level, default to INFO if invalid
+    log_level = log_level_map.get(log_level_str, logging.INFO)
+
+    return log_level
 
 
 def map_user(external_username: str):
@@ -32,6 +53,7 @@ def get_llm(**kwargs):
     """
     Factory function to create an LLM instance based on the vendor.
     """
+    load_dotenv()
     return OpenAI(
         temperature=kwargs.get("temperature", 0.7),
         model=kwargs.get("model", "gpt-3.5-turbo"),
@@ -229,3 +251,23 @@ def _generate_docs(input_json_file: str, author, doc_type):
     print(f"JSON file path: {input_json_file}")
     print(f"HTML file path: {html_file}")
     print(f"PDF file path: {pdf_file}")
+
+
+def get_last_calendar_year_dates():
+    # Get current year
+    current_year = datetime.now().year
+
+    # Set last year
+    last_year = current_year - 1
+
+    # Create start date: January 1st of last year at 00:00
+    start_date = datetime(last_year, 1, 1, 0, 0)
+
+    # Create end date: December 31st of last year at 23:59
+    end_date = datetime(last_year, 12, 31, 23, 59)
+
+    # Format dates as strings
+    start_date_str = start_date.strftime("%Y-%m-%d %H:%M")
+    end_date_str = end_date.strftime("%Y-%m-%d %H:%M")
+
+    return start_date_str, end_date_str

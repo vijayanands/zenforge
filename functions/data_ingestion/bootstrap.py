@@ -5,10 +5,11 @@ import logging
 from pathlib import Path
 
 from functions.data_ingestion.ingestion import ingest_data
+from utils import get_log_level
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=get_log_level(),
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler('pinecone_ingestion.log'),

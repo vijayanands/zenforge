@@ -7,12 +7,14 @@ from typing import Any, Dict, List, Optional, Set
 import requests
 from dotenv import load_dotenv
 
+from utils import get_log_level
+
 load_dotenv()
 
 
 # Set up logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=get_log_level(), format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
@@ -64,7 +66,7 @@ class GitHubAPIClient:
             sys.exit(1)
         return response.json()["default_branch"]
 
-    def get_commits(self, branch: str, start_date: datetime, end_date: datetime) -> Any:
+    def get_commits(self, branch: str, start_date: str, end_date: str) -> Any:
         return self._fetch_from_github("commits", {"sha": branch}, start_date, end_date)
 
     def get_all_pull_requests(self, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Any:
@@ -110,26 +112,16 @@ class GitHubAPIClient:
         return list(all_contributors)
 
     def _fetch_from_github(self, path: str, additional_params: Optional[Dict[str, Any]] = None,
-                           start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+                           start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         url = f"{self.base_url}/{path}"
         params: Dict[str, Any] = {"per_page": 100}
         if additional_params is not None:
             params.update(additional_params)
 
         if start_date:
-            if isinstance(start_date, datetime):
-                params["since"] = start_date.isoformat()
-            elif isinstance(start_date, str):
-                params["since"] = start_date  # Assuming the string is already in ISO format
-            else:
-                raise ValueError("start_date must be a datetime object or a string in ISO format")
+            params["since"] = start_date  # Assuming the string is already in ISO format
         if end_date:
-            if isinstance(end_date, datetime):
-                params["until"] = end_date.isoformat()
-            elif isinstance(end_date, str):
-                params["until"] = end_date  # Assuming the string is already in ISO format
-            else:
-                raise ValueError("end_date must be a datetime object or a string in ISO format")
+            params["until"] = end_date  # Assuming the string is already in ISO format
 
         all_items = []
 

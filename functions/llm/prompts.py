@@ -3,7 +3,8 @@ from llama_index.core import PromptTemplate
 
 APPRAISAL_PROMPT = PromptTemplate(
     """
-    You are tasked with generating a professional self-appraisal based only on the following information about an employee's contributions:
+    You are tasked with generating a professional self-appraisal based only on the following information about an 
+    employee's contributions in the last year starting from today's date going backwards:
 
     {context}
 

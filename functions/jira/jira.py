@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 from dotenv import load_dotenv
 import requests
-from utils import unique_user_emails, get_headers
+from utils import unique_user_emails, get_headers, get_last_calendar_year_dates
 
 load_dotenv()
 
@@ -108,7 +108,7 @@ def _extract_jira_response(base_url, response):
     return jira_response
 
 
-def fetch_jira_projects(base_url: str, username: str) -> List[Dict[str, Any]]:
+def fetch_jira_projects(base_url: str, username: str) -> list[dict[str, Any]]:
     """
     Fetch a list of projects from Jira using basic authentication.
     :return: A list of dictionaries containing project information
@@ -132,12 +132,8 @@ def count_resolved_issues(base_url, username, author, start_date, end_date):
     print(json.dumps(projects, indent=2))
     projects = [project["key"] for project in projects]
 
-    # Convert start_date and end_date to strings in the format yyyy-MM-dd HH:mm
-    start_date_str = start_date.strftime("%Y-%m-%d %H:%M")
-    end_date_str = end_date.strftime("%Y-%m-%d %H:%M")
-
     # Construct the JQL query with date filtering
-    jql_query = f'project in ({",".join(projects)}) AND resolution = Done AND assignee = "{author}" AND resolutiondate >= "{start_date_str}" AND resolutiondate <= "{end_date_str}"'
+    jql_query = f'project in ({",".join(projects)}) AND resolution = Done AND assignee = "{author}" AND resolutiondate >= "{start_date}" AND resolutiondate <= "{end_date}"'
 
     # Set up the API endpoint
     api_endpoint = f"{base_url}/rest/api/3/search"
@@ -233,36 +229,59 @@ def count_resolved_issues_by_assignee(base_url, username):
         print(f"An error occurred: {e}")
         return None
 
-
-def get_jira_contributions_by_author(author: str, start_date: datetime, end_date: datetime):
+def get_jira_contributions_by_author_for_the_last_year(author: str):
     """
-    Get Jira contributions by the specified author for the specified date range.
-    If no date range is provided, defaults to the last year.
+    Get Jira contributions by the specified author for the last year
+
+    Args:
+        author (str): The author's username
+
+    Returns:
+        Dict : A summary of the author's contributions for the last year
+    """
+    start_date , end_date = get_last_calendar_year_dates()
+    return get_jira_contributions_by_author(author, start_date, end_date)
+
+def get_jira_contributions_by_author(author: str, start_date: str, end_date: str) -> Dict[str, Any]:
+    """
+    Get Jira contributions by an author within a specified date range. If no date range is provided, defaults to the last year.
+
+    Args:
+        author (str): The author's username
+        start_date (str): The start date for the search
+        end_date (str, optional): The end date for the search. If not provided, defaults to current date.
+
+    Returns:
+        Dict : A summary of the author's contributions
     """
     response = count_resolved_issues(atlassian_base_url, atlassian_username, author, start_date, end_date)
     jira_data = response.get("jiras_resolved", [])
     jira_url_list = [jira["link"] for jira in jira_data]
-    if response is not None:
-        return {
-            "author": author,
-            "total_resolved_issues": response.get("total_resolved_issues"),
-            "jiras_data": jira_data,
-            "jira_list": jira_url_list,
-        }
-    else:
-        return None
+    return {
+        "author": author,
+        "total_resolved_issues": response.get("total_resolved_issues"),
+        "jiras_data": jira_data,
+        "jira_list": jira_url_list,
+    }
 
-def get_jira_contributions_by_author_in_the_last_week(author: str, start_date: datetime = None, end_date: datetime = None):
+def get_jira_contributions_by_author_in_the_last_week(author: str):
     """
     Get Jira contributions by the specified author in the last week
+
+    Args:
+        author (str): The author's username
+
+    Returns:
+        Dict : A summary of the author's contributions in the last week
     """
-    if start_date is None or end_date is None:
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)  # Set to last year
-    get_jira_contributions_by_author(author, start_date, end_date)
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=7)
+    start_date_str = start_date.strftime("%Y-%m-%d %H:%M")
+    end_date_str = end_date.strftime("%Y-%m-%d %H:%M")
+    get_jira_contributions_by_author(author, start_date_str, end_date_str)
 
 
-def get_jira_contributions_per_user(start_date: datetime, end_date: datetime):
+def get_jira_contributions_per_user(start_date: str, end_date: str):
     all_jira_contributions = {}
     for user in unique_user_emails:
         contributions = get_jira_contributions_by_author(user, start_date, end_date)

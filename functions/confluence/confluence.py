@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 import requests
 from bs4 import BeautifulSoup, Comment
 from functions.llm.llamaindex_summarization import summarize_data
-from utils import unique_user_emails, get_headers
+from utils import unique_user_emails, get_headers, get_last_calendar_year_dates
+
 load_dotenv()
 
 # atlassian_base_url = https://openmrs.atlassian.net/wiki/spaces/docs/overview
@@ -142,11 +143,31 @@ def get_confluence_contributions(
         print(response.text)
         return None
 
-
-def get_confluence_contributions_by_author(author: str, start_date: datetime, end_date: datetime):
+def get_confluence_contributions_by_author_for_the_last_year(author: str):
     """
-    Get Confluence contributions by the specified author for the specified date range.
-    If no date range is provided, defaults to the last year.
+    Get Confluence contributions by the specified author for the last year
+
+    Args:
+        author (str): The author's username
+
+    Returns:
+        Dict : A summary of the author's contributions
+    """
+    start_date, end_date = get_last_calendar_year_dates()
+    return get_confluence_contributions_by_author(author, start_date, end_date)
+
+def get_confluence_contributions_by_author(author: str, start_date: str, end_date: str):
+    """
+    Get Confluence contributions by the specified author for the specified date range. If no date range is provided, defaults
+    to the last year.
+
+    Args:
+        author (str): The author's username
+        start_date (str): The start date for the search
+        end_date (str, optional): The end date for the search. If not provided, defaults to current date.
+
+    Returns:
+        Dict : A summary of the author's contributions
     """
     confluence_data = get_confluence_contributions(
         atlassian_base_url,
@@ -169,12 +190,20 @@ def get_confluence_contributions_by_author(author: str, start_date: datetime, en
 def get_confluence_contributions_by_author_in_the_last_week(author: str):
     """
     Get Confluence contributions by the specified author in the last week.
+
+    Args:
+        author (str): The author's username
+
+    Returns:
+        Dict : A summary of the author's contributions in the last week
     """
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
-    get_confluence_contributions_by_author(author, end_date=end_date, start_date=start_date)
+    start_date_str = start_date.strftime("%Y-%m-%d %H:%M")
+    end_date_str = end_date.strftime("%Y-%m-%d %H:%M")
+    get_confluence_contributions_by_author(author, end_date=end_date_str, start_date=start_date_str)
 
-def get_confluence_contributions_per_user(start_date: datetime, end_date: datetime):
+def get_confluence_contributions_per_user(start_date: str, end_date: str):
     confluence_contributions = {}
     for user in unique_user_emails:
         confluence_data = get_confluence_contributions_by_author(user, start_date, end_date)

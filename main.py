@@ -5,7 +5,9 @@ import argparse
 from functions.data_ingestion.bootstrap import bootstrap_data
 import logging
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+from utils import get_log_level
+
+logging.basicConfig(stream=sys.stdout, level=get_log_level())
 
 def run_streamlit():
     """Run Streamlit app programmatically"""

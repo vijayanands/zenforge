@@ -7,24 +7,24 @@ from llama_index.core.agent import ReActAgent
 from llama_index.core.tools import BaseTool, FunctionTool
 
 from functions.llm.prompts import APPRAISAL_PROMPT, WEEKLY_REPORT_PROMPT
-from functions.confluence.confluence import get_confluence_contributions_by_author, \
+from functions.confluence.confluence import get_confluence_contributions_by_author_for_the_last_year, \
     get_confluence_contributions_by_author_in_the_last_week
-from utils import get_llm
-from functions.github.github import get_github_contributions_by_author, get_github_contributions_by_author_in_the_last_week
-from functions.jira.jira import get_jira_contributions_by_author, get_jira_contributions_by_author_in_the_last_week
+from utils import get_llm, get_log_level
+from functions.github.github import get_github_contributions_by_author_for_the_last_year, get_github_contributions_by_author_in_the_last_week
+from functions.jira.jira import get_jira_contributions_by_author_for_the_last_year, get_jira_contributions_by_author_in_the_last_week
 from llama_index.core import set_global_handler
 
 # Set up logging
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=get_log_level(), format="%(asctime)s - %(levelname)s - %(message)s"
 )
 set_global_handler("simple")
 
 # Create FunctionTool instances
 tools: List[BaseTool] = [
-    FunctionTool.from_defaults(fn=get_jira_contributions_by_author),
-    FunctionTool.from_defaults(fn=get_github_contributions_by_author),
-    FunctionTool.from_defaults(fn=get_confluence_contributions_by_author),
+    FunctionTool.from_defaults(fn=get_jira_contributions_by_author_for_the_last_year),
+    FunctionTool.from_defaults(fn=get_github_contributions_by_author_for_the_last_year),
+    FunctionTool.from_defaults(fn=get_confluence_contributions_by_author_for_the_last_year),
     FunctionTool.from_defaults(fn=get_jira_contributions_by_author_in_the_last_week),
     FunctionTool.from_defaults(fn=get_github_contributions_by_author_in_the_last_week),
     FunctionTool.from_defaults(fn=get_confluence_contributions_by_author_in_the_last_week),

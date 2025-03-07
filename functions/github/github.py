@@ -8,7 +8,7 @@ from typing import Any, DefaultDict, Dict, List, Optional
 import random
 from dotenv import load_dotenv
 
-from utils import unique_user_emails, user_to_external_users, map_user
+from utils import unique_user_emails, user_to_external_users, map_user, get_last_calendar_year_dates, get_log_level
 from model.sdlc_events import UserMapping, User, DatabaseManager, connection_string, Base
 from functions.github.github_client import GitHubAPIClient
 load_dotenv()
@@ -129,10 +129,30 @@ def get_all_pull_requests_by_user(since: Optional[datetime] = None) -> Any:
 def get_pull_requests_by_author(author: str, since: Optional[datetime] = None) -> Any:
     return get_all_pull_requests_by_user(since=since)[author].get("pull_requests", [])
 
-def get_github_contributions_by_author(author: str, start_date: datetime, end_date: datetime) -> Any:
+def get_github_contributions_by_author_for_the_last_year(author: str) -> Any:
     """
-    Get Jira contributions by the specified author for the specified date range.
-    If no date range is provided, defaults to the last year.
+    Get Jira contributions by the specified author for the last calendar year
+
+    Args:
+        author (str): The author's username
+
+    Returns:
+        Dict : A summary of the author's contributions
+    """
+    start_date, end_date = get_last_calendar_year_dates()
+    return get_github_contributions_by_author(author, start_date=start_date, end_date=end_date)
+
+def get_github_contributions_by_author(author: str, start_date: str, end_date: str) -> Any:
+    """
+    Get Jira contributions by the specified author for the specified date range. If no date range is provided, defaults to the last year.
+
+    Args:
+        author (str): The author's username
+        start_date (datetime): The start date for the search
+        end_date (datetime, optional): The end date for the search. If not provided, defaults to current date.
+
+    Returns:
+        Dict : A summary of the author's contributions
     """
     commit_info_list, total_commits = get_commits_by_author(author=author, start_date=start_date, end_date=end_date)
     pr_list = get_pull_requests_by_author(author=author)
@@ -148,10 +168,18 @@ def get_github_contributions_by_author(author: str, start_date: datetime, end_da
 def get_github_contributions_by_author_in_the_last_week(author: str) -> Any:
     """
     Get Jira contributions by the specified author in the last week.
+
+    Args:
+        author (str): The author's username
+
+    Returns:
+        Dict : A summary of the author's contributions in the last week
     """
     end_date = datetime.now()
     start_date = end_date - timedelta(days=7)
-    return get_github_contributions_by_author(author, start_date=start_date, end_date=end_date)
+    start_date_str = start_date.strftime("%Y-%m-%d %H:%M")
+    end_date_str = end_date.strftime("%Y-%m-%d %H:%M")
+    return get_github_contributions_by_author(author, start_date=start_date_str, end_date=end_date_str)
 
 def get_user_mapping(github_username: str, session) -> Optional[str]:
     """Get mapped user email from the mapping table"""
@@ -321,10 +349,8 @@ def get_commits(start_date: str, end_date: Optional[str] = None):
         print("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
-    start_date_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_date_dt = datetime.strptime(end_date, "%Y-%m-%d") if end_date else None
     branch = client.get_default_branch()
-    commits = client.get_commits(branch, start_date_dt, end_date_dt)
+    commits = client.get_commits(branch, start_date, end_date)
     return commits
 
 
@@ -491,7 +517,7 @@ def pull_github_data(
     return data, user_info
 
 
-def _analyze_commits_per_user(start_date: datetime, end_date: datetime):
+def _analyze_commits_per_user(start_date: str, end_date: str):
     logging.info(f"Analyzing repository: {owner}/{repo}")
     branch = client.get_default_branch()
     logging.info(f"Analyzing commits on the default branch: {branch}")
@@ -502,7 +528,7 @@ def _analyze_commits_per_user(start_date: datetime, end_date: datetime):
     commits_per_user = defaultdict(dict)
 
     for commit in commits:
-        author = commit["author"]["login"]
+        author = commit["commit"]["author"]["email"]
         commits_per_user[author]["login"] = author
         commits_per_user[author].setdefault("commits", []).append(
             f"https://github.com/{author}/{repo}/commits/{commit['sha']}"
@@ -516,14 +542,15 @@ def _analyze_commits_per_user(start_date: datetime, end_date: datetime):
     return commits_per_user
 
 
-def _get_commits_per_user_in_repo(start_date: datetime, end_date: datetime):
+def _get_commits_per_user_in_repo(start_date: str, end_date: str):
     try:
         commits_per_user = _analyze_commits_per_user(start_date, end_date)
 
         # Print the results to the console as well
-        print("\nCommits per user:")
-        for commit_info in commits_per_user.items():
-            print(json.dumps(commit_info))
+        if get_log_level() == logging.DEBUG:
+            print("\nCommits per user:")
+            for commit_info in commits_per_user.items():
+                print(json.dumps(commit_info))
 
         # Return the commits_per_user dictionary
         return commits_per_user
@@ -581,7 +608,7 @@ def get_pull_requests_per_user() -> Any:
     return prs_by_author
 
 
-def get_commits_by_author(author: str, start_date: datetime, end_date: datetime) -> Any:
+def get_commits_by_author(author: str, start_date: str, end_date: str) -> Any:
     # Get a list of external user ids mapped to the author
     external_usernames = user_to_external_users[author]
 
@@ -603,14 +630,14 @@ def get_commits_by_author(author: str, start_date: datetime, end_date: datetime)
     for username in external_usernames:
         commit_info = _github_data.get(username)
         if not commit_info:
-            logging.warning(f"No commit info found for external username: {username}")
+            logging.debug(f"No commit info found for external username: {username}")
             continue
         total_commits += commit_info.get("total_commits")
         commit_info_list.append(commit_info)
     return commit_info_list, total_commits
 
 
-def get_github_contributions_by_repo(start_date: datetime, end_date: datetime):
+def get_github_contributions_by_repo(start_date: str, end_date: str):
     commits_per_user = _get_commits_per_user_in_repo(start_date, end_date)
     pull_requests_per_user = get_pull_requests_per_user()
 

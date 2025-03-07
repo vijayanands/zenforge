@@ -30,7 +30,7 @@ def _generate_key(user: str) -> str:
     return str(uuid5(NAMESPACE_DNS, user))
 
 
-def _get_documents_to_ingest(start_date: datetime, end_date: datetime) -> List[Document]:
+def _get_documents_to_ingest(start_date: str, end_date: str) -> List[Document]:
     jira_documents = get_jira_contributions_per_user(start_date, end_date)
     github_documents = get_github_contributions_by_repo(start_date, end_date)
     confluence_documents = get_confluence_contributions_per_user(start_date, end_date)
