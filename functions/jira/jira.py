@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -99,7 +100,7 @@ def _extract_jira_response(base_url, response):
         jira_data["resolved_by"] = (
             jira_data["assignee"] if jira_data["assignee"] != "Unassigned" else None
         )
-        print(json.dumps(jira_data, indent=5))
+        logging.debug(json.dumps(jira_data, indent=5))
         jira_list.append(jira_data)
     # Get the total number of issues
     jira_response = defaultdict()
@@ -129,7 +130,7 @@ def fetch_jira_projects(base_url: str, username: str) -> list[dict[str, Any]]:
 
 def count_resolved_issues(base_url, username, author, start_date, end_date):
     projects = fetch_jira_projects(base_url, username)
-    print(json.dumps(projects, indent=2))
+    logging.debug(json.dumps(projects, indent=2))
     projects = [project["key"] for project in projects]
 
     # Construct the JQL query with date filtering
@@ -176,7 +177,7 @@ def count_resolved_issues(base_url, username, author, start_date, end_date):
 
 def count_resolved_issues_by_assignee(base_url, username):
     projects = fetch_jira_projects(base_url, username)
-    print(json.dumps(projects, indent=2))
+    logging.debug(json.dumps(projects, indent=2))
     projects = [project["key"] for project in projects]
 
     # Initialize the count dictionary

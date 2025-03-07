@@ -205,14 +205,13 @@ def create_pdf(html_content, output_file):
     try:
         pdfkit.from_string(html_content, output_file)
         if os.path.exists(output_file):
-            print(f"PDF file generated successfully: {output_file}")
+            logging.info(f"PDF file generated successfully: {output_file}")
             return True
         else:
-            print(f"PDF file was not created at the specified location: {output_file}")
+            logging.info(f"PDF file was not created at the specified location: {output_file}")
             return False
     except Exception as e:
-        print(f"Error generating PDF: {str(e)}")
-        print("Make sure wkhtmltopdf is installed on your system.")
+        logging.error(f"Error generating PDF: {str(e)}")
         return False
 
 
@@ -247,10 +246,10 @@ def _generate_docs(input_json_file: str, author, doc_type):
 
     process_json_to_html_and_pdf(input_json_file, html_file, pdf_file, author)
 
-    print(f"Current working directory: {current_dir}")
-    print(f"JSON file path: {input_json_file}")
-    print(f"HTML file path: {html_file}")
-    print(f"PDF file path: {pdf_file}")
+    logging.info(f"Current working directory: {current_dir}")
+    logging.info(f"JSON file path: {input_json_file}")
+    logging.info(f"HTML file path: {html_file}")
+    logging.info(f"PDF file path: {pdf_file}")
 
 
 def get_last_calendar_year_dates():

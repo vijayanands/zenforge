@@ -57,14 +57,13 @@ if __name__ == "__main__":
     args = parse_arguments()
     
     if args.bootstrap:
-        print("Bootstrapping data...")
+        logging.info("Bootstrapping data...")
         try:
             bootstrap_data()
-            print("Data bootstrapping completed successfully.")
+            logging.info("Data bootstrapping completed successfully.")
         except Exception as e:
-            print(f"Error bootstrapping data: {str(e)}")
+            logging.error(f"Error bootstrapping data: {str(e)}")
             sys.exit(1)
     
     elif args.streamlit:
-        print("Starting Streamlit app...")
         run_streamlit()

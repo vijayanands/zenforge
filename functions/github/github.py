@@ -354,19 +354,6 @@ def get_commits(start_date: str, end_date: Optional[str] = None):
     return commits
 
 
-def print_commits(commits, start_date):
-    print(f"Found {len(commits)} commit(s) starting from {start_date}:\n")
-    for commit in commits:
-        sha = commit["sha"]
-        message = commit["commit"]["message"].split("\n")[0]
-        author = commit["commit"]["author"]["name"]
-        date = commit["commit"]["author"]["date"]
-        url = commit["html_url"]
-        print(f"Commit {sha[:7]} - {message}")
-        print(f"  Author: {author} on {date}")
-        print(f"  URL: {url}\n")
-
-
 def get_pull_request_comments(prs: List, start_date: str, end_date: str):
     # Validate date format
     try:
@@ -386,7 +373,7 @@ def get_pull_request_comments(prs: List, start_date: str, end_date: str):
 
 
 def print_pull_request_comments(comments, start_date):
-    print(
+    logging.debug(
         f"Found {len(comments)} pull request comment(s) starting from {start_date}:\n"
     )
     for comment in comments:
@@ -414,19 +401,6 @@ def get_commit_comments(start_date: str, end_date: Optional[str] = None):
     return comments
 
 
-def print_commit_comments(comments, start_date):
-    print(f"Found {len(comments)} commit comment(s) starting from {start_date}:\n")
-    for comment in comments:
-        commit_id = comment["commit_id"]
-        commenter = comment["user"]["login"]
-        created_at = comment["created_at"]
-        url = comment["html_url"]
-        body = comment["body"].split("\n")[0]
-        print(f"Commit {commit_id[:7]} Comment by {commenter} on {created_at}")
-        print(f"  {body}")
-        print(f"  URL: {url}\n")
-
-
 def get_PRs(start_date: str, end_date: Optional[str] = None):
     # Validate date format
     try:
@@ -434,19 +408,11 @@ def get_PRs(start_date: str, end_date: Optional[str] = None):
         if end_date:
             datetime.strptime(end_date, "%Y-%m-%d")
     except ValueError:
-        print("Date format should be YYYY-MM-DD")
+        logging.error("Date format should be YYYY-MM-DD")
         sys.exit(1)
 
     prs = client.get_all_pull_requests(start_date=datetime.strptime(start_date, "%Y-%m-%d"), end_date=datetime.strptime(end_date, "%Y-%m-%d") if end_date else None)
     return prs
-
-
-def print_PRs(prs, start_date):
-    print(f"Found {len(prs)} pull request(s) starting from {start_date}:\n")
-    for pr in prs:
-        print(f"PR #{pr['number']} - {pr['title']}")
-        print(f"  Created by: {pr['user']['login']} on {pr['created_at']}")
-        print(f"  URL: {pr['html_url']}\n")
 
 
 def _pretty_print_dict(dictionary, indent=0):
@@ -465,20 +431,6 @@ def _pretty_print_dict(dictionary, indent=0):
         else:
             print(str(value))
 
-
-def print_github_data(github_data):
-        # Convert github_data to JSON
-    json_data = json.dumps(github_data, indent=2, default=str)
-
-    # Print the JSON data
-    print(json_data)
-
-    # Save the JSON data to a file
-    output_file = "../../tools/github_data_output.json"
-    with open(output_file, "w") as f:
-        f.write(json_data)
-
-    print(f"\nJSON data has been saved to {output_file}")
 
 def set_user_name_to_email(user_info: Dict[str, Dict[str, str]]) -> None:
     for email, info in user_info.items():
@@ -520,10 +472,10 @@ def pull_github_data(
 def _analyze_commits_per_user(start_date: str, end_date: str):
     logging.info(f"Analyzing repository: {owner}/{repo}")
     branch = client.get_default_branch()
-    logging.info(f"Analyzing commits on the default branch: {branch}")
+    logging.debug(f"Analyzing commits on the default branch: {branch}")
 
     commits = client.get_commits(branch, start_date, end_date)
-    logging.info(f"Found {len(commits)} commits on the {branch} branch")
+    logging.debug(f"Found {len(commits)} commits on the {branch} branch")
 
     commits_per_user = defaultdict(dict)
 
@@ -584,7 +536,7 @@ def initialize_github_hack():
 
 def list_repo_contributors(owner: str, repo: str) -> Any:
     all_contributors = client.list_contributors()
-    print(f"Found {len(all_contributors)} contributors in {owner}/{repo}")
+    logging.debug(f"Found {len(all_contributors)} contributors in {owner}/{repo}")
     return all_contributors
 
 
@@ -593,7 +545,7 @@ def get_all_pull_requests_data(owner: str, repo: str) -> Any:
     raw_prs: Any = client.get_all_pull_requests()
     prs = [_extract_pr_info(pr) for pr in raw_prs]
 
-    print(f"Found {len(prs)} pull requests in {owner}/{repo}")
+    logging.debug(f"Found {len(prs)} pull requests in {owner}/{repo}")
     return prs
 
 

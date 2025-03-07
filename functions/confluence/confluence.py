@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 from datetime import datetime, timedelta
@@ -7,7 +8,7 @@ from dotenv import load_dotenv
 import requests
 from bs4 import BeautifulSoup, Comment
 from functions.llm.llamaindex_summarization import summarize_data
-from utils import unique_user_emails, get_headers, get_last_calendar_year_dates
+from utils import unique_user_emails, get_headers, get_last_calendar_year_dates, get_log_level
 
 load_dotenv()
 
@@ -39,8 +40,7 @@ def get_page_content(base_url, page_id, username, api_token) -> str or None:
         page_body = page_data.get("body", {}).get("storage", {}).get("value", "")
         return page_body
     else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
+        logging.error(f"Error: {response.status_code}, response: {response.text}")
         return None
 
 
@@ -58,11 +58,10 @@ def get_space_id(base_url, space_key, username, api_token) -> int or None:
         if spaces:
             return spaces[0]["id"]
         else:
-            print(f"No space found with key '{space_key}'")
+            logging.error(f"No space found with key '{space_key}'")
             return None
     else:
-        print(f"Error fetching space ID: {response.status_code}")
-        print(response.text)
+        logging.error(f"Error fetching space ID: {response.status_code}, response: {response.text}")
         return None
 
 
@@ -117,17 +116,18 @@ def get_confluence_contributions(
 
     if response.status_code == 200:
         pages = response.json()["results"]
-        print(f"Pages created by {target_username} in space {space_key}:")
+        logging.debug(f"Pages created by {target_username} in space {space_key}:")
         for page in pages:
             page_id = page["id"]
             raw_content = get_page_content(base_url, page_id, username, api_token)
             cleaned_content = clean_confluence_content(raw_content)
-            print(f"Title: {page['title']}")
-            print(f"ID: {page_id}")
-            print(f"Created: {page['createdAt']}")
-            print(f"{atlassian_base_url}/wiki{page['_links']['webui']}")
-            print("Page Content:")
-            print(cleaned_content)
+            if get_log_level() == logging.DEBUG:
+                print(f"Title: {page['title']}")
+                print(f"ID: {page_id}")
+                print(f"Created: {page['createdAt']}")
+                print(f"{atlassian_base_url}/wiki{page['_links']['webui']}")
+                print("Page Content:")
+                print(cleaned_content)
             pages_dict[page_id] = {
                 "title": page["title"],
                 "created_at": page["createdAt"],
@@ -139,8 +139,7 @@ def get_confluence_contributions(
 
         return pages_dict
     else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
+        logging.error(f"Error: {response.status_code}, response: {response.text}")
         return None
 
 def get_confluence_contributions_by_author_for_the_last_year(author: str):
@@ -223,6 +222,5 @@ def get_confluence_pages_space(base_url, username, api_token, space_id):
         pages = response.json()["results"]
         return pages
     else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
+        logging.error(f"Error: {response.status_code}, response: {response.text}")
         return None

@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 import shutil
@@ -61,7 +62,7 @@ def _get_documents_to_ingest(start_date: str, end_date: str) -> List[Document]:
             )
             all_user_data[email_id] = user_data
         except ValidationError as e:
-            print(f"Error parsing data for user {email_id}: {e}")
+            logging.error(f"Error parsing data for user {email_id}: {e}")
             continue
 
     documents = []
@@ -84,7 +85,7 @@ def _get_documents_to_ingest(start_date: str, end_date: str) -> List[Document]:
 
 def create_pinecone_index(pc):
     try:
-        print(f"Creating new Pinecone index: {index_name}")
+        logging.info(f"Creating new Pinecone index: {index_name}")
         pc.create_index(
             name=index_name,
             dimension=1536,
@@ -96,16 +97,16 @@ def create_pinecone_index(pc):
             try:
                 index_description = pc.describe_index(index_name)
                 if index_description.status["ready"]:
-                    print(f"Pinecone index {index_name} is ready.")
+                    logging.debug(f"Pinecone index {index_name} is ready.")
                     return True
                 else:
-                    print("Waiting for Pinecone index to be ready...")
+                    logging.debug("Waiting for Pinecone index to be ready...")
                     time.sleep(10)
             except Exception as e:
-                print(f"Error checking index status: {e}")
+                logging.error(f"Error checking index status: {e}")
                 time.sleep(10)
     except Exception as e:
-        print(f"Failed to create Pinecone index: {e}")
+        logging.error(f"Failed to create Pinecone index: {e}")
         return False
 
 
@@ -221,11 +222,11 @@ def ingest_data(start_date: datetime, end_date: datetime, verify_index = True):
 
         if verify_index:
             if verify_index_creation_with_retries(documents):
-                print(
+                logging.info(
                     "Index created and verified successfully. Persisting Pinecone store locally..."
                 )
             else:
-                print(
+                logging.error(
                     "Failed to verify index creation after multiple attempts. Please check the logs and try again."
                 )
                 return None

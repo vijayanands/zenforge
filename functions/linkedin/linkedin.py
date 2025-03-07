@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import requests
@@ -22,5 +23,5 @@ def get_linkedin_profile_json(profile):
     data = response.json()
     keys_to_remove = ["people_also_viewed", "connections"]
     my_dict = {k: v for k, v in data.items() if k not in keys_to_remove}
-    print(json.dumps(response.json(), indent=4))
+    logging.debug(json.dumps(response.json(), indent=4))
     return my_dict

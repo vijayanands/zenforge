@@ -49,20 +49,20 @@ class GitHubAPIClient:
         return self.github_repo
 
     def call_github(self, url, params=None) -> Any:
-        print(f"Making API call to: {url}")
+        logging.debug(f"Making API call to: {url}")
         response = requests.get(url, headers=self.headers, params=params)
-        print(f"Response status code: {response.status_code}")
+        logging.debug(f"Response status code: {response.status_code}")
         if response.status_code != 200:
-            print(f"Error calling url: {url}, response code: {response.status_code}")
-            print(response.json().get("message", "No error message provided"))
-            print(f"Response content: {response.text}")
+            logging.error(f"Error calling url: {url}, response code: {response.status_code}")
+            logging.error(response.json().get("message", "No error message provided"))
+            logging.error(f"Response content: {response.text}")
         return response
 
     def get_default_branch(self) -> str:
         response = self.call_github(self.base_url)
         if response.status_code != 200:
-            print(f"Error fetching repository info: {response.status_code}")
-            print(f"Response content: {response.text}")
+            logging.error(f"Error fetching repository info: {response.status_code}")
+            logging.error(f"Response content: {response.text}")
             sys.exit(1)
         return response.json()["default_branch"]
 
@@ -108,7 +108,7 @@ class GitHubAPIClient:
             contributor["user"]["login"] for contributor in pr_contributors
         )
 
-        print(f"Fetched {len(all_contributors)} unique contributors")
+        logging.debug(f"Fetched {len(all_contributors)} unique contributors")
         return list(all_contributors)
 
     def _fetch_from_github(self, path: str, additional_params: Optional[Dict[str, Any]] = None,
@@ -141,5 +141,5 @@ class GitHubAPIClient:
             # Clear params for subsequent requests to avoid duplicate query parameters
             params = {}
 
-        print(f"Fetched {len(all_items)} {path}")
+        logging.debug(f"Fetched {len(all_items)} {path}")
         return all_items
