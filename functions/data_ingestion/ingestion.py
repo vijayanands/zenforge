@@ -193,18 +193,18 @@ def ingest_data(start_date: datetime, end_date: datetime, verify_index = True):
     recreate_index = os.getenv("RECREATE_INDEX", "False").lower() == "true"
 
     embed_model = OpenAIEmbedding()
-    pinecone.init(api_key=os.environ.get("PINECONE_API_KEY"))
+    pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
 
     if recreate_index or not os.path.exists(local_persist_path):
         if os.path.exists(local_persist_path):
             print(f"Deleting existing local store at {local_persist_path}")
             shutil.rmtree(local_persist_path)
 
-        if index_name in pinecone.list_indexes():
+        if index_name in pc.list_indexes():
             print(f"Deleting existing Pinecone index: {index_name}")
-            pinecone.delete_index(index_name)
+            pc.delete_index(index_name)
 
-        if not create_pinecone_index(pinecone):
+        if not create_pinecone_index():
             print("Failed to create Pinecone index. Exiting.")
             return None
 
@@ -222,11 +222,11 @@ def ingest_data(start_date: datetime, end_date: datetime, verify_index = True):
 
         if verify_index:
             if verify_index_creation_with_retries(documents):
-                logging.info(
+                print(
                     "Index created and verified successfully. Persisting Pinecone store locally..."
                 )
             else:
-                logging.error(
+                print(
                     "Failed to verify index creation after multiple attempts. Please check the logs and try again."
                 )
                 return None
